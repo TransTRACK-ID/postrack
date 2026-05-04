@@ -645,9 +645,13 @@ const activeCollectionId = computed(() => {
   for (const workspace of workspaces.value) {
     for (const project of workspace.projects) {
       for (const collection of project.collections) {
+        // Check root-level requests (not in any folder)
+        if (collection.requests?.some((r: any) => r.id === selectedRequest.value?.id)) {
+          return collection.id;
+        }
+        // Check requests inside folders (recursive)
         const findInFolders = (folders: any[]): string | null => {
           for (const folder of folders) {
-            // Check if this folder belongs to the collection
             if (folder.requests?.some((r: any) => r.id === selectedRequest.value?.id)) {
               return collection.id;
             }
@@ -2382,6 +2386,9 @@ const executeSave = async (request: any) => {
       // Reset unsaved flag on the tab
       updateTabUnsavedStatus(normalizedRequest, false);
       
+      // Tell RequestBuilder to capture current state as saved so its indicator clears
+      requestBuilderRef.value?.captureCurrentStateAsSaved?.();
+      
       // Update prefetch cache so subsequent hovers show fresh data
       prefetchedRequests.value.set(request.id, normalizedRequest);
       
@@ -3532,7 +3539,8 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
     onSaveRequest: () => {
         if (!canEditWorkspace.value) return;
         if (selectedRequest.value && activeTabKey.value) {
-            handleSaveRequest(selectedRequest.value);
+            const currentState = requestBuilderRef.value?.getCurrentRequestState?.();
+            handleSaveRequest(currentState || selectedRequest.value);
         }
     },
     onNewTab: () => {

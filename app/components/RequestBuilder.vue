@@ -2143,9 +2143,10 @@ const hasUnsavedChanges = computed(() => {
   const currentParamNotes = buildParamNotes();
   
   // Normalize auth for comparison - make aware of inheritAuth for accurate comparisons
+  // Note: 'inherit' property intentionally omitted here; normalizeAuth adds it at the end
+  // to match the property ordering of compareState (originalRequestState / lastSavedState)
   const rawCurrentAuth = {
     type: authType.value,
-    inherit: inheritFromParent.value,
     credentials: authType.value === 'api-key' ? {
       key: apiKey.value.key,
       value: apiKey.value.value,
@@ -2783,51 +2784,54 @@ const handlePreviewMousedown = () => {
   window.focus();
 };
 
+const buildCurrentRequestState = () => ({
+  id: props.request.id,
+  folderId: props.request.folderId,
+  collectionId: props.request.collectionId,
+  name: props.request.name,
+  method: form.value.method,
+  url: form.value.url,
+  headers: buildHeadersRecord(),
+  body: buildBodyForSave(),
+  auth: {
+    type: authType.value,
+    // Note: 'inherit' field removed from auth - using inheritAuth column as single source of truth
+    credentials: authType.value === 'api-key' ? {
+      key: apiKey.value.key,
+      value: apiKey.value.value,
+      addTo: apiKey.value.addTo
+    } : authType.value === 'bearer' ? { token: bearerToken.value }
+      : authType.value === 'basic' ? {
+        username: basicAuth.value.username,
+        password: basicAuth.value.password
+      } : authType.value === 'oauth2' ? {
+        authUrl: oauth2.value.authUrl,
+        tokenUrl: oauth2.value.tokenUrl,
+        clientId: oauth2.value.clientId,
+        clientSecret: oauth2.value.clientSecret,
+        scopes: oauth2.value.scopes,
+        callbackUrl: oauth2.value.callbackUrl,
+        accessToken: oauth2.value.accessToken,
+        refreshToken: oauth2.value.refreshToken,
+        expiresAt: oauth2.value.expiresAt,
+        tokenType: oauth2.value.tokenType,
+        grantType: oauth2.value.grantType,
+        PKCE: oauth2.value.PKCE
+      } : undefined
+  } || null,
+  inheritAuth: inheritFromParent.value ? 1 : 0,
+  mockConfig: mockConfig.value,
+  preScript: preScript.value,
+  postScript: postScript.value,
+  pathVariables: buildPathVariablesRecord(),
+  paramNotes: buildParamNotes(),
+  order: props.request.order,
+  createdAt: props.request.createdAt,
+  updatedAt: new Date()
+});
+
 const openSaveDialog = () => {
-  emit('saveRequest', {
-    id: props.request.id,
-    folderId: props.request.folderId,
-    name: props.request.name,
-    method: form.value.method,
-    url: form.value.url,
-    headers: buildHeadersRecord(),
-    body: buildBodyForSave(),
-    auth: {
-      type: authType.value,
-      // Note: 'inherit' field removed from auth - using inheritAuth column as single source of truth
-      credentials: authType.value === 'api-key' ? {
-        key: apiKey.value.key,
-        value: apiKey.value.value,
-        addTo: apiKey.value.addTo
-      } : authType.value === 'bearer' ? { token: bearerToken.value }
-        : authType.value === 'basic' ? {
-          username: basicAuth.value.username,
-          password: basicAuth.value.password
-        } : authType.value === 'oauth2' ? {
-          authUrl: oauth2.value.authUrl,
-          tokenUrl: oauth2.value.tokenUrl,
-          clientId: oauth2.value.clientId,
-          clientSecret: oauth2.value.clientSecret,
-          scopes: oauth2.value.scopes,
-          callbackUrl: oauth2.value.callbackUrl,
-          accessToken: oauth2.value.accessToken,
-          refreshToken: oauth2.value.refreshToken,
-          expiresAt: oauth2.value.expiresAt,
-          tokenType: oauth2.value.tokenType,
-          grantType: oauth2.value.grantType,
-          PKCE: oauth2.value.PKCE
-        } : undefined
-    } || null,
-    inheritAuth: inheritFromParent.value ? 1 : 0,
-    mockConfig: mockConfig.value,
-    preScript: preScript.value,
-    postScript: postScript.value,
-    pathVariables: buildPathVariablesRecord(),
-    paramNotes: buildParamNotes(),
-    order: props.request.order,
-    createdAt: props.request.createdAt,
-    updatedAt: new Date()
-  });
+  emit('saveRequest', buildCurrentRequestState());
 
   // Capture current state as saved to immediately update UI feedback
   captureCurrentStateAsSaved();
@@ -2934,6 +2938,13 @@ watch(hasUnsavedChanges, (newValue, oldValue) => {
   if (!isMounted.value || isLoadingRequestData.value || newValue === oldValue) {
     return;
   }
+
+  // When save completes (hasUnsavedChanges goes false), capture state into lastSavedState
+  // so subsequent comparisons use the saved state instead of stale originalRequestState
+  if (!newValue) {
+    captureCurrentStateAsSaved();
+  }
+
   emit('unsavedChanges', props.request, newValue, buildDraftSnapshot());
 });
 
@@ -3235,7 +3246,9 @@ defineExpose({
   bearerToken,
   basicAuth,
   apiKey,
-  refreshCollectionAuth: fetchCollectionAuth
+  refreshCollectionAuth: fetchCollectionAuth,
+  getCurrentRequestState: buildCurrentRequestState,
+  captureCurrentStateAsSaved
 });
 </script>
 
