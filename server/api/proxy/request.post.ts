@@ -619,7 +619,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         const serverFormData = new FormData();
         for (const entry of resolvedBody.entries) {
           if (entry.isFile) {
-            if (typeof entry.value !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(entry.value)) {
+            if (typeof entry.value !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(entry.value)) {
               console.error(`[Proxy] Invalid base64 data for field "${entry.key}"`);
               continue;
             }

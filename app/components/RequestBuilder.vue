@@ -2841,7 +2841,7 @@ const openSaveAsDialog = () => {
     method: form.value.method,
     url: form.value.url,
     headers: buildHeadersRecord(),
-    body: buildBody(),
+    body: buildBodyForSave(),
     auth: {
       type: authType.value,
       // Note: 'inherit' field removed from auth - using inheritAuth column as single source of truth
@@ -3073,12 +3073,17 @@ const sendRequest = async () => {
 
     // If the browser blocked the request due to CORS, automatically retry via server proxy
     if (!result.success && (result as ProxyErrorResponse).error?.code === 'CORS_ERROR') {
+      const PROXY_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
       try {
         let proxyRequestBody = requestBody;
         if (requestBody instanceof FormData) {
           const formEntries = Array.from(requestBody.entries());
           const results = await Promise.all(formEntries.map(async ([key, value]) => {
             if (value instanceof File) {
+              if (value.size > PROXY_FILE_SIZE_LIMIT) {
+                console.error(`[RequestBuilder] File "${value.name}" (${(value.size / 1024 / 1024).toFixed(1)}MB) exceeds ${PROXY_FILE_SIZE_LIMIT / 1024 / 1024}MB proxy limit — field omitted`);
+                return { key, value: '', isFile: true, fileName: value.name, fileType: 'application/octet-stream' };
+              }
               try {
                 const base64 = await fileToBase64(value);
                 return { key, value: base64, isFile: true, fileName: value.name, fileType: value.type };
@@ -3717,6 +3722,13 @@ defineExpose({
                     :disabled="!param.enabled"
                     class="w-full py-1.5 px-2 bg-bg-input border border-border-default rounded text-text-muted text-xs focus:outline-none focus:border-accent-blue disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  <div
+                    v-if="param.value && !fileObjects.has(param.id)"
+                    class="text-[11px] text-accent-yellow mt-0.5 truncate"
+                    :title="`Previously saved: ${param.value} — re-select to include in request`"
+                  >
+                    ↻ {{ param.value }}
+                  </div>
                 </div>
                 <input
                   :value="param.note"
