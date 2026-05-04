@@ -266,6 +266,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           if (resolvedBody && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
             if (typeof resolvedBody === 'string') {
               resolvedBody = substituteWithLimit(resolvedBody);
+            } else if (resolvedBody?.__formData === true) {
+              // Skip variable substitution for form-data to avoid corrupting base64-encoded file payloads
             } else {
               const bodyStr = JSON.stringify(resolvedBody);
               const substitutedBody = substituteWithLimit(bodyStr);
@@ -616,7 +618,16 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       } else if (resolvedBody?.__formData === true && Array.isArray(resolvedBody.entries)) {
         const serverFormData = new FormData();
         for (const entry of resolvedBody.entries) {
-          serverFormData.append(entry.key, entry.value);
+          if (entry.isFile) {
+            if (typeof entry.value !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(entry.value)) {
+              console.error(`[Proxy] Invalid base64 data for field "${entry.key}"`);
+              continue;
+            }
+            const buffer = Buffer.from(entry.value, 'base64');
+            serverFormData.append(entry.key, new Blob([buffer], { type: entry.fileType || 'application/octet-stream' }), entry.fileName || 'file');
+          } else {
+            serverFormData.append(entry.key, entry.value);
+          }
         }
         fetchOptions.body = serverFormData;
         delete resolvedHeaders['Content-Type'];

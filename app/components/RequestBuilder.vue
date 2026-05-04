@@ -404,6 +404,7 @@ const formDataParams = ref<BodyParam[]>([]);
 const rawBody = ref('');
 const rawContentType = ref('text/plain');
 const binaryFile = ref<File | null>(null);
+const fileObjects = ref<Map<string, File>>(new Map());
 
 type AuthType = 'none' | 'basic' | 'bearer' | 'api-key' | 'oauth2';
 const authType = ref<AuthType>('none');
@@ -717,6 +718,7 @@ const loadRequestData = async (request: HttpRequest) => {
     jsonBody.value = '';
     rawBody.value = '';
     formDataParams.value = [];
+    fileObjects.value.clear();
     binaryFile.value = null;
     bodyFormat.value = 'none';
     
@@ -1416,6 +1418,7 @@ const removeFormDataParam = (id: string) => {
   const index = formDataParams.value.findIndex(p => p.id === id);
   if (index !== -1) {
     formDataParams.value.splice(index, 1);
+    fileObjects.value.delete(id);
   }
 };
 
@@ -1431,9 +1434,23 @@ const handleFileSelect = (id: string, event: Event) => {
   if (target.files && target.files[0]) {
     const param = formDataParams.value.find(p => p.id === id);
     if (param) {
-      param.value = target.files[0].name;
+      const file = target.files[0];
+      param.value = file.name;
+      fileObjects.value.set(id, file);
     }
   }
+};
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 };
 
 const handleBinaryFileSelect = (event: Event) => {
@@ -1471,7 +1488,16 @@ const buildBody = (): any => {
       const formData = new FormData()
       formDataParams.value.forEach(param => {
         if (param.enabled && param.key) {
-          formData.append(param.key, param.value)
+          if (param.type === 'file') {
+            const file = fileObjects.value.get(param.id);
+            if (file) {
+              formData.append(param.key, file);
+            } else {
+              console.warn(`[RequestBuilder] File-type param "${param.key}" has no file selected — field omitted from request`);
+            }
+          } else {
+            formData.append(param.key, param.value);
+          }
         }
       })
       return formData
@@ -3050,13 +3076,20 @@ const sendRequest = async () => {
       try {
         let proxyRequestBody = requestBody;
         if (requestBody instanceof FormData) {
-          proxyRequestBody = {
-            __formData: true,
-            entries: Array.from(requestBody.entries()).map(([key, value]) => ({
-              key,
-              value: typeof value === 'string' ? value : value.toString()
-            }))
-          };
+          const formEntries = Array.from(requestBody.entries());
+          const results = await Promise.all(formEntries.map(async ([key, value]) => {
+            if (value instanceof File) {
+              try {
+                const base64 = await fileToBase64(value);
+                return { key, value: base64, isFile: true, fileName: value.name, fileType: value.type };
+              } catch (err) {
+                console.error(`[RequestBuilder] Failed to encode file "${value.name}":`, err);
+                return { key, value: '', isFile: true, fileName: value.name, fileType: 'application/octet-stream' };
+              }
+            }
+            return { key, value };
+          }));
+          proxyRequestBody = { __formData: true, entries: results };
         }
 
         const proxyResult = await $fetch<ProxyResponse | ProxyErrorResponse>('/api/proxy/request', {
