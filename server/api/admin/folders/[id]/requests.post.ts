@@ -3,6 +3,20 @@ import { folders, savedRequests, type HttpMethod, type RequestHeaders, type Requ
 import { eq } from 'drizzle-orm';
 import { trackResourceAction } from '../../../../services/usageTracking';
 
+function parseJsonField<T>(value: unknown): T | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  }
+  return value as T;
+}
+
 interface CreateRequestBody {
   name: string;
   method: HttpMethod;
@@ -159,7 +173,24 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    return newRequest;
+    return {
+      ...newRequest,
+      headers: parseJsonField<Record<string, string>>(newRequest.headers),
+      body: parseJsonField<Record<string, unknown> | string>(newRequest.body),
+      auth: parseJsonField<{
+        type: string;
+        credentials?: Record<string, string>;
+      } | null>(newRequest.auth),
+      mockConfig: parseJsonField<{
+        isEnabled: boolean;
+        statusCode: number;
+        delay: number;
+        responseBody: Record<string, unknown> | string | null;
+        responseHeaders: Record<string, string>;
+      } | null>(newRequest.mockConfig),
+      pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(newRequest.pathVariables),
+      paramNotes: parseJsonField<Record<string, Record<string, string>>>(newRequest.paramNotes)
+    };
   } catch (error: any) {
     // Re-throw if it's already an H3 error
     if (error.statusCode) {

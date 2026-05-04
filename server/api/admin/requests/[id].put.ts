@@ -4,6 +4,20 @@ import { eq, sql } from 'drizzle-orm';
 import { trackResourceAction } from '../../../services/usageTracking';
 import { cache, CacheKeys } from '../../../utils/cache';
 
+function parseJsonField<T>(value: unknown): T | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  }
+  return value as T;
+}
+
 interface UpdateRequestBody {
   name?: string;
   method?: HttpMethod;
@@ -238,7 +252,24 @@ export default defineEventHandler(async (event) => {
       cache.delete(CacheKeys.workspaceTree(user.id));
     }
 
-    return updatedRequest;
+    return {
+      ...updatedRequest,
+      headers: parseJsonField<Record<string, string>>(updatedRequest.headers),
+      body: parseJsonField<Record<string, unknown> | string>(updatedRequest.body),
+      auth: parseJsonField<{
+        type: string;
+        credentials?: Record<string, string>;
+      } | null>(updatedRequest.auth),
+      mockConfig: parseJsonField<{
+        isEnabled: boolean;
+        statusCode: number;
+        delay: number;
+        responseBody: Record<string, unknown> | string | null;
+        responseHeaders: Record<string, string>;
+      } | null>(updatedRequest.mockConfig),
+      pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(updatedRequest.pathVariables),
+      paramNotes: parseJsonField<Record<string, Record<string, string>>>(updatedRequest.paramNotes)
+    };
   } catch (error: any) {
     // Re-throw if it's already an H3 error
     if (error.statusCode) {

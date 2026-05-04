@@ -2102,14 +2102,25 @@ const handleHoverRequest = async (requestId: string) => {
 };
 
 // Request handlers
-const handleSelectRequest = (request: HttpRequest) => {
+const handleSelectRequest = async (request: HttpRequest) => {
   activeAdminPanel.value = 'requests';
   selectedMock.value = null;
 
   syncWorkspaceSelectionForRequest(request);
   
   // Use prefetched data if available, otherwise use tree data
-  const requestData = prefetchedRequests.value.get(request.id) || request;
+  let requestData = prefetchedRequests.value.get(request.id) || request;
+  
+  // Tree-light data omits auth/headers/body — fetch full request if sparse
+  if (request.id && !requestData.auth) {
+    try {
+      requestData = await $fetch<HttpRequest>(`/api/admin/requests/${request.id}`);
+      prefetchedRequests.value.set(request.id, requestData);
+    } catch {
+      // keep sparse data on failure
+    }
+  }
+
   const normalizedRequest = normalizeRequestForTab(requestData);
   
   // Check if this request is in a shared workspace
@@ -2371,6 +2382,9 @@ const executeSave = async (request: any) => {
       // Reset unsaved flag on the tab
       updateTabUnsavedStatus(normalizedRequest, false);
       
+      // Update prefetch cache so subsequent hovers show fresh data
+      prefetchedRequests.value.set(request.id, normalizedRequest);
+      
       // Refresh workspaces to update the tree with latest data
       await refreshWorkspaces();
       
@@ -2532,6 +2546,7 @@ const handleSave = async (data: any) => {
           selectedRequest.value = normalizedNewRequest;
           isSharedWorkspace.value = checkIfRequestIsInSharedWorkspace(normalizedNewRequest);
           syncWorkspaceSelectionForRequest(normalizedNewRequest);
+          prefetchedRequests.value.set(normalizedNewRequest.id, normalizedNewRequest);
         }
       }
     } else {
@@ -2578,6 +2593,10 @@ const handleSave = async (data: any) => {
       
       // Reset unsaved flag on the tab
       updateTabUnsavedStatus(requestToSave.value, false);
+      
+      if (selectedRequest.value && selectedRequest.value.id === requestToSave.value.id) {
+        prefetchedRequests.value.set(requestToSave.value.id, selectedRequest.value);
+      }
     }
 
     showSaveDialog.value = false;
