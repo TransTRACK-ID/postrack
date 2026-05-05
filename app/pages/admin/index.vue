@@ -2383,6 +2383,15 @@ const executeSave = async (request: any) => {
         selectedRequest.value = normalizedRequest;
       }
       
+      // Update the tab's request so tabs persist the new data on page refresh
+      const tabIdx = openTabs.value.findIndex(t => t.key === activeTabKey.value);
+      if (tabIdx !== -1 && openTabs.value[tabIdx].request.id === request.id) {
+        openTabs.value[tabIdx] = {
+          ...openTabs.value[tabIdx],
+          request: normalizedRequest
+        };
+      }
+      
       // Reset unsaved flag on the tab
       updateTabUnsavedStatus(normalizedRequest, false);
       
