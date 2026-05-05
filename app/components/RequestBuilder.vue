@@ -239,6 +239,43 @@ const form = ref({
   url: props.request.url
 });
 
+const requestName = ref(props.request.name);
+const isEditingName = ref(false);
+const editingNameInput = ref<HTMLInputElement | null>(null);
+
+watch(() => props.request.name, (val) => {
+  requestName.value = val;
+});
+
+const startEditingName = () => {
+  if (props.readOnly) return;
+  editingName.value = requestName.value;
+  isEditingName.value = true;
+  nextTick(() => {
+    editingNameInput.value?.focus();
+    editingNameInput.value?.select();
+  });
+};
+
+const editingName = ref('');
+
+const saveEditingName = () => {
+  if (!isEditingName.value) return;
+  const trimmed = editingName.value.trim();
+  if (!trimmed) {
+    isEditingName.value = false;
+    return;
+  }
+  requestName.value = trimmed;
+  isEditingName.value = false;
+  emit('saveRequest', buildCurrentRequestState());
+};
+
+const cancelEditingName = () => {
+  isEditingName.value = false;
+  editingName.value = requestName.value;
+};
+
 const activeTab = ref<TabType>('params');
 const isLoading = ref(false);
 const abortController = ref<AbortController | null>(null);
@@ -2788,7 +2825,7 @@ const buildCurrentRequestState = () => ({
   id: props.request.id,
   folderId: props.request.folderId,
   collectionId: props.request.collectionId,
-  name: props.request.name,
+  name: requestName.value,
   method: form.value.method,
   url: form.value.url,
   headers: buildHeadersRecord(),
@@ -2841,7 +2878,7 @@ const openSaveAsDialog = () => {
   emit('saveAsRequest', {
     id: props.request.id,
     folderId: props.request.folderId,
-    name: props.request.name,
+    name: requestName.value,
     method: form.value.method,
     url: form.value.url,
     headers: buildHeadersRecord(),
@@ -3257,11 +3294,30 @@ defineExpose({
     <div class="p-4 border-b border-border-default bg-bg-secondary">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <h2 class="text-sm font-semibold text-text-primary flex items-center gap-2">
-            {{ request.name }}
+          <div class="flex items-center gap-2">
+            <div v-if="isEditingName" class="flex items-center">
+              <input
+                ref="editingNameInput"
+                v-model="editingName"
+                class="bg-bg-input border border-accent-blue rounded px-2 py-1 text-sm font-semibold text-text-primary outline-none w-64"
+                maxlength="200"
+                @keydown.enter.prevent="saveEditingName"
+                @keydown.escape.prevent="cancelEditingName"
+                @blur="saveEditingName"
+              />
+            </div>
+            <h2 
+              v-else 
+              class="text-sm font-semibold text-text-primary flex items-center gap-2 cursor-pointer hover:text-accent-blue transition-colors duration-fast"
+              :class="{ 'cursor-default': readOnly }"
+              :title="readOnly ? undefined : 'Click to rename'"
+              @click="startEditingName"
+            >
+              {{ requestName }}
+            </h2>
             <span 
               v-if="hasUnsavedChanges && !readOnly"
-              class="w-2 h-2 rounded-full bg-accent-orange"
+              class="w-2 h-2 rounded-full bg-accent-orange flex-shrink-0"
               title="Unsaved changes"
             ></span>
             <!-- Shared workspace badge -->
@@ -3278,7 +3334,7 @@ defineExpose({
               </svg>
               Shared
             </span>
-          </h2>
+          </div>
           <span 
             class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
             :class="[methodColors[form.method] || 'text-text-primary']"

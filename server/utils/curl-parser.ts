@@ -308,7 +308,6 @@ function processOption(tokens: string[], index: number, state: ParseState): { ne
       if (value) {
         processData(stripQuotes(value), state);
         state.method = state.method === 'GET' ? 'POST' : state.method;
-        state.isUrlEncoded = true;
         return { newIndex: index + 2, skipToken: true };
       }
       break;
@@ -334,7 +333,6 @@ function processOption(tokens: string[], index: number, state: ParseState): { ne
       if (value) {
         processData(stripQuotes(value), state, true);
         state.method = state.method === 'GET' ? 'POST' : state.method;
-        state.isUrlEncoded = true;
         return { newIndex: index + 2, skipToken: true };
       }
       break;
@@ -508,6 +506,7 @@ function processHeader(headerValue: string, state: ParseState): void {
  */
 function processData(data: string, state: ParseState, urlEncode = false): void {
   let processed = data;
+  state.isUrlEncoded = false;
   
   // URL encode if needed
   if (urlEncode) {
@@ -624,7 +623,7 @@ function processForm(formValue: string, state: ParseState, isString = false): vo
   const eqIndex = formValue.indexOf('=');
   if (eqIndex > 0) {
     const key = formValue.substring(0, eqIndex);
-    let value = formValue.substring(eqIndex + 1);
+    let value = stripQuotes(formValue.substring(eqIndex + 1));
     
     // Check if it's a file upload (@filename or <filename)
     let type: 'text' | 'file' = 'text';
@@ -674,16 +673,24 @@ function parseUrlComponents(state: ParseState): void {
   }
 }
 
+const BODY_FORMAT_META_KEY = '__mockServiceBodyFormat';
+const FORM_DATA_PARAMS_META_KEY = '__mockServiceFormDataParams';
+
 /**
  * Process final body based on content type and form data
  */
 function processBody(state: ParseState): { body: RequestBody; contentType: string | undefined } {
   // If we have form data from -F options
   if (state.formData.length > 0) {
-    const body: Record<string, string> = {};
-    state.formData.forEach(item => {
-      body[item.key] = item.value;
-    });
+    const body = {
+      [BODY_FORMAT_META_KEY]: 'form-data',
+      [FORM_DATA_PARAMS_META_KEY]: state.formData.map(item => ({
+        key: item.key,
+        value: item.value,
+        enabled: true,
+        type: item.type
+      }))
+    };
     return { 
       body, 
       contentType: 'multipart/form-data' 
@@ -692,9 +699,19 @@ function processBody(state: ParseState): { body: RequestBody; contentType: strin
   
   // If URL encoded body
   if (state.isUrlEncoded && state.body && typeof state.body === 'object') {
-    return { 
-      body: state.body, 
-      contentType: 'application/x-www-form-urlencoded' 
+    const flatBody = state.body as Record<string, string>;
+    const params = Object.entries(flatBody).map(([key, value]) => ({
+      key,
+      value,
+      enabled: true,
+      type: 'text' as const
+    }));
+    return {
+      body: {
+        [BODY_FORMAT_META_KEY]: 'urlencoded',
+        [FORM_DATA_PARAMS_META_KEY]: params
+      },
+      contentType: 'application/x-www-form-urlencoded'
     };
   }
   
