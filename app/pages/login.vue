@@ -64,7 +64,6 @@ const login = async () => {
       body: form.value
     });
     
-    // Check for redirect URL
     const urlParams = new URLSearchParams(window.location.search);
     const redirectUrl = urlParams.get('redirect');
     
@@ -103,36 +102,31 @@ const hasAnySso = computed(() => {
 onMounted(() => {
   fetchSsoProviders();
   
-  // Check if user is already logged in
   checkAuthAndRedirect();
 });
 
 const checkAuthAndRedirect = async () => {
-  // Check for redirect URL in query params
   const urlParams = new URLSearchParams(window.location.search);
   const redirectUrl = urlParams.get('redirect');
   
   try {
     const response = await $fetch('/api/auth/check');
     if (response.status === 'logged_in') {
-      // User is already logged in, redirect to intended destination or admin
       if (redirectUrl) {
-        console.log('[Login] User already logged in, redirecting to:', decodeURIComponent(redirectUrl));
         await navigateTo(decodeURIComponent(redirectUrl), { external: true });
       } else {
         await navigateTo('/admin', { external: true });
       }
     }
   } catch (e) {
-    // User is not logged in, stay on login page
     console.log('[Login] User not logged in, staying on login page');
   }
 };
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-bg-primary relative overflow-hidden">
-    <div class="flex flex-col items-center w-full max-w-[400px] p-6 z-10">
+  <div class="login-light min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-white to-orange-50 relative overflow-hidden">
+    <div class="flex flex-col items-center w-full max-w-[420px] p-6 z-10">
       <!-- Logo -->
       <div class="mb-8">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -143,17 +137,17 @@ const checkAuthAndRedirect = async () => {
       </div>
 
       <!-- Card -->
-      <div class="w-full bg-bg-secondary border border-border-default rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <div class="w-full bg-white border border-gray-200/80 rounded-2xl p-8 shadow-[0_8px_30px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.03)]">
         <!-- Header -->
         <div class="text-center mb-7">
-          <h1 class="text-2xl font-semibold text-text-primary mb-2">Welcome Back</h1>
-          <p class="text-sm text-text-secondary m-0">Sign in to access Mock Services</p>
+          <h1 class="text-2xl font-semibold text-gray-900 mb-2">Welcome Back</h1>
+          <p class="text-sm text-gray-500 m-0">Sign in to access Mock Services</p>
         </div>
 
         <!-- Error Message -->
         <div 
           v-if="errorMessage" 
-          class="flex items-center gap-2.5 py-3 px-4 bg-accent-red/15 border border-accent-red/30 rounded-lg mb-5 text-accent-red text-[13px]"
+          class="flex items-center gap-2.5 py-3 px-4 bg-red-50 border border-red-200 rounded-lg mb-5 text-red-600 text-[13px]"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -186,19 +180,19 @@ const checkAuthAndRedirect = async () => {
 
         <!-- Divider -->
         <div v-if="hasAnySso" class="flex items-center gap-4 my-4">
-          <div class="flex-1 h-px bg-border-default"></div>
-          <span class="text-xs text-text-muted uppercase tracking-wide">or continue with email</span>
-          <div class="flex-1 h-px bg-border-default"></div>
+          <div class="flex-1 h-px bg-gray-200"></div>
+          <span class="text-xs text-gray-400 uppercase tracking-wide">or continue with email</span>
+          <div class="flex-1 h-px bg-gray-200"></div>
         </div>
 
         <!-- Form -->
         <form @submit.prevent="login" class="flex flex-col gap-5">
           <!-- Email Field -->
           <div class="flex flex-col gap-2">
-            <label for="email" class="text-[13px] font-medium text-text-secondary normal-case tracking-normal">Email</label>
+            <label for="email" class="text-[13px] font-medium text-gray-500 normal-case tracking-normal">Email</label>
             <div class="relative">
               <svg 
-                class="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" 
+                class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" 
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
               >
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
@@ -211,17 +205,17 @@ const checkAuthAndRedirect = async () => {
                 placeholder="admin@mock.com"
                 required 
                 autocomplete="email"
-                class="w-full py-3.5 px-3.5 pl-[46px] bg-bg-input border border-border-default rounded-[10px] text-text-primary text-sm transition-all duration-fast focus:outline-none focus:border-accent-orange focus:shadow-[0_0_0_3px_rgba(255,108,55,0.15)] placeholder:text-text-muted"
+                class="w-full py-3.5 px-3.5 pl-[46px] bg-gray-50 border border-gray-200 rounded-[10px] text-gray-900 text-sm transition-all duration-fast focus:outline-none focus:border-accent-orange focus:ring-2 focus:ring-accent-orange/15 placeholder:text-gray-400"
               />
             </div>
           </div>
 
           <!-- Password Field -->
           <div class="flex flex-col gap-2">
-            <label for="password" class="text-[13px] font-medium text-text-secondary normal-case tracking-normal">Password</label>
+            <label for="password" class="text-[13px] font-medium text-gray-500 normal-case tracking-normal">Password</label>
             <div class="relative">
               <svg 
-                class="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" 
+                class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" 
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
               >
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -234,7 +228,7 @@ const checkAuthAndRedirect = async () => {
                 placeholder="••••••••"
                 required 
                 autocomplete="current-password"
-                class="w-full py-3.5 px-3.5 pl-[46px] bg-bg-input border border-border-default rounded-[10px] text-text-primary text-sm transition-all duration-fast focus:outline-none focus:border-accent-orange focus:shadow-[0_0_0_3px_rgba(255,108,55,0.15)] placeholder:text-text-muted"
+                class="w-full py-3.5 px-3.5 pl-[46px] bg-gray-50 border border-gray-200 rounded-[10px] text-gray-900 text-sm transition-all duration-fast focus:outline-none focus:border-accent-orange focus:ring-2 focus:ring-accent-orange/15 placeholder:text-gray-400"
               />
             </div>
           </div>
@@ -242,7 +236,7 @@ const checkAuthAndRedirect = async () => {
           <!-- Submit Button -->
           <button 
             type="submit" 
-            class="flex items-center justify-center gap-2.5 w-full py-3.5 bg-gradient-to-br from-accent-orange to-[#FF8C5A] border-none rounded-[10px] text-white text-[15px] font-semibold cursor-pointer transition-all duration-normal mt-2 hover:not-disabled:-translate-y-px hover:not-disabled:shadow-[0_6px_20px_rgba(255,108,55,0.35)] active:not-disabled:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed"
+            class="flex items-center justify-center gap-2.5 w-full py-3.5 bg-gradient-to-br from-accent-orange to-[#E85A2A] border-none rounded-[10px] text-white text-[15px] font-semibold cursor-pointer transition-all duration-normal mt-2 hover:not-disabled:-translate-y-px hover:not-disabled:shadow-[0_6px_20px_rgba(255,108,55,0.3)] active:not-disabled:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed"
             :disabled="isLoading"
           >
             <svg v-if="isLoading" class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -255,19 +249,24 @@ const checkAuthAndRedirect = async () => {
       </div>
 
       <!-- Footer -->
-      <p class="mt-6 text-[13px] text-text-muted">
+      <p class="mt-6 text-[13px] text-gray-400">
         Mock Services Admin Panel
       </p>
     </div>
 
     <!-- Background decoration -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute w-[600px] h-[600px] -top-[200px] -right-[200px] rounded-full bg-gradient-to-br from-accent-orange to-transparent opacity-5"></div>
-      <div class="absolute w-[400px] h-[400px] -bottom-[100px] -left-[100px] rounded-full bg-gradient-to-br from-accent-blue to-transparent opacity-5"></div>
+      <div class="absolute w-[600px] h-[600px] -top-[200px] -right-[200px] rounded-full bg-gradient-to-br from-amber-200/40 to-transparent"></div>
+      <div class="absolute w-[400px] h-[400px] -bottom-[100px] -left-[100px] rounded-full bg-gradient-to-br from-orange-200/30 to-transparent"></div>
+      <div class="absolute top-1/3 left-1/4 w-2 h-2 rounded-full bg-amber-300/30"></div>
+      <div class="absolute top-2/3 right-1/3 w-3 h-3 rounded-full bg-orange-300/20"></div>
+      <div class="absolute top-1/4 right-1/4 w-1.5 h-1.5 rounded-full bg-amber-200/40"></div>
     </div>
   </div>
 </template>
 
-<style>
-/* Animation spin for loading spinner - using tailwind animate-spin */
+<style scoped>
+.login-light {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
 </style>
