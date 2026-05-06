@@ -647,24 +647,43 @@ const clearEventFilters = () => {
             <div class="bg-bg-sidebar border border-border-default rounded-lg p-4">
               <h3 class="text-[13px] font-semibold text-text-primary mb-4">Activity Trends</h3>
               <div class="h-64 relative">
-                <!-- Simple Bar Chart -->
-                <div v-if="chartData.length > 0" class="absolute inset-x-0 bottom-8 top-0 flex items-end gap-1 px-2">
-                  <div
-                    v-for="(day, index) in chartData"
-                    :key="day.date"
-                    class="flex-1 flex flex-col items-center gap-1 group min-w-0"
-                  >
+                <div v-if="chartData.length > 0" class="h-full flex flex-col">
+                  <div class="flex-1 flex gap-[2px] pl-10">
+                    <!-- Y-axis labels -->
+                    <div class="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-[10px] text-text-muted px-1 pb-0.5 pointer-events-none select-none">
+                      <span>{{ formatNumber(maxEvents) }}</span>
+                      <span>{{ formatNumber(Math.round(maxEvents / 2)) }}</span>
+                      <span>0</span>
+                    </div>
+                    <!-- Bars -->
                     <div
-                      class="w-full bg-accent-blue hover:bg-accent-blue-hover rounded-t transition-colors relative min-h-[2px]"
-                      :style="{ height: `${(day.events / maxEvents) * 100}%` }"
+                      v-for="(day, index) in chartData"
+                      :key="day.date"
+                      class="flex-1 relative group"
                     >
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-bg-secondary border border-border-default px-2 py-1 rounded text-[10px] text-text-primary opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                        {{ formatNumber(day.events) }} events
+                      <div
+                        class="absolute bottom-0 left-0 right-0 bg-accent-blue hover:bg-accent-blue-hover rounded-t transition-all duration-200"
+                        :style="{
+                          height: maxEvents > 0 ? `${(day.events / maxEvents) * 100}%` : '0%',
+                          opacity: day.events > 0 ? 1 : 0.3
+                        }"
+                      >
+                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-bg-secondary border border-border-default px-2 py-1 rounded text-[10px] text-text-primary opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none shadow-lg">
+                          {{ formatNumber(day.events) }} events
+                        </div>
                       </div>
                     </div>
-                    <span v-if="index % 5 === 0 || index === chartData.length - 1" class="text-[9px] text-text-muted -rotate-45 origin-top-left translate-y-2 shrink-0">
-                      {{ day.date.slice(5) }}
-                    </span>
+                  </div>
+                  <div class="flex gap-[2px] pl-10">
+                    <div
+                      v-for="(day, index) in chartData"
+                      :key="day.date + '-xlabel'"
+                      class="flex-1 text-center"
+                    >
+                      <span v-if="index % 5 === 0 || index === chartData.length - 1" class="text-[9px] text-text-muted leading-none">
+                        {{ day.date.slice(5) }}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <!-- Empty State -->
@@ -677,7 +696,6 @@ const clearEventFilters = () => {
                     <p class="text-[12px]">No activity data available</p>
                   </div>
                 </div>
-                <div class="absolute bottom-0 left-0 right-0 h-px bg-border-default"></div>
               </div>
             </div>
 

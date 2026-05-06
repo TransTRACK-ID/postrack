@@ -1,6 +1,6 @@
 import { db } from '../../../../db';
-import { usageEvents, dailyUsageStats } from '../../../../db/schema';
-import { sql, gte, lte, and, desc } from 'drizzle-orm';
+import { usageEvents } from '../../../../db/schema';
+import { gte, lte, and } from 'drizzle-orm';
 import { isSuperAdmin } from '../../../../utils/permissions';
 
 interface DailyTrend {
@@ -50,14 +50,6 @@ export default defineEventHandler(async (event) => {
         lte(usageEvents.timestamp, endDate)
       ));
 
-    const aggregatedStats = await db
-      .select()
-      .from(dailyUsageStats)
-      .where(and(
-        gte(sql`${dailyUsageStats.date}`, getDateStr(startDate)),
-        lte(sql`${dailyUsageStats.date}`, getDateStr(endDate))
-      ));
-
     const dailyMap = new Map<string, DailyTrend>();
 
     const currentDate = new Date(startDate);
@@ -94,24 +86,6 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    for (const s of aggregatedStats) {
-      const trend = dailyMap.get(s.date);
-      if (trend) {
-        const totalFromAgg = (s.requestExecutions || 0) + (s.requestCreates || 0) + (s.requestUpdates || 0) + (s.requestDeletes || 0) +
-          (s.collectionCreates || 0) + (s.collectionUpdates || 0) + (s.collectionDeletes || 0) +
-          (s.folderCreates || 0) + (s.mockCreates || 0) + (s.mockUpdates || 0) + (s.mockDeletes || 0) +
-          (s.environmentCreates || 0) + (s.environmentUpdates || 0) + (s.environmentDeletes || 0);
-        trend.totalEvents += totalFromAgg;
-        trend.requestExecutions += s.requestExecutions || 0;
-        trend.resourceCreates += (s.requestCreates || 0) + (s.collectionCreates || 0) + (s.folderCreates || 0) +
-          (s.mockCreates || 0) + (s.environmentCreates || 0);
-        trend.resourceUpdates += (s.requestUpdates || 0) + (s.collectionUpdates || 0) +
-          (s.mockUpdates || 0) + (s.environmentUpdates || 0);
-        trend.resourceDeletes += (s.requestDeletes || 0) + (s.collectionDeletes || 0) + (s.folderDeletes || 0) +
-          (s.mockDeletes || 0) + (s.environmentDeletes || 0);
-      }
-    }
-
     const dailyUsersMap = new Map<string, Set<string>>();
     for (const e of detailedEvents) {
       const dateStr = getDateStr(e.timestamp);
@@ -119,12 +93,6 @@ export default defineEventHandler(async (event) => {
         dailyUsersMap.set(dateStr, new Set());
       }
       dailyUsersMap.get(dateStr)!.add(e.userId);
-    }
-    for (const s of aggregatedStats) {
-      if (!dailyUsersMap.has(s.date)) {
-        dailyUsersMap.set(s.date, new Set());
-      }
-      dailyUsersMap.get(s.date)!.add(s.userId);
     }
 
     for (const [dateStr, users] of dailyUsersMap) {
