@@ -182,18 +182,7 @@ const clearSelection = () => {
   selectedForCompare.value.clear();
 };
 
-const getMethodColor = (method: string) => {
-  const colors: Record<string, string> = {
-    GET: 'text-method-get',
-    POST: 'text-method-post',
-    PUT: 'text-method-put',
-    PATCH: 'text-method-patch',
-    DELETE: 'text-method-delete',
-    HEAD: 'text-method-head',
-    OPTIONS: 'text-method-options'
-  };
-  return colors[method] || 'text-text-primary';
-};
+const getMethodColor = (method: string) => getMethodColorClass(method);
 
 const getStatusColorClass = (status: number | null) => {
   if (!status) return 'bg-bg-tertiary text-text-muted';

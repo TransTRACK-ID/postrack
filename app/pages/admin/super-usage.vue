@@ -314,20 +314,7 @@ const getEventTypeColor = (eventType: string): string => {
   return 'bg-bg-tertiary text-text-muted';
 };
 
-// Method colors
-const getMethodColor = (method: string | null): string => {
-  if (!method) return 'text-text-muted';
-  const colors: Record<string, string> = {
-    GET: 'text-method-get',
-    POST: 'text-method-post',
-    PUT: 'text-method-put',
-    PATCH: 'text-method-patch',
-    DELETE: 'text-method-delete',
-    HEAD: 'text-method-head',
-    OPTIONS: 'text-method-options',
-  };
-  return colors[method] || 'text-text-muted';
-};
+const getMethodColor = (method: string | null): string => getMethodColorClass(method, 'text-text-muted');
 
 // Success/failure colors
 const getSuccessColor = (success: boolean | null): string => {
