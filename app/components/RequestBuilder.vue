@@ -214,15 +214,7 @@ const COMMON_HEADERS = [
   'Bearer'
 ] as const;
 
-const methodColors: Record<string, string> = {
-  GET: 'text-method-get',
-  POST: 'text-method-post',
-  PUT: 'text-method-put',
-  DELETE: 'text-method-delete',
-  PATCH: 'text-method-patch',
-  HEAD: 'text-method-head',
-  OPTIONS: 'text-method-options'
-};
+const methodColors = (method: string) => getMethodColorClass(method);
 
 const BODY_FORMATS = ['none', 'json', 'form-data', 'urlencoded', 'raw', 'binary'] as const;
 const RAW_CONTENT_TYPES = [
@@ -3337,7 +3329,7 @@ defineExpose({
           </div>
           <span 
             class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-            :class="[methodColors[form.method] || 'text-text-primary']"
+            :class="methodColors(form.method)"
           >
             {{ form.method }}
           </span>
@@ -3380,7 +3372,7 @@ defineExpose({
             v-model="form.method" 
             :class="[
               'py-2.5 px-3 bg-transparent border-none border-r border-border-default font-semibold text-sm cursor-pointer min-w-[100px] shrink-0 focus:outline-none',
-              methodColors[form.method] || 'text-text-primary'
+              methodColors(form.method)
             ]"
           >
             <option v-for="m in HTTP_METHODS" :key="m" :value="m">{{ m }}</option>
@@ -3388,7 +3380,7 @@ defineExpose({
           <span
             v-else
             class="py-2.5 px-3 border-r border-border-default font-semibold text-sm min-w-[100px] shrink-0 text-center"
-            :class="methodColors[form.method] || 'text-text-primary'"
+            :class="methodColors(form.method)"
           >{{ form.method }}</span>
           <VariableInput
             v-model="form.url"

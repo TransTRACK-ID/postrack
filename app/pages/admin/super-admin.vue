@@ -201,10 +201,6 @@ onUnmounted(() => {
 });
 
 // Helper functions
-const getMethodColor = (method: string): string => {
-  return METHOD_COLORS[method] || '#64748b';
-};
-
 const formatDate = (date: Date | string): string => {
   const d = new Date(date);
   return d.toLocaleDateString('en-US', { 

@@ -89,8 +89,6 @@ const emit = defineEmits<{
 
 const draggedIndex = ref<number | null>(null);
 
-const methodColors = METHOD_COLORS;
-
 const handleTabClick = (key: string) => {
   emit('selectTab', key);
 };
@@ -226,7 +224,7 @@ onUnmounted(() => {
     >
       <span
         :class="['font-bold uppercase text-[10px] w-5 text-center']"
-        :style="{ color: methodColors[tab.request.method] }"
+        :style="{ color: getMethodColor(tab.request.method) }"
       >
         {{ tab.request.method }}
       </span>

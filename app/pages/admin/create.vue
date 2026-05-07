@@ -29,14 +29,7 @@ const activeTab = ref('body');
 const isSaving = ref(false);
 const jsonError = ref('');
 
-// Method color classes
-const methodColorClasses: Record<string, string> = {
-  GET: 'text-method-get',
-  POST: 'text-method-post',
-  PUT: 'text-method-put',
-  DELETE: 'text-method-delete',
-  PATCH: 'text-method-patch'
-};
+const methodColorClass = (method: string) => getMethodColorClass(method);
 
 // Validate JSON
 const validateJson = () => {
@@ -137,7 +130,7 @@ const getCollectionColor = (collectionId: string) => {
           v-model="form.method" 
           :class="[
             'py-2.5 px-3 bg-transparent border-none border-r border-r-border-default font-semibold text-sm cursor-pointer min-w-[100px] focus:outline-none',
-            methodColorClasses[form.method] || 'text-text-primary'
+            methodColorClass(form.method)
           ]"
         >
           <option v-for="m in methods" :key="m" :value="m">{{ m }}</option>

@@ -61,10 +61,6 @@ const emit = defineEmits<{
 const canEdit = computed(() => props.permission === 'owner' || props.permission === 'edit');
 const canDrag = computed(() => props.permission === 'owner' || props.permission === 'edit');
 
-const getMethodColor = (method: string) => {
-  return METHOD_COLORS[method] || '#64748b';
-};
-
 const isExpanded = (folderId: string) => props.expandedFolderIds.has(folderId);
 
 const handleDragStart = (event: DragEvent, type: 'folder' | 'request', id: string) => {

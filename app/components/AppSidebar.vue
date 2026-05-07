@@ -921,10 +921,6 @@ const getCollectionColor = (color: string) => {
   return { borderLeftColor: color || '#6366f1' };
 };
 
-const getMethodColor = (method: string) => {
-  return METHOD_COLORS[method] || '#64748b';
-};
-
 interface SortedCollectionItem {
   id: string;
   type: 'folder' | 'request';
