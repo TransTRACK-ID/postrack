@@ -202,16 +202,7 @@ onUnmounted(() => {
 
 // Helper functions
 const getMethodColor = (method: string): string => {
-  const colors: Record<string, string> = {
-    GET: '#73BF69',
-    POST: '#FFCA28',
-    PUT: '#64B5F6',
-    PATCH: '#AB47BC',
-    DELETE: '#EF5350',
-    HEAD: '#8b5cf6',
-    OPTIONS: '#64748b'
-  };
-  return colors[method] || '#64748b';
+  return METHOD_COLORS[method] || '#64748b';
 };
 
 const formatDate = (date: Date | string): string => {

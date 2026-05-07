@@ -89,15 +89,7 @@ const emit = defineEmits<{
 
 const draggedIndex = ref<number | null>(null);
 
-const methodColors: Record<string, string> = {
-  GET: '#73BF69',
-  POST: '#FFCA28',
-  PUT: '#64B5F6',
-  PATCH: '#AB47BC',
-  DELETE: '#EF5350',
-  HEAD: '#8b5cf6',
-  OPTIONS: '#64748b'
-};
+const methodColors = METHOD_COLORS;
 
 const handleTabClick = (key: string) => {
   emit('selectTab', key);
