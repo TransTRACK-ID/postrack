@@ -203,11 +203,11 @@ onUnmounted(() => {
 // Helper functions
 const getMethodColor = (method: string): string => {
   const colors: Record<string, string> = {
-    GET: '#22c55e',
-    POST: '#3b82f6',
-    PUT: '#f97316',
-    PATCH: '#eab308',
-    DELETE: '#ef4444',
+    GET: '#73BF69',
+    POST: '#FFCA28',
+    PUT: '#64B5F6',
+    PATCH: '#AB47BC',
+    DELETE: '#EF5350',
     HEAD: '#8b5cf6',
     OPTIONS: '#64748b'
   };
