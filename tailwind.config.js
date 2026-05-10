@@ -13,46 +13,46 @@ export default {
       // Custom Colors - Matching the existing design tokens
       colors: {
         // Background colors
-        'bg-primary': '#1C1C1C',
-        'bg-secondary': '#252526',
-        'bg-tertiary': '#2D2D2D',
-        'bg-sidebar': '#1A1A1A',
-        'bg-header': '#2D2F31',
-        'bg-input': '#2D2D2D',
-        'bg-hover': '#3D3D3D',
-        'bg-active': '#404040',
+        'bg-primary': 'var(--bg-primary)',
+        'bg-secondary': 'var(--bg-secondary)',
+        'bg-tertiary': 'var(--bg-tertiary)',
+        'bg-sidebar': 'var(--bg-sidebar)',
+        'bg-header': 'var(--bg-header)',
+        'bg-input': 'var(--bg-input)',
+        'bg-hover': 'var(--bg-hover)',
+        'bg-active': 'var(--bg-active)',
 
         // Border colors
-        'border-default': '#3D3D3D',
-        'border-subtle': '#333333',
+        'border-default': 'var(--border-color)',
+        'border-subtle': 'var(--border-subtle)',
 
         // Text colors
-        'text-primary': '#E0E0E0',
-        'text-secondary': '#9E9E9E',
-        'text-muted': '#6E6E6E',
-        'text-inverse': '#1C1C1C',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted': 'var(--text-muted)',
+        'text-inverse': 'var(--text-inverse)',
 
         // Accent colors
-        'accent-orange': '#FF6C37',
-        'accent-blue': '#007AFF',
-        'accent-green': '#73BF69',
-        'accent-yellow': '#FFCA28',
-        'accent-red': '#EF5350',
-        'accent-purple': '#AB47BC',
+        'accent-orange': 'var(--accent-orange)',
+        'accent-blue': 'var(--accent-blue)',
+        'accent-green': 'var(--accent-green)',
+        'accent-yellow': 'var(--accent-yellow)',
+        'accent-red': 'var(--accent-red)',
+        'accent-purple': 'var(--accent-purple)',
 
         // HTTP Method colors
-        'method-get': '#73BF69',
-        'method-post': '#FFCA28',
-        'method-put': '#64B5F6',
-        'method-delete': '#EF5350',
-        'method-patch': '#AB47BC',
-        'method-head': '#8b5cf6',
-        'method-options': '#64748b',
+        'method-get': 'var(--method-get)',
+        'method-post': 'var(--method-post)',
+        'method-put': 'var(--method-put)',
+        'method-delete': 'var(--method-delete)',
+        'method-patch': 'var(--method-patch)',
+        'method-head': 'var(--method-head)',
+        'method-options': 'var(--method-options)',
 
         // Status colors (aliases)
-        'status-success': '#73BF69',
-        'status-error': '#EF5350',
-        'status-warning': '#FFCA28',
+        'status-success': 'var(--status-success)',
+        'status-error': 'var(--status-error)',
+        'status-warning': 'var(--status-warning)',
       },
 
       // Custom Font Families

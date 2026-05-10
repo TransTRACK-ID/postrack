@@ -50,6 +50,8 @@
   --method-put: #64B5F6;
   --method-delete: #EF5350;
   --method-patch: #AB47BC;
+  --method-head: #8b5cf6;
+  --method-options: #64748b;
   
   /* Status Colors */
   --status-success: #73BF69;
@@ -99,6 +101,53 @@
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* ============================================
+   LIGHT MODE OVERRIDES
+   ============================================ */
+.light {
+  /* Backgrounds */
+  --bg-primary: #F8F8F6;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #F0F0EE;
+  --bg-sidebar: #F5F5F3;
+  --bg-header: #FFFFFF;
+  --bg-input: #F5F5F3;
+  --bg-hover: #EBEBE9;
+  --bg-active: #E0E0DE;
+
+  /* Borders */
+  --border-color: #E0E0DC;
+  --border-subtle: #EBEBE7;
+
+  /* Text */
+  --text-primary: #1C1C1C;
+  --text-secondary: #6E6E6E;
+  --text-muted: #A0A0A0;
+  --text-inverse: #FFFFFF;
+
+  /* Accent Colors (same as dark - they work in both) */
+  --accent-orange: #FF6C37;
+  --accent-blue: #007AFF;
+  --accent-green: #73BF69;
+  --accent-yellow: #FFCA28;
+  --accent-red: #EF5350;
+  --accent-purple: #AB47BC;
+
+  /* HTTP Method Colors */
+  --method-get: #73BF69;
+  --method-post: #FFCA28;
+  --method-put: #64B5F6;
+  --method-delete: #EF5350;
+  --method-patch: #AB47BC;
+  --method-head: #8b5cf6;
+  --method-options: #64748b;
+
+  /* Status Colors */
+  --status-success: #73BF69;
+  --status-error: #EF5350;
+  --status-warning: #FFCA28;
 }
 
 /* ============================================

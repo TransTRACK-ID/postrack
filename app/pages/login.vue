@@ -26,6 +26,44 @@ const isLoading = ref(false);
 const errorMessage = ref('');
 const ssoProviders = ref<SsoProvidersResponse>({ providers: [], allowMultipleProviders: true });
 const isLoadingProviders = ref(true);
+const isLightMode = ref(false);
+
+const updateHtmlClass = () => {
+  if (isLightMode.value) {
+    document.documentElement.classList.add('light');
+  } else {
+    document.documentElement.classList.remove('light');
+  }
+};
+
+const toggleTheme = () => {
+  isLightMode.value = !isLightMode.value;
+  updateHtmlClass();
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('login-theme', isLightMode.value ? 'light' : 'dark');
+  }
+};
+
+onMounted(() => {
+  fetchSsoProviders();
+
+  // Restore saved theme preference
+  if (typeof localStorage !== 'undefined') {
+    const saved = localStorage.getItem('login-theme');
+    if (saved === 'light') {
+      isLightMode.value = true;
+    }
+  }
+  updateHtmlClass();
+
+  // Check if user is already logged in
+  checkAuthAndRedirect();
+});
+
+onUnmounted(() => {
+  // Clean up light class when leaving the page
+  document.documentElement.classList.remove('light');
+});
 
 const fetchSsoProviders = async () => {
   try {
@@ -100,13 +138,6 @@ const hasAnySso = computed(() => {
   return Array.isArray(ssoProviders.value.providers) && ssoProviders.value.providers.length > 0;
 });
 
-onMounted(() => {
-  fetchSsoProviders();
-  
-  // Check if user is already logged in
-  checkAuthAndRedirect();
-});
-
 const checkAuthAndRedirect = async () => {
   // Check for redirect URL in query params
   const urlParams = new URLSearchParams(window.location.search);
@@ -132,6 +163,29 @@ const checkAuthAndRedirect = async () => {
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-bg-primary relative overflow-hidden">
+    <!-- Theme Toggle -->
+    <button
+      type="button"
+      @click="toggleTheme"
+      class="absolute top-6 right-6 p-2.5 rounded-full bg-bg-secondary border border-border-default text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-all duration-normal z-20"
+      :aria-label="isLightMode ? 'Switch to dark mode' : 'Switch to light mode'"
+    >
+      <svg v-if="isLightMode" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+
     <div class="flex flex-col items-center w-full max-w-[400px] p-6 z-10">
       <!-- Logo -->
       <div class="mb-8">
@@ -143,7 +197,10 @@ const checkAuthAndRedirect = async () => {
       </div>
 
       <!-- Card -->
-      <div class="w-full bg-bg-secondary border border-border-default rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <div
+        class="w-full bg-bg-secondary border border-border-default rounded-2xl p-8 transition-shadow duration-normal"
+        :class="isLightMode ? 'shadow-[0_8px_32px_rgba(0,0,0,0.08)]' : 'shadow-[0_8px_32px_rgba(0,0,0,0.4)]'"
+      >
         <!-- Header -->
         <div class="text-center mb-7">
           <h1 class="text-2xl font-semibold text-text-primary mb-2">Welcome Back</h1>
@@ -262,8 +319,14 @@ const checkAuthAndRedirect = async () => {
 
     <!-- Background decoration -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute w-[600px] h-[600px] -top-[200px] -right-[200px] rounded-full bg-gradient-to-br from-accent-orange to-transparent opacity-5"></div>
-      <div class="absolute w-[400px] h-[400px] -bottom-[100px] -left-[100px] rounded-full bg-gradient-to-br from-accent-blue to-transparent opacity-5"></div>
+      <div
+        class="absolute w-[600px] h-[600px] -top-[200px] -right-[200px] rounded-full bg-gradient-to-br from-accent-orange to-transparent transition-opacity duration-normal"
+        :class="isLightMode ? 'opacity-10' : 'opacity-5'"
+      ></div>
+      <div
+        class="absolute w-[400px] h-[400px] -bottom-[100px] -left-[100px] rounded-full bg-gradient-to-br from-accent-blue to-transparent transition-opacity duration-normal"
+        :class="isLightMode ? 'opacity-10' : 'opacity-5'"
+      ></div>
     </div>
   </div>
 </template>
