@@ -72,6 +72,8 @@ const handleDragStart = (event: DragEvent, type: 'folder' | 'request', id: strin
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('application/json', JSON.stringify({ type, id }));
   }
+  // Reset throttle timer so the first dragover always updates immediately
+  lastDragOverTime = 0;
   emit('dragStart', type, id);
 };
 
@@ -79,12 +81,24 @@ const handleDragEnd = () => {
   emit('dragEnd');
 };
 
+// Throttle dragover updates to prevent excessive event emission and re-renders
+const DRAG_THROTTLE_MS = 120;
+let lastDragOverTime = 0;
+
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
   if (!canEdit.value) return;
   event.preventDefault();
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
   }
+
+  // Throttle to reduce reactive updates and memory pressure during DnD
+  const now = Date.now();
+  if (now - lastDragOverTime < DRAG_THROTTLE_MS) {
+    return;
+  }
+  lastDragOverTime = now;
+
   emit('dragOver', event, type, id, position);
 };
 

@@ -188,6 +188,10 @@ const dropTarget = ref<{
   position: 'before' | 'after' | 'inside';
 } | null>(null);
 
+// Throttle dragover updates to prevent excessive re-renders during DnD
+const DRAG_THROTTLE_MS = 120;
+const lastDragOverTime = ref(0);
+
 const workspaceSearchQuery = ref('');
 
 const localWorkspaces = ref<WorkspaceWithProjects[]>([]);
@@ -536,6 +540,8 @@ const handleDragStart = (type: 'folder' | 'request', id: string) => {
     draggingRequestId.value = id;
     draggingFolderId.value = null;
   }
+  // Reset throttle timer so the first dragover always updates immediately
+  lastDragOverTime.value = 0;
 };
 
 const handleDragEnd = () => {
@@ -546,7 +552,15 @@ const handleDragEnd = () => {
 
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
   event.preventDefault();
-  
+
+  // Throttle dragover updates to prevent excessive re-renders and memory pressure
+  const now = Date.now();
+  if (now - lastDragOverTime.value < DRAG_THROTTLE_MS) {
+    // Still call preventDefault to allow dropping, but skip reactive updates
+    return;
+  }
+  lastDragOverTime.value = now;
+
   if (type === 'folder') {
     const targetFolder = findFolderById(currentWorkspace.value, id);
     if (!targetFolder) return;
@@ -576,17 +590,24 @@ const handleDragLeave = () => {
 
 const handleCollectionDragOver = (event: DragEvent, collectionId: string) => {
   event.preventDefault();
-  
+
   // Only allow dropping requests onto collections (not folders)
   if (!draggingRequestId.value) {
     dropTarget.value = null;
     return;
   }
-  
+
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
   }
-  
+
+  // Throttle dragover updates to prevent excessive re-renders and memory pressure
+  const now = Date.now();
+  if (now - lastDragOverTime.value < DRAG_THROTTLE_MS) {
+    return;
+  }
+  lastDragOverTime.value = now;
+
   dropTarget.value = { type: 'collection', id: collectionId, position: 'inside' };
 };
 
