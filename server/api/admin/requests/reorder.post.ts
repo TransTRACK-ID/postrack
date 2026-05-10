@@ -1,6 +1,7 @@
 import { db } from '../../../db';
 import { savedRequests } from '../../../db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { cache, CacheKeys } from '../../../utils/cache';
 
 interface RequestUpdate {
   id: string;
@@ -95,6 +96,13 @@ export default defineEventHandler(async (event) => {
         .returning())[0];
 
       updatedRequests.push(updated);
+    }
+
+    // Invalidate cache so subsequent fetches get fresh data
+    const user = event.context.user;
+    if (user?.id) {
+      cache.delete(CacheKeys.workspaceTree(user.id));
+      cache.delete(CacheKeys.workspaceTreeLight(user.id));
     }
 
     return {

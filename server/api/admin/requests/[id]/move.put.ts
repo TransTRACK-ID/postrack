@@ -1,6 +1,7 @@
 import { db } from '../../../../db';
 import { savedRequests, folders, collections } from '../../../../db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { cache, CacheKeys } from '../../../../utils/cache';
 
 interface MoveRequestBody {
   folderId?: string | null;
@@ -160,6 +161,13 @@ export default defineEventHandler(async (event) => {
       .set(updateData)
       .where(eq(savedRequests.id, id))
       .returning())[0];
+
+    // Invalidate cache so subsequent fetches get fresh data
+    const user = event.context.user;
+    if (user?.id) {
+      cache.delete(CacheKeys.workspaceTree(user.id));
+      cache.delete(CacheKeys.workspaceTreeLight(user.id));
+    }
 
     return {
       success: true,
