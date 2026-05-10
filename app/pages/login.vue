@@ -26,69 +26,48 @@ const isLoading = ref(false);
 const errorMessage = ref('');
 const ssoProviders = ref<SsoProvidersResponse>({ providers: [], allowMultipleProviders: true });
 const isLoadingProviders = ref(true);
-const isLightMode = ref(false);
 
-const theme = computed(() => {
-  if (isLightMode.value) {
-    return {
-      pageBg: 'bg-[#F0F4F8]',
-      cardBg: 'bg-white',
-      cardBorder: 'border-[#E2E8F0]',
-      cardShadow: 'shadow-[0_8px_32px_rgba(0,0,0,0.08)]',
-      inputBg: 'bg-white',
-      inputBorder: 'border-[#E2E8F0]',
-      inputText: 'text-[#0F172A]',
-      inputPlaceholder: 'placeholder:text-[#94A3B8]',
-      inputFocus: 'focus:shadow-[0_0_0_3px_rgba(255,108,55,0.1)]',
-      labelText: 'text-[#475569]',
-      headingText: 'text-[#0F172A]',
-      bodyText: 'text-[#475569]',
-      mutedText: 'text-[#94A3B8]',
-      divider: 'bg-[#E2E8F0]',
-      errorBg: 'bg-red-50',
-      errorBorder: 'border-red-200',
-      errorText: 'text-red-600',
-      iconColor: 'text-[#94A3B8]',
-      footerText: 'text-[#94A3B8]',
-      decorationOpacity: 'opacity-[0.08]',
-      toggleBg: 'bg-[#E2E8F0]',
-      toggleHover: 'hover:bg-[#CBD5E1]',
-      toggleIcon: 'text-[#475569]',
-    };
-  }
-  return {
-    pageBg: 'bg-bg-primary',
-    cardBg: 'bg-bg-secondary',
-    cardBorder: 'border-border-default',
-    cardShadow: 'shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
-    inputBg: 'bg-bg-input',
-    inputBorder: 'border-border-default',
-    inputText: 'text-text-primary',
-    inputPlaceholder: 'placeholder:text-text-muted',
-    inputFocus: 'focus:shadow-[0_0_0_3px_rgba(255,108,55,0.15)]',
-    labelText: 'text-text-secondary',
-    headingText: 'text-text-primary',
-    bodyText: 'text-text-secondary',
-    mutedText: 'text-text-muted',
-    divider: 'bg-border-default',
-    errorBg: 'bg-accent-red/15',
-    errorBorder: 'border-accent-red/30',
-    errorText: 'text-accent-red',
-    iconColor: 'text-text-muted',
-    footerText: 'text-text-muted',
-    decorationOpacity: 'opacity-5',
-    toggleBg: 'bg-bg-secondary',
-    toggleHover: 'hover:bg-bg-hover',
-    toggleIcon: 'text-text-muted',
-  };
+// Theme toggle
+const { lightMode, init: initTheme, toggle: toggleTheme } = useLoginTheme();
+
+// Prevent FOUC: apply theme class before page renders
+useHead({
+  script: [
+    {
+      key: 'login-theme',
+      innerHTML: `
+        (function() {
+          var key = 'postrack-login-theme';
+          var saved = localStorage.getItem(key);
+          var isLight = saved ? saved === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches;
+          if (isLight) {
+            document.documentElement.classList.add('login-light');
+          }
+        })();
+      `,
+      tagPosition: 'head'
+    }
+  ]
 });
 
-const toggleTheme = () => {
-  isLightMode.value = !isLightMode.value;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('login-theme', isLightMode.value ? 'light' : 'dark');
-  }
-};
+// Theme-aware computed classes
+const pageBg = computed(() => lightMode.value ? 'bg-[#F5F2EE]' : 'bg-bg-primary');
+const cardBg = computed(() => lightMode.value ? 'bg-white' : 'bg-bg-secondary');
+const cardBorder = computed(() => lightMode.value ? 'border-[#E0DEDA]' : 'border-border-default');
+const cardShadow = computed(() => lightMode.value ? 'shadow-[0_8px_32px_rgba(0,0,0,0.08)]' : 'shadow-[0_8px_32px_rgba(0,0,0,0.4)]');
+const inputBg = computed(() => lightMode.value ? 'bg-[#F0EEEB]' : 'bg-bg-input');
+const inputBorder = computed(() => lightMode.value ? 'border-[#D8D5D0]' : 'border-border-default');
+const inputText = computed(() => lightMode.value ? 'text-[#1A1A2E]' : 'text-text-primary');
+const textPrimary = computed(() => lightMode.value ? 'text-[#1A1A2E]' : 'text-text-primary');
+const textSecondary = computed(() => lightMode.value ? 'text-[#5A5A6E]' : 'text-text-secondary');
+const textMuted = computed(() => lightMode.value ? 'text-[#8A8A9A]' : 'text-text-muted');
+const dividerBg = computed(() => lightMode.value ? 'bg-[#E0DEDA]' : 'bg-border-default');
+const errorBg = computed(() => lightMode.value ? 'bg-[#EF5350]/8' : 'bg-accent-red/15');
+const errorBorder = computed(() => lightMode.value ? 'border-[#EF5350]/25' : 'border-accent-red/30');
+const errorText = computed(() => lightMode.value ? 'text-[#D32F2F]' : 'text-accent-red');
+const focusRing = computed(() => lightMode.value ? 'focus:!shadow-[0_0_0_3px_rgba(255,108,55,0.10)]' : 'focus:!shadow-[0_0_0_3px_rgba(255,108,55,0.15)]');
+const submitHoverShadow = computed(() => lightMode.value ? 'hover:not-disabled:shadow-[0_6px_20px_rgba(255,108,55,0.25)]' : 'hover:not-disabled:shadow-[0_6px_20px_rgba(255,108,55,0.35)]');
+const bgDecorOpacity = computed(() => lightMode.value ? 'opacity-[0.08]' : 'opacity-5');
 
 const fetchSsoProviders = async () => {
   try {
@@ -164,19 +143,8 @@ const hasAnySso = computed(() => {
 });
 
 onMounted(() => {
-  // Restore theme preference
-  if (typeof localStorage !== 'undefined') {
-    const saved = localStorage.getItem('login-theme');
-    if (saved) {
-      isLightMode.value = saved === 'light';
-    } else if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      isLightMode.value = true;
-    }
-  }
-
+  initTheme();
   fetchSsoProviders();
-
-  // Check if user is already logged in
   checkAuthAndRedirect();
 });
 
@@ -204,41 +172,21 @@ const checkAuthAndRedirect = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center relative overflow-hidden" :class="theme.pageBg">
+  <div :class="['min-h-screen flex items-center justify-center relative overflow-hidden transition-colors duration-300', pageBg]">
     <!-- Theme Toggle -->
     <button
       type="button"
       @click="toggleTheme"
-      class="absolute top-6 right-6 z-20 p-2.5 rounded-full transition-all duration-normal cursor-pointer"
-      :class="[theme.toggleBg, theme.toggleHover]"
-      :title="isLightMode ? 'Switch to dark mode' : 'Switch to light mode'"
+      :class="[
+        'fixed top-5 right-5 z-50 p-2.5 rounded-full cursor-pointer transition-all duration-300',
+        lightMode
+          ? 'bg-white shadow-[0_2px_12px_rgba(0,0,0,0.1)] text-[#8A8A9A] hover:text-[#FF6C37] hover:shadow-[0_4px_16px_rgba(0,0,0,0.15)]'
+          : 'bg-[#2D2D2D] text-[#6E6E6E] hover:text-[#FF6C37] shadow-[0_2px_12px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.4)]'
+      ]"
+      aria-label="Toggle theme"
     >
-      <svg
-        v-if="isLightMode"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        :class="theme.toggleIcon"
-      >
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-      </svg>
-      <svg
-        v-else
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        :class="theme.toggleIcon"
-      >
+      <!-- Sun icon (switch to light) -->
+      <svg v-if="!lightMode" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="5"></circle>
         <line x1="12" y1="1" x2="12" y2="3"></line>
         <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -248,6 +196,10 @@ const checkAuthAndRedirect = async () => {
         <line x1="21" y1="12" x2="23" y2="12"></line>
         <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <!-- Moon icon (switch to dark) -->
+      <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>
     </button>
 
@@ -262,18 +214,17 @@ const checkAuthAndRedirect = async () => {
       </div>
 
       <!-- Card -->
-      <div class="w-full rounded-2xl p-8" :class="[theme.cardBg, theme.cardBorder, theme.cardShadow]">
+      <div :class="['w-full rounded-2xl p-8 transition-colors duration-300', cardBg, cardBorder, cardShadow]">
         <!-- Header -->
         <div class="text-center mb-7">
-          <h1 class="text-2xl font-semibold mb-2" :class="theme.headingText">Welcome Back</h1>
-          <p class="text-sm m-0" :class="theme.bodyText">Sign in to access Mock Services</p>
+          <h1 :class="['text-2xl font-semibold mb-2', textPrimary]">Welcome Back</h1>
+          <p :class="['text-sm m-0', textSecondary]">Sign in to access Mock Services</p>
         </div>
 
         <!-- Error Message -->
-        <div
-          v-if="errorMessage"
-          class="flex items-center gap-2.5 py-3 px-4 rounded-lg mb-5 text-[13px]"
-          :class="[theme.errorBg, theme.errorBorder, theme.errorText]"
+        <div 
+          v-if="errorMessage" 
+          :class="['flex items-center gap-2.5 py-3 px-4 rounded-lg mb-5 text-[13px] transition-colors duration-300', errorBg, errorBorder, errorText]"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -306,59 +257,55 @@ const checkAuthAndRedirect = async () => {
 
         <!-- Divider -->
         <div v-if="hasAnySso" class="flex items-center gap-4 my-4">
-          <div class="flex-1 h-px" :class="theme.divider"></div>
-          <span class="text-xs uppercase tracking-wide" :class="theme.mutedText">or continue with email</span>
-          <div class="flex-1 h-px" :class="theme.divider"></div>
+          <div :class="['flex-1 h-px transition-colors duration-300', dividerBg]"></div>
+          <span :class="['text-xs uppercase tracking-wide transition-colors duration-300', textMuted]">or continue with email</span>
+          <div :class="['flex-1 h-px transition-colors duration-300', dividerBg]"></div>
         </div>
 
         <!-- Form -->
         <form @submit.prevent="login" class="flex flex-col gap-5">
           <!-- Email Field -->
           <div class="flex flex-col gap-2">
-            <label for="email" class="text-[13px] font-medium normal-case tracking-normal" :class="theme.labelText">Email</label>
+            <label for="email" :class="['text-[13px] font-medium normal-case tracking-normal transition-colors duration-300', textSecondary]">Email</label>
             <div class="relative">
-              <svg
-                class="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                :class="theme.iconColor"
+              <svg 
+                :class="['absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-300', textMuted]" 
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
               >
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                 <polyline points="22,6 12,13 2,6"></polyline>
               </svg>
-              <input
+              <input 
                 id="email"
-                v-model="form.email"
-                type="email"
+                v-model="form.email" 
+                type="email" 
                 placeholder="admin@mock.com"
-                required
+                required 
                 autocomplete="email"
-                class="w-full py-3.5 px-3.5 pl-[46px] rounded-[10px] text-sm transition-all duration-fast focus:outline-none focus:border-accent-orange"
-                :class="[theme.inputBg, theme.inputBorder, theme.inputText, theme.inputPlaceholder, theme.inputFocus]"
+                :class="['w-full py-3.5 px-3.5 pl-[46px] rounded-[10px] text-sm transition-all duration-fast focus:outline-none focus:!border-accent-orange placeholder:transition-colors placeholder:duration-300', inputBg, inputBorder, inputText, focusRing, lightMode ? 'placeholder:text-[#B0ADA8]' : 'placeholder:text-text-muted']"
               />
             </div>
           </div>
 
           <!-- Password Field -->
           <div class="flex flex-col gap-2">
-            <label for="password" class="text-[13px] font-medium normal-case tracking-normal" :class="theme.labelText">Password</label>
+            <label for="password" :class="['text-[13px] font-medium normal-case tracking-normal transition-colors duration-300', textSecondary]">Password</label>
             <div class="relative">
-              <svg
-                class="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                :class="theme.iconColor"
+              <svg 
+                :class="['absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-300', textMuted]" 
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
               >
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              <input
+              <input 
                 id="password"
-                v-model="form.password"
-                type="password"
+                v-model="form.password" 
+                type="password" 
                 placeholder="••••••••"
-                required
+                required 
                 autocomplete="current-password"
-                class="w-full py-3.5 px-3.5 pl-[46px] rounded-[10px] text-sm transition-all duration-fast focus:outline-none focus:border-accent-orange"
-                :class="[theme.inputBg, theme.inputBorder, theme.inputText, theme.inputPlaceholder, theme.inputFocus]"
+                :class="['w-full py-3.5 px-3.5 pl-[46px] rounded-[10px] text-sm transition-all duration-fast focus:outline-none focus:!border-accent-orange placeholder:transition-colors placeholder:duration-300', inputBg, inputBorder, inputText, focusRing, lightMode ? 'placeholder:text-[#B0ADA8]' : 'placeholder:text-text-muted']"
               />
             </div>
           </div>
@@ -366,7 +313,7 @@ const checkAuthAndRedirect = async () => {
           <!-- Submit Button -->
           <button 
             type="submit" 
-            class="flex items-center justify-center gap-2.5 w-full py-3.5 bg-gradient-to-br from-accent-orange to-[#FF8C5A] border-none rounded-[10px] text-white text-[15px] font-semibold cursor-pointer transition-all duration-normal mt-2 hover:not-disabled:-translate-y-px hover:not-disabled:shadow-[0_6px_20px_rgba(255,108,55,0.35)] active:not-disabled:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed"
+            :class="['flex items-center justify-center gap-2.5 w-full py-3.5 bg-gradient-to-br from-accent-orange to-[#FF8C5A] border-none rounded-[10px] text-white text-[15px] font-semibold cursor-pointer transition-all duration-normal mt-2 hover:not-disabled:-translate-y-px active:not-disabled:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed', submitHoverShadow]"
             :disabled="isLoading"
           >
             <svg v-if="isLoading" class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -379,19 +326,37 @@ const checkAuthAndRedirect = async () => {
       </div>
 
       <!-- Footer -->
-      <p class="mt-6 text-[13px]" :class="theme.footerText">
+      <p :class="['mt-6 text-[13px] transition-colors duration-300', textMuted]">
         Mock Services Admin Panel
       </p>
     </div>
 
     <!-- Background decoration -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute w-[600px] h-[600px] -top-[200px] -right-[200px] rounded-full bg-gradient-to-br from-accent-orange to-transparent" :class="theme.decorationOpacity"></div>
-      <div class="absolute w-[400px] h-[400px] -bottom-[100px] -left-[100px] rounded-full bg-gradient-to-br from-accent-blue to-transparent" :class="theme.decorationOpacity"></div>
+      <div :class="['absolute w-[600px] h-[600px] -top-[200px] -right-[200px] rounded-full bg-gradient-to-br from-accent-orange to-transparent transition-opacity duration-500', bgDecorOpacity]"></div>
+      <div :class="['absolute w-[400px] h-[400px] -bottom-[100px] -left-[100px] rounded-full bg-gradient-to-br from-accent-blue to-transparent transition-opacity duration-500', bgDecorOpacity]"></div>
     </div>
   </div>
 </template>
 
-<style>
-/* Animation spin for loading spinner - using tailwind animate-spin */
+<style scoped>
+/* Smooth color transitions for all theme-related properties */
+:deep(input),
+:deep(button),
+:deep(div),
+:deep(span),
+:deep(label),
+:deep(h1),
+:deep(p),
+:deep(svg) {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity;
+  transition-duration: 300ms;
+  transition-timing-function: ease;
+}
+
+/* Ensure the page background fills the viewport */
+:deep(.min-h-screen) {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 </style>
