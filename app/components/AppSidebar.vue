@@ -1679,7 +1679,7 @@ defineExpose({
                       <!-- Render Request -->
                       <div
                         v-else
-                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.id === item.data.id]"
+                         v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
                         :class="[
                           'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer border-l-2 border-l-transparent transition-all duration-fast hover:bg-bg-hover',
                           dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10 border-l-accent-blue' : ''
