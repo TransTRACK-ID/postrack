@@ -81,8 +81,8 @@ const handleDragEnd = () => {
   emit('dragEnd');
 };
 
-// Throttle dragover updates to prevent excessive event emission and re-renders
-const DRAG_THROTTLE_MS = 120;
+// Throttle dragover to 250ms to match AppSidebar and reduce reactive updates
+const DRAG_THROTTLE_MS = 250;
 let lastDragOverTime = 0;
 
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
@@ -112,14 +112,11 @@ const handleDrop = (event: DragEvent, type: 'folder' | 'request', id: string, po
   emit('drop', event, type, id, position);
 };
 
-const isValidDropTarget = (): boolean => {
-  if (!canEdit.value) return false;
-  if (props.draggingFolderId === props.folder.id) return false;
-  if (props.draggingFolderId && isDescendant(props.draggingFolderId, props.folder.id)) return false;
-  return true;
-};
+// Cache descendant check as computed to avoid recursive recomputation on every render
+const isDraggingSelf = computed(() => props.draggingFolderId === props.folder.id);
 
-const isDescendant = (ancestorId: string, descendantId: string): boolean => {
+const isDescendantOfDragging = computed(() => {
+  if (!props.draggingFolderId) return false;
   const findInChildren = (folderId: string, children: any[]): boolean => {
     for (const child of children) {
       if (child.id === folderId) return true;
@@ -127,15 +124,39 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
     }
     return false;
   };
-  return findInChildren(ancestorId, props.folder.children);
+  return findInChildren(props.draggingFolderId, props.folder.children);
+});
+
+const isValidDropTarget = (): boolean => {
+  if (!canEdit.value) return false;
+  if (isDraggingSelf.value) return false;
+  if (isDescendantOfDragging.value) return false;
+  return true;
 };
+
+// Pre-compute drop target indicator states so template expressions are cheap
+const isFolderDropBefore = computed(() =>
+  props.dropTarget?.type === 'folder' && props.dropTarget?.id === props.folder.id && props.dropTarget?.position === 'before'
+);
+const isFolderDropInside = computed(() =>
+  props.dropTarget?.type === 'folder' && props.dropTarget?.id === props.folder.id && props.dropTarget?.position === 'inside'
+);
+const isStartDropBetween = computed(() =>
+  props.dropTarget?.type === 'between' && props.dropTarget?.id === 'start-' + props.folder.id
+);
+const isEndDropBetween = computed(() =>
+  props.dropTarget?.type === 'between' && props.dropTarget?.id === 'end-' + props.folder.id
+);
+const isBeforeRequestsDrop = computed(() =>
+  props.folder.children.length > 0 && props.dropTarget?.type === 'between' && props.dropTarget?.id === 'before-requests'
+);
 </script>
 
 <template>
   <div class="mb-0.5 relative">
     <!-- Drop indicator line - before folder -->
     <div
-      v-if="dropTarget?.type === 'folder' && dropTarget?.id === folder.id && dropTarget?.position === 'before'"
+      v-if="isFolderDropBefore"
       class="absolute left-0 right-0 h-0.5 bg-accent-blue -top-0.5 z-10 pointer-events-none"
     ></div>
 
@@ -143,7 +164,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
     <div
       :class="[
         'flex items-center gap-1.5 py-1.5 px-3 text-text-primary text-xs font-medium cursor-pointer transition-colors duration-fast group relative',
-        dropTarget?.type === 'folder' && dropTarget?.id === folder.id && dropTarget?.position === 'inside' ? 'bg-accent-blue/10 border border-dashed border-accent-blue rounded' : '',
+        isFolderDropInside ? 'bg-accent-blue/10 border border-dashed border-accent-blue rounded' : '',
         !isValidDropTarget() && (draggingFolderId || draggingRequestId) ? 'opacity-40' : ''
       ]"
       :draggable="canDrag"
@@ -157,7 +178,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
     >
       <!-- Drop indicator - left side when hovering for reorder -->
       <div
-        v-if="dropTarget?.type === 'folder' && dropTarget?.id === folder.id && dropTarget?.position === 'before'"
+        v-if="isFolderDropBefore"
         class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-accent-blue z-20"
       ></div>
 
@@ -200,7 +221,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
       <div v-show="isExpanded(folder.id)" class="pl-3 relative">
         <!-- Drop indicator - before first child -->
         <div
-          v-if="dropTarget?.type === 'between' && dropTarget?.id === 'start-' + folder.id"
+          v-if="isStartDropBetween"
           class="absolute left-0 right-0 h-0.5 bg-accent-blue -top-0.5 z-10 pointer-events-none"
         ></div>
 
@@ -212,6 +233,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
             :dragging-folder-id="draggingFolderId"
             :dragging-request-id="draggingRequestId"
             :drop-target="dropTarget"
+            :permission="permission"
             @toggle-folder="emit('toggleFolder', $event)"
             @select-request="emit('selectRequest', $event)"
             @context-menu="(...args: any[]) => emit('contextMenu', args[0], args[1], args[2])"
@@ -232,7 +254,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
 
         <!-- Drop indicator before requests section -->
         <div
-          v-if="folder.children.length > 0 && dropTarget?.type === 'between' && dropTarget?.id === 'before-requests'"
+          v-if="isBeforeRequestsDrop"
           class="absolute left-0 right-0 h-0.5 bg-accent-blue -mt-0.5 z-10 pointer-events-none"
         ></div>
 
@@ -247,6 +269,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
             ></div>
 
             <div
+              v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
               :class="[
                 'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer border-l-2 border-l-transparent transition-all duration-fast hover:bg-bg-hover',
                 dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10 border-l-accent-blue' : ''
@@ -283,7 +306,7 @@ const isDescendant = (ancestorId: string, descendantId: string): boolean => {
 
         <!-- Drop indicator at end of folder -->
         <div
-          v-if="dropTarget?.type === 'between' && dropTarget?.id === 'end-' + folder.id"
+          v-if="isEndDropBetween"
           class="absolute left-0 right-0 h-0.5 bg-accent-blue -mt-0.5 z-10 pointer-events-none"
         ></div>
 

@@ -5,6 +5,9 @@ import ApiDefinitionsPanel from './ApiDefinitionsPanel.vue';
 // Toast notification
 const { showToast } = useToast();
 
+// Optimized drag state (uses shallowRef to minimize reactive overhead)
+const dragState = useDragState();
+
 interface Collection {
   id: string;
   name: string;
@@ -180,17 +183,10 @@ const expandedProjects = useExpandedState('mock-service-expanded-projects');
 const expandedCollectionsHierarchy = useExpandedState('mock-service-expanded-collections-hierarchy');
 const expandedFolders = useExpandedState('mock-service-expanded-folders');
 
-const draggingFolderId = ref<string | null>(null);
-const draggingRequestId = ref<string | null>(null);
-const dropTarget = ref<{
-  type: 'folder' | 'request' | 'collection' | 'between';
-  id: string;
-  position: 'before' | 'after' | 'inside';
-} | null>(null);
-
-// Throttle dragover updates to prevent excessive re-renders during DnD
-const DRAG_THROTTLE_MS = 120;
-const lastDragOverTime = ref(0);
+// Drag state is managed via useDragState composable (shallowRef for performance)
+const draggingFolderId = dragState.__draggingFolderId;
+const draggingRequestId = dragState.__draggingRequestId;
+const dropTarget = dragState.__dropTarget;
 
 const workspaceSearchQuery = ref('');
 
@@ -533,59 +529,46 @@ const isCollectionHierarchyExpanded = (collectionId: string) => expandedCollecti
 const isFolderExpanded = (folderId: string) => expandedFolders.value.has(folderId);
 
 const handleDragStart = (type: 'folder' | 'request', id: string) => {
-  if (type === 'folder') {
-    draggingFolderId.value = id;
-    draggingRequestId.value = null;
-  } else {
-    draggingRequestId.value = id;
-    draggingFolderId.value = null;
-  }
-  // Reset throttle timer so the first dragover always updates immediately
-  lastDragOverTime.value = 0;
+  dragState.setDragging(type, id);
 };
 
 const handleDragEnd = () => {
-  draggingFolderId.value = null;
-  draggingRequestId.value = null;
-  dropTarget.value = null;
+  dragState.clearDragging();
 };
 
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
   event.preventDefault();
 
-  // Throttle dragover updates to prevent excessive re-renders and memory pressure
-  const now = Date.now();
-  if (now - lastDragOverTime.value < DRAG_THROTTLE_MS) {
-    // Still call preventDefault to allow dropping, but skip reactive updates
+  // Throttle dragover to 250ms to reduce reactive updates and re-renders
+  if (!dragState.shouldProcessDragOver(250)) {
     return;
   }
-  lastDragOverTime.value = now;
 
   if (type === 'folder') {
     const targetFolder = findFolderById(currentWorkspace.value, id);
-    if (!targetFolder) return;
+    if (!targetFolder) {
+      dragState.setDropTarget(null);
+      return;
+    }
 
     if (draggingFolderId.value === id) {
-      dropTarget.value = null;
+      dragState.setDropTarget(null);
       return;
     }
 
     if (draggingFolderId.value && isDescendant(draggingFolderId.value, id, currentWorkspace.value)) {
-      dropTarget.value = null;
+      dragState.setDropTarget(null);
       return;
     }
 
-    dropTarget.value = { type, id, position: position === 'inside' ? 'inside' : 'before' };
+    dragState.setDropTarget({ type, id, position: position === 'inside' ? 'inside' : 'before' });
   } else {
-    dropTarget.value = { type, id, position };
+    dragState.setDropTarget({ type, id, position });
   }
 };
 
 const handleDragLeave = () => {
-  if (!dropTarget.value) {
-    return;
-  }
-  dropTarget.value = null;
+  dragState.setDropTarget(null);
 };
 
 const handleCollectionDragOver = (event: DragEvent, collectionId: string) => {
@@ -593,7 +576,7 @@ const handleCollectionDragOver = (event: DragEvent, collectionId: string) => {
 
   // Only allow dropping requests onto collections (not folders)
   if (!draggingRequestId.value) {
-    dropTarget.value = null;
+    dragState.setDropTarget(null);
     return;
   }
 
@@ -601,14 +584,12 @@ const handleCollectionDragOver = (event: DragEvent, collectionId: string) => {
     event.dataTransfer.dropEffect = 'move';
   }
 
-  // Throttle dragover updates to prevent excessive re-renders and memory pressure
-  const now = Date.now();
-  if (now - lastDragOverTime.value < DRAG_THROTTLE_MS) {
+  // Throttle dragover to 250ms
+  if (!dragState.shouldProcessDragOver(250)) {
     return;
   }
-  lastDragOverTime.value = now;
 
-  dropTarget.value = { type: 'collection', id: collectionId, position: 'inside' };
+  dragState.setDropTarget({ type: 'collection', id: collectionId, position: 'inside' });
 };
 
 const handleCollectionDrop = async (event: DragEvent, collectionId: string) => {
@@ -1698,6 +1679,7 @@ defineExpose({
                       <!-- Render Request -->
                       <div
                         v-else
+                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.id === item.data.id]"
                         :class="[
                           'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer border-l-2 border-l-transparent transition-all duration-fast hover:bg-bg-hover',
                           dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10 border-l-accent-blue' : ''
