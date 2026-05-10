@@ -17,12 +17,18 @@ import VariableInput from '~/components/VariableInput.vue';
 import EnvironmentManager from '~/components/EnvironmentManager.vue';
 import { useKeyboardShortcuts } from '~/composables/useKeyboardShortcuts';
 import { useExampleData } from '~/composables/useExampleData';
+import { useToast } from '~/composables/useToast';
+import {
+  reorderRequestsOptimistically,
+  reorderFoldersOptimistically
+} from '~/composables/useOptimisticMove';
 
 const emit = defineEmits<{
   saved: [];
 }>();
 
 const { normalizeExampleData } = useExampleData();
+const { showToast } = useToast();
 
 interface Collection {
   id: string;
@@ -3483,14 +3489,21 @@ const renameItem = async () => {
 const handleReorderFolders = async (collectionId: string, updates: { id: string; parentFolderId: string | null; order: number }[]) => {
     const wsId = workspaceIdForCollectionId(collectionId);
     if (wsId && !canEditWorkspaceById(wsId)) return;
+
+    // Optimistically update local tree immediately for instant feedback
+    if (workspaces.value) {
+        reorderFoldersOptimistically(workspaces.value, collectionId, updates);
+    }
+
     try {
         await $fetch('/api/admin/folders/reorder', {
             method: 'POST',
             body: { collectionId, updates }
         });
-        refresh();
+        showToast('Folders reordered', 'success', { duration: 2000 });
+        refreshWorkspaces();
     } catch (e: any) {
-        alert('Error reordering folders: ' + (e.data?.message || e.message));
+        showToast('Error reordering folders: ' + (e.data?.message || e.message), 'error', { duration: 4000 });
         refresh();
     }
 };
@@ -3505,21 +3518,28 @@ const handleReorderRequests = async (
     const wsFromFolder = hit ? workspaceIdForCollectionId(hit.collectionId) : null;
     const wsId = wsFromCollection || wsFromFolder;
     if (wsId && !canEditWorkspaceById(wsId)) return;
+
+    // Optimistically update local tree immediately for instant feedback
+    if (workspaces.value) {
+        reorderRequestsOptimistically(workspaces.value, folderId, collectionId, updates);
+    }
+
+    const body: any = { updates };
+    if (folderId) {
+        body.folderId = folderId;
+    } else if (collectionId) {
+        body.collectionId = collectionId;
+    }
+
     try {
-        const body: any = { updates };
-        if (folderId) {
-            body.folderId = folderId;
-        } else if (collectionId) {
-            body.collectionId = collectionId;
-        }
-        
         await $fetch('/api/admin/requests/reorder', {
             method: 'POST',
             body
         });
-        refresh();
+        showToast('Request moved', 'success', { duration: 2000 });
+        refreshWorkspaces();
     } catch (e: any) {
-        alert('Error reordering requests: ' + (e.data?.message || e.message));
+        showToast('Error moving request: ' + (e.data?.message || e.message), 'error', { duration: 4000 });
         refresh();
     }
 };
