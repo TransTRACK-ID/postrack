@@ -3486,10 +3486,6 @@ const renameItem = async () => {
     }
 };
 
-// Track latest in-flight reorder promises to prevent stale refreshes from older operations
-let latestFolderReorderPromise: Promise<any> | null = null;
-let latestRequestReorderPromise: Promise<any> | null = null;
-
 const handleReorderFolders = async (collectionId: string, updates: { id: string; parentFolderId: string | null; order: number }[]) => {
     const wsId = workspaceIdForCollectionId(collectionId);
     if (wsId && !canEditWorkspaceById(wsId)) return;
@@ -3499,25 +3495,17 @@ const handleReorderFolders = async (collectionId: string, updates: { id: string;
         reorderFoldersOptimistically(workspaces.value, collectionId, updates);
     }
 
-    // Sync with server in background (non-blocking)
-    const promise = $fetch('/api/admin/folders/reorder', {
-        method: 'POST',
-        body: { collectionId, updates }
-    }).then(() => {
+    try {
+        await $fetch('/api/admin/folders/reorder', {
+            method: 'POST',
+            body: { collectionId, updates }
+        });
         showToast('Folders reordered', 'success', { duration: 2000 });
-        // Only refresh from authoritative state if this is the most recent operation
-        if (latestFolderReorderPromise === promise) {
-            refreshWorkspaces();
-        }
-    }).catch((e: any) => {
+        refreshWorkspaces();
+    } catch (e: any) {
         showToast('Error reordering folders: ' + (e.data?.message || e.message), 'error', { duration: 4000 });
-        // Revert to server state on error only if this is the most recent operation
-        if (latestFolderReorderPromise === promise) {
-            refresh();
-        }
-    });
-
-    latestFolderReorderPromise = promise;
+        refresh();
+    }
 };
 
 const handleReorderRequests = async (
@@ -3536,7 +3524,6 @@ const handleReorderRequests = async (
         reorderRequestsOptimistically(workspaces.value, folderId, collectionId, updates);
     }
 
-    // Sync with server in background (non-blocking)
     const body: any = { updates };
     if (folderId) {
         body.folderId = folderId;
@@ -3544,24 +3531,17 @@ const handleReorderRequests = async (
         body.collectionId = collectionId;
     }
 
-    const promise = $fetch('/api/admin/requests/reorder', {
-        method: 'POST',
-        body
-    }).then(() => {
+    try {
+        await $fetch('/api/admin/requests/reorder', {
+            method: 'POST',
+            body
+        });
         showToast('Request moved', 'success', { duration: 2000 });
-        // Only refresh from authoritative state if this is the most recent operation
-        if (latestRequestReorderPromise === promise) {
-            refreshWorkspaces();
-        }
-    }).catch((e: any) => {
+        refreshWorkspaces();
+    } catch (e: any) {
         showToast('Error moving request: ' + (e.data?.message || e.message), 'error', { duration: 4000 });
-        // Revert to server state on error only if this is the most recent operation
-        if (latestRequestReorderPromise === promise) {
-            refresh();
-        }
-    });
-
-    latestRequestReorderPromise = promise;
+        refresh();
+    }
 };
 
 const urlInputRef = ref<HTMLInputElement | null>(null);

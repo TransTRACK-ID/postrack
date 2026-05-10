@@ -319,9 +319,13 @@ export function reorderRequestsOptimistically(
   targetList.length = 0;
   targetList.push(...merged);
 
-  // Ensure sequential orders for consistency
-  for (let i = 0; i < targetList.length; i++) {
-    targetList[i].order = i;
+  // Only enforce sequential orders for folder-level consistency.
+  // Collection root shares an order namespace with folders, so preserve
+  // the orders as passed in `updates` rather than renumbering to 0..n.
+  if (folderId) {
+    for (let i = 0; i < targetList.length; i++) {
+      targetList[i].order = i;
+    }
   }
 
   return true;
