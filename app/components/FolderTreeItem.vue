@@ -115,22 +115,10 @@ const handleDrop = (event: DragEvent, type: 'folder' | 'request', id: string, po
 // Cache descendant check as computed to avoid recursive recomputation on every render
 const isDraggingSelf = computed(() => props.draggingFolderId === props.folder.id);
 
-const isDescendantOfDragging = computed(() => {
-  if (!props.draggingFolderId) return false;
-  const findInChildren = (folderId: string, children: any[]): boolean => {
-    for (const child of children) {
-      if (child.id === folderId) return true;
-      if (child.children && child.children.length > 0 && findInChildren(folderId, child.children)) return true;
-    }
-    return false;
-  };
-  return findInChildren(props.draggingFolderId, props.folder.children);
-});
-
 const isValidDropTarget = (): boolean => {
   if (!canEdit.value) return false;
   if (isDraggingSelf.value) return false;
-  if (isDescendantOfDragging.value) return false;
+  // Note: descendant prevention is handled by AppSidebar using the full tree
   return true;
 };
 
