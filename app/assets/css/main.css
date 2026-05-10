@@ -603,3 +603,70 @@
 .jsonc-null {
   color: var(--accent-purple);
 }
+
+/* ============================================
+   LOGIN PAGE LIGHT MODE
+   ============================================ */
+html.login-light,
+html.login-light body {
+  background-color: #F5F2EE;
+  color: #1A1A2E;
+}
+
+html.login-light ::-webkit-scrollbar-track {
+  background: #F5F2EE;
+}
+
+html.login-light ::-webkit-scrollbar-thumb {
+  background: #D8D5D0;
+  border-radius: 6px;
+}
+
+html.login-light ::-webkit-scrollbar-thumb:hover {
+  background: #B0ADA8;
+}
+
+html.login-light h1,
+html.login-light h2,
+html.login-light h3,
+html.login-light h4,
+html.login-light h5,
+html.login-light h6 {
+  color: #1A1A2E;
+}
+
+html.login-light p {
+  color: #5A5A6E;
+}
+
+html.login-light a {
+  color: #007AFF;
+}
+
+html.login-light a:hover {
+  color: #FF6C37;
+}
+
+html.login-light input,
+html.login-light textarea,
+html.login-light select {
+  background-color: #F0EEEB;
+  border-color: #D8D5D0;
+  color: #1A1A2E;
+}
+
+html.login-light input:focus,
+html.login-light textarea:focus,
+html.login-light select:focus {
+  border-color: #FF6C37;
+  box-shadow: 0 0 0 2px rgba(255, 108, 55, 0.15);
+}
+
+html.login-light input::placeholder,
+html.login-light textarea::placeholder {
+  color: #B0ADA8;
+}
+
+html.login-light label {
+  color: #5A5A6E;
+}
