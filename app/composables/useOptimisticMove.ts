@@ -198,7 +198,6 @@ export function moveRequestOptimistically(
 
   // Update request properties
   request.folderId = targetFolderId;
-  request.collectionId = targetCollectionId;
   request.order = newOrder;
 
   // Decrement old collection requestCount if moving to different collection
@@ -222,6 +221,9 @@ export function moveRequestOptimistically(
     }
     return false;
   }
+
+  // Set collectionId to the resolved target collection
+  request.collectionId = targetCollection.id;
 
   // Insert into target
   if (targetFolderId) {
@@ -399,8 +401,8 @@ export function reorderFoldersOptimistically(
 
 function insertAtOrder<T extends { order: number }>(list: T[], item: T, order: number): void {
   item.order = order;
-  // Find insertion point maintaining order
-  let insertIdx = list.findIndex(existing => existing.order > order);
+  // Find insertion point maintaining order (use >= so same-order items are inserted before)
+  let insertIdx = list.findIndex(existing => existing.order >= order);
   if (insertIdx === -1) insertIdx = list.length;
   list.splice(insertIdx, 0, item);
   // Renumber remaining items to keep order consistent
