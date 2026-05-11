@@ -1824,70 +1824,161 @@ const codeSnippets = computed(() => {
     };
 });
 
+const getBodyContent = (mock: any) => {
+    const format = mock.bodyFormat || 'none';
+    const hasBodyMethod = ['POST', 'PUT', 'PATCH'].includes(mock.method);
+    if (!hasBodyMethod || format === 'none') return { format: 'none' as const };
+    if (format === 'json') return { format: 'json' as const, content: mock.jsonBody || '{}' };
+    if (format === 'raw') return { format: 'raw' as const, content: mock.rawBody || '', contentType: mock.rawContentType || 'text/plain' };
+    if (format === 'form-data' || format === 'urlencoded') {
+        const params = (mock.formDataParams || []).filter((p: any) => p.enabled !== false);
+        return { format: format as 'form-data' | 'urlencoded', params };
+    }
+    if (format === 'binary') return { format: 'binary' as const };
+    return { format: 'none' as const };
+};
+
 const generateCurl = (mock: any, url: string, authHeader: string) => {
     let cmd = `curl -X ${mock.method} "${url}"`;
     if (authHeader) cmd += ` \\\n  -H "${authHeader}"`;
-    if (['POST', 'PUT', 'PATCH'].includes(mock.method)) {
+
+    const body = getBodyContent(mock);
+    if (body.format === 'json') {
         cmd += ` \\\n  -H "Content-Type: application/json"`;
-        cmd += ` \\\n  -d '{}'`;
+        cmd += ` \\\n  -d '${(body.content as string).replace(/'/g, "'\\''")}'`;
+    } else if (body.format === 'raw') {
+        cmd += ` \\\n  -H "Content-Type: ${(body as any).contentType}"`;
+        cmd += ` \\\n  -d '${(body.content as string).replace(/'/g, "'\\''")}'`;
+    } else if (body.format === 'form-data') {
+        for (const param of (body.params as any[])) {
+            if (param.type === 'file') {
+                cmd += ` \\\n  -F "${param.key}=@/path/to/${param.key}"`;
+            } else {
+                cmd += ` \\\n  -F "${param.key}=${param.value}"`;
+            }
+        }
+    } else if (body.format === 'urlencoded') {
+        cmd += ` \\\n  -H "Content-Type: application/x-www-form-urlencoded"`;
+        const pairs = (body.params as any[]).map((p: any) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
+        if (pairs) cmd += ` \\\n  -d "${pairs}"`;
+    } else if (body.format === 'binary') {
+        cmd += ` \\\n  -H "Content-Type: application/octet-stream"`;
+        cmd += ` \\\n  --data-binary @file`;
     }
     return cmd;
 };
 
 const generateJavaScript = (mock: any, url: string, authHeader: string) => {
-    const hasBody = ['POST', 'PUT', 'PATCH'].includes(mock.method);
+    const body = getBodyContent(mock);
     let code = `const response = await fetch("${url}", {
   method: "${mock.method}",
-  headers: {
-    "Content-Type": "application/json"${authHeader ? `,\n    "Authorization": "Bearer YOUR_TOKEN"` : ''}
-  }${hasBody ? `,
-  body: JSON.stringify({})` : ''}
-});
+  headers: {`;
 
-const data = await response.json();
-console.log(data);`;
+    const headers: string[] = [];
+    if (body.format === 'json') headers.push(`    "Content-Type": "application/json"`);
+    else if (body.format === 'raw') headers.push(`    "Content-Type": "${(body as any).contentType}"`);
+    else if (body.format === 'urlencoded') headers.push(`    "Content-Type": "application/x-www-form-urlencoded"`);
+    else if (body.format === 'binary') headers.push(`    "Content-Type": "application/octet-stream"`);
+    if (authHeader) headers.push(`    "Authorization": "Bearer YOUR_TOKEN"`);
+
+    code += headers.join(',\n');
+    code += `\n  }`;
+
+    if (body.format === 'json') {
+        code += `,\n  body: \`${(body.content as string).replace(/`/g, '\\`').replace(/\${/g, '\\${')}\``;
+    } else if (body.format === 'raw') {
+        code += `,\n  body: \`${(body.content as string).replace(/`/g, '\\`').replace(/\${/g, '\\${')}\``;
+    } else if (body.format === 'form-data') {
+        code += `,\n  body: (() => {\n    const formData = new FormData();`;
+        for (const param of (body.params as any[])) {
+            if (param.type === 'file') {
+                code += `\n    formData.append("${param.key}", fileInput.files[0]);`;
+            } else {
+                code += `\n    formData.append("${param.key}", "${param.value}");`;
+            }
+        }
+        code += `\n    return formData;\n  })()`;
+    } else if (body.format === 'urlencoded') {
+        const pairs = (body.params as any[]).map((p: any) => `    ["${p.key}"]: "${p.value}"`).join(',\n');
+        code += `,\n  body: new URLSearchParams({\n${pairs}\n  })`;
+    } else if (body.format === 'binary') {
+        code += `,\n  body: file`;
+    }
+
+    code += `\n});\n\nconst data = await response.json();\nconsole.log(data);`;
     return code;
 };
 
 const generatePython = (mock: any, url: string, authHeader: string) => {
-    const hasBody = ['POST', 'PUT', 'PATCH'].includes(mock.method);
-    let code = `import requests
+    const body = getBodyContent(mock);
+    let code = `import requests\n\nheaders = {`;
 
-headers = {
-    "Content-Type": "application/json"${authHeader ? `,
-    "Authorization": "Bearer YOUR_TOKEN"` : ''}
-}
+    const headers: string[] = [];
+    if (body.format === 'json') headers.push(`    "Content-Type": "application/json"`);
+    else if (body.format === 'raw') headers.push(`    "Content-Type": "${(body as any).contentType}"`);
+    else if (body.format === 'urlencoded') headers.push(`    "Content-Type": "application/x-www-form-urlencoded"`);
+    else if (body.format === 'binary') headers.push(`    "Content-Type": "application/octet-stream"`);
+    if (authHeader) headers.push(`    "Authorization": "Bearer YOUR_TOKEN"`);
 
-response = requests.${mock.method.toLowerCase()}(
-    "${url}",
-    headers=headers${hasBody ? `,
-    json={}` : ''}
-)
+    code += headers.join(',\n');
+    code += `\n}\n\nresponse = requests.${mock.method.toLowerCase()}(\n    "${url}"`;
 
-print(response.json())`;
+    if (body.format === 'json') {
+        code += `,\n    data=r"""${(body.content as string).replace(/"""/g, '\\"""')}""".encode()`;
+    } else if (body.format === 'raw') {
+        code += `,\n    data=r"""${(body.content as string).replace(/"""/g, '\\"""')}""".encode()`;
+    } else if (body.format === 'form-data') {
+        const params = body.params as any[];
+        if (params.length) {
+            code += `,\n    files={\n${params.map((p: any) => {
+                if (p.type === 'file') return `        "${p.key}": open("/path/to/${p.key}", "rb")`;
+                return `        "${p.key}": (None, "${p.value}")`;
+            }).join(',\n')}\n    }`;
+        }
+    } else if (body.format === 'urlencoded') {
+        const pairs = (body.params as any[]).map((p: any) => `        "${p.key}": "${p.value}"`).join(',\n');
+        code += `,\n    data={\n${pairs}\n    }`;
+    } else if (body.format === 'binary') {
+        code += `,\n    data=open("file", "rb").read()`;
+    }
+
+    code += `\n)\n\nprint(response.json())`;
     return code;
 };
 
 const generatePHP = (mock: any, url: string, authHeader: string) => {
-    const hasBody = ['POST', 'PUT', 'PATCH'].includes(mock.method);
-    let code = `<?php
-$ch = curl_init();
+    const body = getBodyContent(mock);
+    let code = `<?php\n$ch = curl_init();\n\ncurl_setopt_array($ch, [\n    CURLOPT_URL => "${url}",\n    CURLOPT_RETURNTRANSFER => true,\n    CURLOPT_CUSTOMREQUEST => "${mock.method}"`;
 
-curl_setopt_array($ch, [
-    CURLOPT_URL => "${url}",
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_CUSTOMREQUEST => "${mock.method}",
-    CURLOPT_HTTPHEADER => [
-        "Content-Type: application/json"${authHeader ? `,
-        "Authorization: Bearer YOUR_TOKEN"` : ''}
-    ]${hasBody ? `,
-    CURLOPT_POSTFIELDS => json_encode([])` : ''}
-]);
+    const httpHeaders: string[] = [];
+    if (body.format === 'json') httpHeaders.push(`        "Content-Type: application/json"`);
+    else if (body.format === 'raw') httpHeaders.push(`        "Content-Type: ${(body as any).contentType}"`);
+    else if (body.format === 'urlencoded') httpHeaders.push(`        "Content-Type: application/x-www-form-urlencoded"`);
+    else if (body.format === 'binary') httpHeaders.push(`        "Content-Type: application/octet-stream"`);
+    if (authHeader) httpHeaders.push(`        "Authorization: Bearer YOUR_TOKEN"`);
 
-$response = curl_exec($ch);
-curl_close($ch);
+    if (httpHeaders.length) {
+        code += `,\n    CURLOPT_HTTPHEADER => [\n${httpHeaders.join(',\n')}\n    ]`;
+    }
 
-echo $response;`;
+    if (body.format === 'json') {
+        code += `,\n    CURLOPT_POSTFIELDS => '${(body.content as string).replace(/'/g, "'\\''")}'`;
+    } else if (body.format === 'raw') {
+        code += `,\n    CURLOPT_POSTFIELDS => '${(body.content as string).replace(/'/g, "'\\''")}'`;
+    } else if (body.format === 'form-data') {
+        const fields = (body.params as any[]).map((p: any) => {
+            if (p.type === 'file') return `        "${p.key}" => new CURLFile("/path/to/${p.key}")`;
+            return `        "${p.key}" => "${p.value}"`;
+        }).join(',\n');
+        code += `,\n    CURLOPT_POSTFIELDS => [\n${fields}\n    ]`;
+    } else if (body.format === 'urlencoded') {
+        const pairs = (body.params as any[]).map((p: any) => `        "${p.key}" => "${p.value}"`).join(',\n');
+        code += `,\n    CURLOPT_POSTFIELDS => http_build_query([\n${pairs}\n    ])`;
+    } else if (body.format === 'binary') {
+        code += `,\n    CURLOPT_POSTFIELDS => file_get_contents("file")`;
+    }
+
+    code += `\n]);\n\n$response = curl_exec($ch);\ncurl_close($ch);\n\necho $response;`;
     return code;
 };
 
