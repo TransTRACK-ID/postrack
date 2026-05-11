@@ -556,6 +556,8 @@ const goBack = () => {
               :query-params="requestBuilderRef?.queryParams || []"
               :body="requestBuilderRef?.bodyFormat === 'json' ? requestBuilderRef?.jsonBody : requestBuilderRef?.bodyFormat === 'raw' ? requestBuilderRef?.rawBody : null"
               :body-format="requestBuilderRef?.bodyFormat || 'none'"
+              :raw-content-type="requestBuilderRef?.rawContentType"
+              :form-data-params="requestBuilderRef?.formDataParams || []"
               :auth-type="requestBuilderRef?.authType || 'none'"
               :bearer-token="requestBuilderRef?.bearerToken"
               :basic-auth="requestBuilderRef?.basicAuth"

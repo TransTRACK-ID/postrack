@@ -3271,6 +3271,8 @@ defineExpose({
   bodyFormat,
   jsonBody,
   rawBody,
+  rawContentType,
+  formDataParams,
   authType,
   bearerToken,
   basicAuth,
