@@ -104,48 +104,48 @@ export default defineEventHandler(async (event) => {
       ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
       : null;
 
-    const userEventMap = new Map<string, { userId: string; userEmail: string; count: number }>();
+    const userEventMap = new Map<string, { userId: string; userEmail: string; eventCount: number }>();
     for (const e of detailedEvents) {
-      const existing = userEventMap.get(e.userId) || { userId: e.userId, userEmail: e.userEmail, count: 0 };
-      existing.count++;
+      const existing = userEventMap.get(e.userId) || { userId: e.userId, userEmail: e.userEmail, eventCount: 0 };
+      existing.eventCount++;
       userEventMap.set(e.userId, existing);
     }
     for (const s of aggregatedStats) {
-      const existing = userEventMap.get(s.userId) || { userId: s.userId, userEmail: s.userEmail, count: 0 };
-      existing.count += (s.requestExecutions || 0) + (s.requestCreates || 0) + (s.requestUpdates || 0) + (s.requestDeletes || 0) +
+      const existing = userEventMap.get(s.userId) || { userId: s.userId, userEmail: s.userEmail, eventCount: 0 };
+      existing.eventCount += (s.requestExecutions || 0) + (s.requestCreates || 0) + (s.requestUpdates || 0) + (s.requestDeletes || 0) +
         (s.collectionCreates || 0) + (s.collectionUpdates || 0) + (s.collectionDeletes || 0) +
         (s.folderCreates || 0) + (s.mockCreates || 0) + (s.mockUpdates || 0) + (s.mockDeletes || 0) +
         (s.environmentCreates || 0) + (s.environmentUpdates || 0) + (s.environmentDeletes || 0);
       userEventMap.set(s.userId, existing);
     }
     const topUsers = Array.from(userEventMap.values())
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => b.eventCount - a.eventCount)
       .slice(0, 10);
 
-    const workspaceEventMap = new Map<string, { workspaceId: string; workspaceName: string; count: number }>();
+    const workspaceEventMap = new Map<string, { workspaceId: string; workspaceName: string; eventCount: number }>();
     for (const e of detailedEvents) {
       const existing = workspaceEventMap.get(e.workspaceId) || {
         workspaceId: e.workspaceId,
         workspaceName: workspaceMap.get(e.workspaceId) || 'Unknown',
-        count: 0
+        eventCount: 0
       };
-      existing.count++;
+      existing.eventCount++;
       workspaceEventMap.set(e.workspaceId, existing);
     }
     for (const s of aggregatedStats) {
       const existing = workspaceEventMap.get(s.workspaceId) || {
         workspaceId: s.workspaceId,
         workspaceName: workspaceMap.get(s.workspaceId) || 'Unknown',
-        count: 0
+        eventCount: 0
       };
-      existing.count += (s.requestExecutions || 0) + (s.requestCreates || 0) + (s.requestUpdates || 0) + (s.requestDeletes || 0) +
+      existing.eventCount += (s.requestExecutions || 0) + (s.requestCreates || 0) + (s.requestUpdates || 0) + (s.requestDeletes || 0) +
         (s.collectionCreates || 0) + (s.collectionUpdates || 0) + (s.collectionDeletes || 0) +
         (s.folderCreates || 0) + (s.mockCreates || 0) + (s.mockUpdates || 0) + (s.mockDeletes || 0) +
         (s.environmentCreates || 0) + (s.environmentUpdates || 0) + (s.environmentDeletes || 0);
       workspaceEventMap.set(s.workspaceId, existing);
     }
     const topWorkspaces = Array.from(workspaceEventMap.values())
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => b.eventCount - a.eventCount)
       .slice(0, 10);
 
     const eventsByType: Record<string, number> = {};
