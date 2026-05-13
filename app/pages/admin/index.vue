@@ -18,6 +18,7 @@ import EnvironmentManager from '~/components/EnvironmentManager.vue';
 import { useKeyboardShortcuts } from '~/composables/useKeyboardShortcuts';
 import { useExampleData } from '~/composables/useExampleData';
 import { useToast } from '~/composables/useToast';
+import { useSidebarResize } from '~/composables/useSidebarResize';
 import {
   reorderRequestsOptimistically,
   reorderFoldersOptimistically
@@ -1392,11 +1393,24 @@ const checkMobile = () => {
 };
 
 const toggleSidebar = () => {
-  isSidebarOpen.value = !isSidebarOpen.value;
+  if (isMobile.value) {
+    isSidebarOpen.value = !isSidebarOpen.value;
+  }
 };
 
 const closeSidebar = () => {
   isSidebarOpen.value = false;
+};
+
+// Sidebar resize and collapse state
+const { width: sidebarWidth, isCollapsed: isSidebarCollapsed, isResizing: isSidebarResizing, startResize, toggleCollapse } = useSidebarResize();
+
+const handleToggleSidebar = () => {
+  if (isMobile.value) {
+    toggleSidebar();
+  } else {
+    toggleCollapse();
+  }
 };
 
 // Load saved preference
@@ -3696,6 +3710,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       :can-edit-workspace="canEditWorkspace"
       :is-mock-sidebar-active="isMockSidebarActive"
       :is-mobile="isMobile"
+      :is-sidebar-collapsed="isSidebarCollapsed"
       @open-settings="openSettings"
       @export-open-a-p-i="exportOpenAPI"
       @import-open-a-p-i="openImportModal"
@@ -3710,7 +3725,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       @rename-workspace="openRenameWorkspace"
       @share-workspace="openShareWorkspace"
       @delete-workspace="confirmDeleteWorkspace"
-      @toggle-sidebar="toggleSidebar"
+      @toggle-sidebar="handleToggleSidebar"
     />
 
     <div class="flex flex-1 overflow-hidden relative">
@@ -3726,6 +3741,10 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         :is-mobile="isMobile"
         :is-open="isSidebarOpen"
         :is-duplicating-request="isDuplicatingRequest"
+        :width="sidebarWidth"
+        :is-collapsed="isSidebarCollapsed"
+        :is-resizing="isSidebarResizing"
+        :start-resize="startResize"
         @select-mock="handleSelectMock"
         @select-request="handleSelectRequest"
         @hover-request="handleHoverRequest"

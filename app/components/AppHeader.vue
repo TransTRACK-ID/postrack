@@ -38,6 +38,7 @@ interface Props {
   isMobile?: boolean;
   /** When false, hide import and environment management actions (view-only workspace member) */
   canEditWorkspace?: boolean;
+  isSidebarCollapsed?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -51,7 +52,8 @@ const props = withDefaults(defineProps<Props>(), {
   currentUserEmail: null,
   isMockSidebarActive: false,
   isMobile: false,
-  canEditWorkspace: true
+  canEditWorkspace: true,
+  isSidebarCollapsed: false
 });
 
 const emit = defineEmits<{
@@ -247,17 +249,20 @@ defineExpose({
   <header class="h-12 md:h-12 bg-bg-header border-b border-border-default flex items-center justify-between px-3 md:px-4 flex-shrink-0">
     <!-- Left Section -->
     <div class="flex items-center gap-2 md:gap-4">
-      <!-- Mobile Menu Toggle -->
+      <!-- Sidebar Toggle -->
       <button
-        v-if="isMobile"
         class="flex items-center justify-center w-10 h-10 rounded-md text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
         @click="emit('toggleSidebar')"
         title="Toggle Sidebar"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
+        <svg v-if="!isSidebarCollapsed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+          <path d="M15 8l-4 4 4 4"/>
         </svg>
       </button>
 
