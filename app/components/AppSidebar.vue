@@ -119,6 +119,10 @@ interface Props {
   isMobile?: boolean;
   isOpen?: boolean;
   isDuplicatingRequest?: boolean;
+  width?: number;
+  isCollapsed?: boolean;
+  isResizing?: boolean;
+  startResize?: (e: MouseEvent) => void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -131,7 +135,10 @@ const props = withDefaults(defineProps<Props>(), {
   refreshTrigger: 0,
   isMobile: false,
   isOpen: false,
-  isDuplicatingRequest: false
+  isDuplicatingRequest: false,
+  width: 280,
+  isCollapsed: false,
+  isResizing: false
 });
 
 const emit = defineEmits<{
@@ -1341,15 +1348,22 @@ defineExpose({
 <template>
   <aside
     :class="[
-      'bg-bg-sidebar border-r border-border-default flex flex-col flex-shrink-0',
-      'w-[280px] md:w-[300px] h-full',
-      isMobile ? 'fixed top-0 left-0 h-screen h-dvh shadow-2xl transition-transform duration-250' : 'relative',
-      isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'
+      'bg-bg-sidebar border-r border-border-default flex flex-col flex-shrink-0 h-full',
+      isMobile ? 'fixed top-0 left-0 h-screen h-dvh shadow-2xl transition-transform duration-250' : 'relative transition-all duration-250',
+      isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0',
+      !isMobile && isCollapsed ? 'w-0 border-r-0 overflow-hidden' : ''
     ]"
-    :style="isMobile ? 'z-index: 70;' : ''"
+    :style="isMobile ? 'z-index: 70; width: 300px;' : (!isCollapsed ? `width: ${width}px;` : '')"
   >
     <!-- Sidebar Content Container - Higher z-index than overlay -->
     <div class="relative z-[70] flex flex-col h-full bg-bg-sidebar">
+      <!-- Resize Handle -->
+      <div
+        v-if="!isMobile && !isCollapsed"
+        class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent-orange/50 z-50 transition-colors"
+        :class="{ 'bg-accent-orange/50': isResizing }"
+        @mousedown="startResize"
+      ></div>
     <!-- Mobile Sidebar Header -->
     <div v-if="isMobile" class="flex items-center justify-between p-3 border-b border-border-default bg-bg-header">
       <span class="text-sm font-semibold text-text-primary">Navigation</span>
@@ -1700,7 +1714,7 @@ defineExpose({
                         >
                           {{ item.data.method }}
                         </span>
-                        <span class="flex-1 text-[11px] font-mono truncate text-text-secondary">
+                        <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="item.data.name">
                           {{ item.data.name }}
                         </span>
                       </div>

@@ -278,7 +278,7 @@ const isBeforeRequestsDrop = computed(() =>
               >
                 {{ request.method }}
               </span>
-              <span class="flex-1 text-[11px] font-mono truncate text-text-secondary">
+              <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="request.name">
                 {{ request.name }}
               </span>
             </div>
