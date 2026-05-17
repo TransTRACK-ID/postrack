@@ -128,6 +128,8 @@ const checkAuthAndRedirect = async () => {
     console.log('[Login] User not logged in, staying on login page');
   }
 };
+
+const randomImageUrl = ref(`https://picsum.photos/400/160?random=${Math.floor(Math.random() * 10000)}`);
 </script>
 
 <template>
@@ -144,6 +146,17 @@ const checkAuthAndRedirect = async () => {
 
       <!-- Card -->
       <div class="w-full bg-bg-secondary border border-border-default rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+        <!-- Random Image -->
+        <div class="w-full h-40 mb-6 rounded-xl overflow-hidden border border-border-default relative group">
+          <img 
+            :src="randomImageUrl" 
+            alt="Random" 
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-bg-secondary/60 to-transparent pointer-events-none"></div>
+        </div>
+
         <!-- Header -->
         <div class="text-center mb-7">
           <h1 class="text-2xl font-semibold text-text-primary mb-2">Welcome Back</h1>
