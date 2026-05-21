@@ -233,14 +233,14 @@ const formatDate = (date: string) => {
     <div class="flex flex-1 overflow-hidden">
       <aside class="w-[300px] bg-bg-sidebar border-r border-border-default flex flex-col flex-shrink-0">
         <div class="flex flex-col border-b border-border-default p-2 gap-1">
-            <NuxtLink to="/admin" class="flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium no-underline">
+            <NuxtLink to="/admin" class="hidden flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium no-underline">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
             Mocks
             </NuxtLink>
-            <div class="flex items-center gap-2 py-2 px-3 rounded bg-bg-active text-text-primary text-[13px] font-medium">
+            <div class="hidden flex items-center gap-2 py-2 px-3 rounded bg-bg-active text-text-primary text-[13px] font-medium">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>

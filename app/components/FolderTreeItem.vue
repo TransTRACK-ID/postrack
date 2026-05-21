@@ -259,8 +259,8 @@ const isBeforeRequestsDrop = computed(() =>
             <div
               v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
               :class="[
-                'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer border-l-2 border-l-transparent transition-all duration-fast hover:bg-bg-hover',
-                dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10 border-l-accent-blue' : ''
+                'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
+                dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10' : ''
               ]"
               :draggable="true"
               @dragstart="handleDragStart($event, 'request', request.id)"

@@ -927,10 +927,6 @@ const calculateFolderOrderUpdates = (
   return updates;
 };
 
-const getCollectionColor = (color: string) => {
-  return { borderLeftColor: color || '#6366f1' };
-};
-
 interface SortedCollectionItem {
   id: string;
   type: 'folder' | 'request';
@@ -1373,7 +1369,7 @@ defineExpose({
     <div v-if="isMobile" class="flex items-center justify-between p-3 border-b border-border-default bg-bg-header">
       <span class="text-sm font-semibold text-text-primary">Navigation</span>
       <button
-        class="flex items-center justify-center w-9 h-9 rounded-md text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+        class="flex items-center justify-center w-9 h-9 rounded-md text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
         @click="emit('closeSidebar')"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1386,7 +1382,7 @@ defineExpose({
     <!-- Main Navigation -->
     <div class="flex flex-col border-b border-border-default p-2 gap-1">
       <button
-        :class="['flex items-center gap-2 py-2.5 md:py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target', activeView === 'hierarchy' ? 'bg-bg-active text-text-primary' : '']"
+        :class="['flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none', activeView === 'hierarchy' ? 'bg-bg-active text-text-primary' : '']"
         @click="activeView = 'hierarchy'; if (isMobile) emit('closeSidebar')"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1397,7 +1393,7 @@ defineExpose({
         Workspace
       </button>
       <button
-        :class="['flex items-center gap-2 py-2.5 md:py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target', activeView === 'mocks' ? 'bg-bg-active text-text-primary' : '']"
+        :class="['hidden flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none', activeView === 'mocks' ? 'bg-bg-active text-text-primary' : '']"
         @click="activeView = 'mocks'; if (isMobile) emit('closeSidebar')"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1407,7 +1403,7 @@ defineExpose({
         Mocks
       </button>
       <button
-        :class="['flex items-center gap-2 py-2.5 md:py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target', activeView === 'definitions' ? 'bg-bg-active text-text-primary' : '']"
+        :class="['hidden flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none', activeView === 'definitions' ? 'bg-bg-active text-text-primary' : '']"
         @click="activeView = 'definitions'; if (isMobile) emit('closeSidebar')"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1420,7 +1416,7 @@ defineExpose({
         Definitions
       </button>
       <button
-        :class="['flex items-center gap-2 py-2.5 md:py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target', activeView === 'history' ? 'bg-bg-active text-text-primary' : '']"
+        :class="['hidden flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium touch-target focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none', activeView === 'history' ? 'bg-bg-active text-text-primary' : '']"
         @click="activeView = 'history'; if (isMobile) emit('closeSidebar')"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1435,7 +1431,7 @@ defineExpose({
     <div class="flex flex-col border-b border-border-default p-2 gap-1">
       <NuxtLink
         to="/feedback/my-submissions"
-        :class="['flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium', $route.path === '/feedback/my-submissions' ? 'bg-bg-active text-text-primary' : '']"
+        :class="['flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none', $route.path === '/feedback/my-submissions' ? 'bg-bg-active text-text-primary' : '']"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -1444,7 +1440,7 @@ defineExpose({
       </NuxtLink>
       <NuxtLink
         to="/feedback/public"
-        :class="['flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium', $route.path === '/feedback/public' ? 'bg-bg-active text-text-primary' : '']"
+        :class="['flex items-center gap-2 py-2 px-3 rounded text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors text-[13px] font-medium focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none', $route.path === '/feedback/public' ? 'bg-bg-active text-text-primary' : '']"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -1459,13 +1455,13 @@ defineExpose({
     <!-- Workspace search (Postman-style: search requests, folders, collections) -->
     <div v-if="activeView === 'hierarchy' && currentWorkspace" class="p-2 border-b border-border-default">
       <div class="flex items-center gap-1.5 bg-bg-input border border-border-default rounded-lg overflow-hidden">
-        <button
-          v-if="canEdit"
-          type="button"
-          class="flex items-center justify-center w-8 h-8 shrink-0 text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors"
-          @click="emit('createProject', currentWorkspace.id)"
-          title="New Project"
-        >
+          <button
+            v-if="canEdit"
+            type="button"
+            class="flex items-center justify-center w-8 h-8 shrink-0 text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+            @click="emit('createProject', currentWorkspace.id)"
+            title="New Project"
+          >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -1481,12 +1477,12 @@ defineExpose({
             v-model="workspaceSearchQuery"
             type="text"
             placeholder="Search requests, folders, collections..."
-            class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-text-primary text-[13px] placeholder:text-text-muted focus:outline-none"
+            class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-text-primary text-[13px] placeholder:text-text-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-accent-blue/50"
           />
           <button
             v-if="workspaceSearchQuery"
             type="button"
-            class="flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors"
+            class="flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
             aria-label="Clear search"
             @click="workspaceSearchQuery = ''"
           >
@@ -1506,7 +1502,7 @@ defineExpose({
         <div v-if="currentWorkspace.projects.length > 0" class="flex items-center gap-1 ml-2">
           <button
             v-if="!isAllExpanded"
-            class="flex items-center justify-center w-5 h-5 bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-accent-green"
+            class="flex items-center justify-center w-5 h-5 bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-accent-green focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
             @click="expandAll"
             title="Expand All"
           >
@@ -1519,7 +1515,7 @@ defineExpose({
           </button>
           <button
             v-if="isAnyProjectExpanded"
-            class="flex items-center justify-center w-5 h-5 bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-accent-orange"
+            class="flex items-center justify-center w-5 h-5 bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-accent-orange focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
             @click="collapseAll"
             title="Collapse All"
           >
@@ -1534,7 +1530,7 @@ defineExpose({
       </div>
       <button
         v-if="canEdit"
-        class="flex items-center justify-center w-6 h-6 bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-accent-orange"
+        class="flex items-center justify-center w-6 h-6 bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-accent-orange focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
         @click="emit('createProject', currentWorkspace.id)"
         title="New Project"
       >
@@ -1554,7 +1550,7 @@ defineExpose({
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
           </svg>
           <p class="text-[13px] m-0">No projects yet</p>
-          <button v-if="canEdit" class="btn btn-sm btn-secondary" @click="emit('createProject', currentWorkspace.id)">Create First Project</button>
+          <button v-if="canEdit" class="btn btn-sm btn-secondary focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none" @click="emit('createProject', currentWorkspace.id)">Create First Project</button>
         </div>
 
         <!-- Empty State: search returned no results -->
@@ -1564,14 +1560,14 @@ defineExpose({
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
           <p class="text-[13px] m-0">No matching requests, folders, or collections</p>
-          <button type="button" class="text-xs text-accent-blue hover:underline" @click="workspaceSearchQuery = ''">Clear search</button>
+          <button type="button" class="text-xs text-accent-blue hover:underline focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none" @click="workspaceSearchQuery = ''">Clear search</button>
         </div>
 
         <!-- Projects (filtered by search when workspaceSearchQuery is set) -->
         <div v-for="project in filteredProjects" :key="project.id">
           <!-- Project Header -->
           <div
-            class="flex items-center gap-2 py-2.5 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group"
+            class="flex items-center gap-2 py-2 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group"
             @click="toggleProject(project.id)"
             @contextmenu.prevent="handleContextMenu($event, 'project', project)"
           >
@@ -1601,7 +1597,7 @@ defineExpose({
             <!-- Add collection button -->
             <button
               v-if="canEdit"
-              class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-fast hover:bg-bg-hover hover:text-accent-green"
+              class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-fast hover:bg-bg-hover hover:text-accent-green focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="emit('createCollection', project.id)"
               title="Add Collection"
             >
@@ -1626,7 +1622,7 @@ defineExpose({
                 <div
                   class="flex items-center gap-2 py-2 px-3 text-text-primary text-xs font-medium cursor-pointer transition-colors duration-fast hover:bg-bg-hover group/groupitem relative"
                   :class="{ 
-                    'border-l-[2px] border-l-accent-blue': isCollectionHierarchyExpanded(collection.id),
+                    'bg-bg-active rounded': isCollectionHierarchyExpanded(collection.id),
                     'bg-accent-blue/10 border border-dashed border-accent-blue rounded': dropTarget?.type === 'collection' && dropTarget?.id === collection.id
                   }"
                   @click="toggleCollectionHierarchy(collection.id)"
@@ -1659,7 +1655,7 @@ defineExpose({
                   <!-- Add folder button -->
                   <button
                     v-if="canEdit"
-                    class="flex items-center justify-center w-[18px] h-[18px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover/groupitem:opacity-100 transition-all duration-fast hover:bg-bg-hover hover:text-accent-green"
+                    class="flex items-center justify-center w-[18px] h-[18px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover/groupitem:opacity-100 transition-all duration-fast hover:bg-bg-hover hover:text-accent-green focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
                     @click.stop="emit('createFolder', collection.id)"
                     title="Add Folder"
                   >
@@ -1700,8 +1696,8 @@ defineExpose({
                         v-else
                          v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
                         :class="[
-                          'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer border-l-2 border-l-transparent transition-all duration-fast hover:bg-bg-hover',
-                          dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10 border-l-accent-blue' : ''
+                          'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
+                          dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10' : ''
                         ]"
                         :draggable="canEdit"
                         @dragstart="handleDragStart('request', item.data.id)"
@@ -1746,15 +1742,14 @@ defineExpose({
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
           <p class="text-[13px] m-0">No collections yet</p>
-          <button class="btn btn-sm btn-secondary" @click="emit('createMock')">Create First Mock</button>
+          <button class="btn btn-sm btn-secondary focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none" @click="emit('createMock')">Create First Mock</button>
         </div>
 
         <!-- Collections -->
         <div v-for="collection in collectionsWithGroups" :key="collection.id" class="mb-1">
           <!-- Collection Header -->
           <div 
-            class="flex items-center gap-2 py-2.5 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast border-l-[3px] border-l-transparent hover:bg-bg-hover group" 
-            :style="getCollectionColor(collection.color || '#6366f1')"
+            class="flex items-center gap-2 py-2 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group"
             @click="toggleCollection(collection.id)"
           >
             <!-- Chevron -->
@@ -1785,19 +1780,19 @@ defineExpose({
             
             <!-- Collection Actions (only for non-root) -->
             <div v-if="collection.name !== 'root' && canEdit" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-fast" @click.stop>
-              <button 
-                class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-text-primary" 
-                @click="emit('editCollection', collection)" 
+              <button
+                class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+                @click="emit('editCollection', collection)"
                 title="Edit Collection"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                 </svg>
               </button>
-              <button 
+              <button
                 v-if="canDelete"
-                class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-accent-red/15 hover:text-accent-red" 
-                @click="emit('deleteCollection', collection)" 
+                class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer transition-all duration-fast hover:bg-accent-red/15 hover:text-accent-red focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+                @click="emit('deleteCollection', collection)"
                 title="Delete Collection"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1808,10 +1803,10 @@ defineExpose({
             </div>
 
             <!-- Add mock to collection button -->
-            <button 
+            <button
               v-if="canEdit"
-              class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-fast hover:bg-bg-hover hover:text-accent-green" 
-              @click.stop="emit('createMock', collection.id)" 
+              class="flex items-center justify-center w-[22px] h-[22px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-fast hover:bg-bg-hover hover:text-accent-green focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+              @click.stop="emit('createMock', collection.id)"
               title="Add Mock to Collection"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1857,10 +1852,10 @@ defineExpose({
                     {{ group.items.length }}
                   </span>
 
-                  <!-- Delete Group -->
-                   <button 
+                   <!-- Delete Group -->
+                    <button
                     v-if="canEdit"
-                    class="flex items-center justify-center w-[18px] h-[18px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover/groupitem:opacity-100 transition-all duration-fast hover:bg-accent-red/15 hover:text-accent-red"
+                    class="flex items-center justify-center w-[18px] h-[18px] bg-transparent border-none rounded text-text-secondary cursor-pointer opacity-0 group-hover/groupitem:opacity-100 transition-all duration-fast hover:bg-accent-red/15 hover:text-accent-red focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
                     @click.stop="emit('deleteGroup', collection.id, group.name, group.items)"
                     title="Delete Folder"
                   >
@@ -1878,8 +1873,8 @@ defineExpose({
                       v-for="mock in group.items" 
                       :key="mock.id"
                       :class="[
-                        'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer border-l-2 border-l-transparent transition-all duration-fast hover:bg-bg-hover',
-                        selectedMockId === mock.id ? 'bg-bg-active border-l-accent-orange' : ''
+                        'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
+                        selectedMockId === mock.id ? 'bg-bg-active' : ''
                       ]"
                       @click="emit('selectMock', mock)"
                     >
@@ -1940,7 +1935,7 @@ defineExpose({
           <template v-if="contextMenu.type === 'project'">
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('create-collection')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -1952,7 +1947,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('rename-project')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -1962,7 +1957,7 @@ defineExpose({
             </button>
             <button
               v-if="canDelete"
-              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('delete-project')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -1975,7 +1970,7 @@ defineExpose({
           <template v-if="contextMenu.type === 'collection'">
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('create-folder')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -1987,7 +1982,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('create-request')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -1998,7 +1993,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('import-curl')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2008,7 +2003,7 @@ defineExpose({
               Import from cURL
             </button>
             <button
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('publish-docs')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2025,7 +2020,7 @@ defineExpose({
             <div v-if="canEdit" class="border-t border-border-default my-1"></div>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('edit-collection')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2036,7 +2031,7 @@ defineExpose({
             <div v-if="canDelete" class="border-t border-border-default my-1"></div>
             <button
               v-if="canDelete"
-              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('delete-collection')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2049,7 +2044,7 @@ defineExpose({
           <template v-if="contextMenu.type === 'folder'">
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('create-request')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2060,7 +2055,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('create-sub-folder')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2072,7 +2067,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('import-curl')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2082,7 +2077,7 @@ defineExpose({
               Import from cURL
             </button>
             <button
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('copy-prompt')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2099,7 +2094,7 @@ defineExpose({
             <div v-if="canEdit" class="border-t border-border-default my-1"></div>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('rename-folder')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2109,7 +2104,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('delete-folder')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2142,7 +2137,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('delete-request')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2155,7 +2150,7 @@ defineExpose({
           <template v-if="contextMenu.type === 'workspace'">
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('rename-workspace')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2164,7 +2159,7 @@ defineExpose({
               Rename
             </button>
             <button
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('share-workspace')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
@@ -2178,7 +2173,7 @@ defineExpose({
             </button>
             <button
               v-if="canEdit"
-              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('create-project')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
