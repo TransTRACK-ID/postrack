@@ -74,6 +74,30 @@ const selectedEndpoint = ref<CollectionDocsResponse['endpoints'][0] | null>(null
 const expandedTags = ref<Set<string>>(new Set());
 const activeSection = ref<'endpoints' | 'folders'>('endpoints');
 
+// Track which response sections are collapsed (all expanded by default)
+// Key format: "endpointId::statusCode"
+const collapsedResponses = ref<Set<string>>(new Set());
+
+const getResponseKey = (endpointId: string, statusCode: string) => `${endpointId}::${statusCode}`;
+
+const isResponseCollapsed = (endpointId: string, statusCode: string) => {
+  return collapsedResponses.value.has(getResponseKey(endpointId, statusCode));
+};
+
+const toggleResponse = (endpointId: string, statusCode: string) => {
+  const key = getResponseKey(endpointId, statusCode);
+  if (collapsedResponses.value.has(key)) {
+    collapsedResponses.value.delete(key);
+  } else {
+    collapsedResponses.value.add(key);
+  }
+};
+
+// Clear collapsed state when switching endpoints so all responses are visible by default
+watch(() => selectedEndpoint.value?.id, () => {
+  collapsedResponses.value.clear();
+});
+
 const endpointsByTag = computed(() => {
   if (!data.value?.endpoints) return {};
 
@@ -351,7 +375,7 @@ watch(() => data.value, () => {
                     <span class="inline-block px-2 py-1 bg-bg-hover text-text-primary text-[10px] rounded font-mono mb-2">
                       {{ contentType }}
                     </span>
-                    <pre v-if="contentData.schema?.example" class="text-[11px] text-text-secondary bg-bg-input p-2 rounded overflow-x-auto"><code>{{ JSON.stringify(contentData.schema.example, null, 2) }}</code></pre>
+                    <pre v-if="contentData.schema?.example" class="text-[11px] text-text-secondary bg-bg-input p-2 rounded overflow-x-auto"><code>{{ typeof contentData.schema.example === 'string' ? contentData.schema.example : JSON.stringify(contentData.schema.example, null, 2) }}</code></pre>
                   </div>
                 </div>
               </div>
@@ -365,7 +389,27 @@ watch(() => data.value, () => {
                   :key="statusCode"
                   class="bg-bg-tertiary border border-border-default rounded-md overflow-hidden"
                 >
-                  <div class="p-2.5 border-b border-border-default flex items-center gap-3">
+                  <!-- Response Header (click to collapse/expand) -->
+                  <div
+                    class="p-2.5 border-b border-border-default flex items-center gap-3 cursor-pointer hover:bg-bg-hover transition-colors select-none"
+                    @click="toggleResponse(selectedEndpoint.id, statusCode)"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      :class="[
+                        'text-text-muted transition-transform duration-200 flex-shrink-0',
+                        isResponseCollapsed(selectedEndpoint.id, statusCode) ? '' : 'rotate-90'
+                      ]"
+                    >
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
                     <span
                       :class="[
                         'text-xs font-bold font-mono px-2 py-0.5 rounded',
@@ -377,40 +421,57 @@ watch(() => data.value, () => {
                     >
                       {{ statusCode }}
                     </span>
-                    <span class="text-xs text-text-secondary">{{ response.description }}</span>
+                    <span class="text-xs text-text-secondary flex-1">{{ response.description }}</span>
+                    <span v-if="response.examples" class="text-[10px] text-text-muted">
+                      {{ response.examples.length }} example{{ response.examples.length > 1 ? 's' : '' }}
+                    </span>
                   </div>
 
-                  <!-- Real Examples -->
-                  <div v-if="response.examples && response.examples.length > 0" class="p-3 space-y-3">
+                  <!-- Real Examples (collapsible) -->
+                  <Transition
+                    enter-active-class="transition-all duration-200 ease-out"
+                    enter-from-class="opacity-0 max-h-0"
+                    enter-to-class="opacity-100 max-h-[2000px]"
+                    leave-active-class="transition-all duration-200 ease-in"
+                    leave-from-class="opacity-100 max-h-[2000px]"
+                    leave-to-class="opacity-0 max-h-0"
+                  >
                     <div
-                      v-for="(example, exIndex) in response.examples"
-                      :key="exIndex"
-                      class="border border-border-subtle rounded-md overflow-hidden"
+                      v-show="!isResponseCollapsed(selectedEndpoint.id, statusCode)"
+                      class="overflow-hidden"
                     >
-                      <div class="px-3 py-2 bg-bg-hover border-b border-border-subtle">
-                        <span class="text-[11px] font-medium text-text-primary">{{ example.name }}</span>
-                      </div>
+                      <div v-if="response.examples && response.examples.length > 0" class="p-3 space-y-3">
+                        <div
+                          v-for="(example, exIndex) in response.examples"
+                          :key="exIndex"
+                          class="border border-border-subtle rounded-md overflow-hidden"
+                        >
+                          <div class="px-3 py-2 bg-bg-hover border-b border-border-subtle">
+                            <span class="text-[11px] font-medium text-text-primary">{{ example.name }}</span>
+                          </div>
 
-                      <!-- Example Headers -->
-                      <div v-if="example.headers && Object.keys(example.headers).length > 0" class="px-3 py-2 border-b border-border-subtle">
-                        <div class="space-y-1">
-                          <div
-                            v-for="(headerValue, headerKey) in example.headers"
-                            :key="headerKey"
-                            class="flex items-start gap-2"
-                          >
-                            <span class="font-mono text-[10px] text-text-primary min-w-0">{{ headerKey }}</span>
-                            <span class="text-[10px] text-text-muted">{{ headerValue }}</span>
+                          <!-- Example Headers -->
+                          <div v-if="example.headers && Object.keys(example.headers).length > 0" class="px-3 py-2 border-b border-border-subtle">
+                            <div class="space-y-1">
+                              <div
+                                v-for="(headerValue, headerKey) in example.headers"
+                                :key="headerKey"
+                                class="flex items-start gap-2"
+                              >
+                                <span class="font-mono text-[10px] text-text-primary min-w-0">{{ headerKey }}</span>
+                                <span class="text-[10px] text-text-muted">{{ headerValue }}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <!-- Example Body -->
+                          <div v-if="example.body !== undefined && example.body !== null" class="p-3">
+                            <pre class="text-[11px] text-text-secondary bg-bg-input p-2 rounded overflow-x-auto"><code>{{ typeof example.body === 'string' ? example.body : JSON.stringify(example.body, null, 2) }}</code></pre>
                           </div>
                         </div>
                       </div>
-
-                      <!-- Example Body -->
-                      <div v-if="example.body !== undefined && example.body !== null" class="p-3">
-                        <pre class="text-[11px] text-text-secondary bg-bg-input p-2 rounded overflow-x-auto"><code>{{ typeof example.body === 'string' ? example.body : JSON.stringify(example.body, null, 2) }}</code></pre>
-                      </div>
                     </div>
-                  </div>
+                  </Transition>
                 </div>
               </div>
             </div>
