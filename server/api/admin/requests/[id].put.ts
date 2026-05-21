@@ -92,7 +92,7 @@ export default defineEventHandler(async (event) => {
       pathVariables: RequestPathVariables | null;
       paramNotes: RequestParamNotes | null;
       notes: string | null;
-      paramSchema: ParamSchema[] | null;
+      paramSchema: string | null;
       curlExample: string | null;
       order: number;
       updatedAt: Date;
@@ -224,9 +224,9 @@ export default defineEventHandler(async (event) => {
       updateData.notes = body.notes || null;
     }
 
-    // Set paramSchema (can be null or array)
+    // Set paramSchema (can be null or array) — must be stringified for text column
     if (body.paramSchema !== undefined) {
-      updateData.paramSchema = body.paramSchema;
+      updateData.paramSchema = body.paramSchema ? JSON.stringify(body.paramSchema) : null;
     }
 
     // Set curlExample (can be null or string)

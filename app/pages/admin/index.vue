@@ -4747,7 +4747,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
     </Modal>
 
     <!-- Request Documentation Panel Modal -->
-    <Modal :show="showDocPanel" title=" " @close="showDocPanel = false">
+    <Modal :show="showDocPanel" title="Documentation" size="lg" @close="showDocPanel = false">
       <RequestDocumentationPanel
         :request="selectedRequest"
         :read-only="!canEditWorkspace"
@@ -4756,7 +4756,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
     </Modal>
 
     <!-- Collection Doc Blocks Editor Modal -->
-    <Modal :show="showDocBlocksModal" title=" " @close="showDocBlocksModal = false">
+    <Modal :show="showDocBlocksModal" title="Documentation Content" size="lg" @close="showDocBlocksModal = false">
       <CollectionDocBlocksEditor
         :collection-id="docBlocksCollectionId"
         :endpoints="docBlocksEndpoints"

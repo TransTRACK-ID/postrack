@@ -397,6 +397,110 @@ watch(() => data.value, () => {
     expandedFolders.value = new Set(data.value.folders.map((f: any) => f.id));
   }
 });
+
+// ---- Guide view outline / scroll spy ----
+const guideContentRef = ref<HTMLElement | null>(null);
+const activeSectionId = ref('');
+
+interface OutlineItem {
+  id: string;
+  label: string;
+  type: 'collection' | 'folder' | 'endpoint';
+  method?: string;
+  depth: number;
+}
+
+const guideOutline = computed<OutlineItem[]>(() => {
+  if (!data.value) return [];
+  const items: OutlineItem[] = [];
+
+  // Collection header
+  items.push({
+    id: 'guide-section-collection',
+    label: data.value.collection.name,
+    type: 'collection',
+    depth: 0
+  });
+
+  // Root endpoints
+  for (const ep of filteredRootRequests.value) {
+    items.push({
+      id: `guide-section-endpoint-${ep.id}`,
+      label: ep.name,
+      type: 'endpoint',
+      method: ep.method,
+      depth: 1
+    });
+  }
+
+  // Folders and their endpoints
+  for (const folder of data.value.folders || []) {
+    items.push({
+      id: `guide-section-folder-${folder.id}`,
+      label: folder.name,
+      type: 'folder',
+      depth: 1
+    });
+    for (const req of folder.requests || []) {
+      items.push({
+        id: `guide-section-endpoint-${req.id}`,
+        label: req.name,
+        type: 'endpoint',
+        method: req.method,
+        depth: 2
+      });
+    }
+  }
+
+  return items;
+});
+
+const scrollToSection = (id: string) => {
+  const el = document.getElementById(id);
+  const container = guideContentRef.value;
+  if (!el || !container) return;
+
+  const top = el.offsetTop - container.offsetTop - 16; // 16px padding offset
+  container.scrollTo({ top, behavior: 'smooth' });
+  activeSectionId.value = id;
+};
+
+let sectionObserver: IntersectionObserver | null = null;
+
+watch(() => viewMode.value, (mode) => {
+  if (mode === 'guide') {
+    nextTick(() => {
+      const container = guideContentRef.value;
+      if (!container) return;
+
+      // Observe all section elements inside the guide content
+      const targets = container.querySelectorAll('[id^="guide-section-"]');
+      if (!targets.length) return;
+
+      sectionObserver?.disconnect();
+      sectionObserver = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          if (visible.length > 0) {
+            activeSectionId.value = visible[0].target.id;
+          }
+        },
+        {
+          root: container,
+          rootMargin: '-10% 0px -60% 0px',
+          threshold: 0
+        }
+      );
+
+      targets.forEach((t) => sectionObserver!.observe(t));
+    });
+  } else {
+    sectionObserver?.disconnect();
+    sectionObserver = null;
+  }
+});
 </script>
 
 <template>
@@ -768,63 +872,38 @@ watch(() => data.value, () => {
       </div>
 
       <!-- GUIDE VIEW -->
-      <div v-if="viewMode === 'guide'" class="flex-1 overflow-y-auto">
-        <div class="max-w-3xl mx-auto py-8 px-6">
-          <!-- Collection header -->
-          <div class="mb-8 pb-6 border-b border-border-default">
-            <h1 class="text-2xl font-semibold text-text-primary">{{ data.collection.name }}</h1>
-            <p v-if="data.collection.description" class="text-sm text-text-secondary mt-2">
-              {{ data.collection.description }}
-            </p>
-            <div v-if="data.collection.baseUrl" class="mt-3 flex items-center gap-2">
-              <span class="text-[11px] text-text-muted uppercase tracking-wide">Base URL</span>
-              <code class="text-xs font-mono text-text-primary bg-bg-input px-2 py-1 rounded">{{ data.collection.baseUrl }}</code>
+      <div v-if="viewMode === 'guide'" class="flex-1 flex overflow-hidden">
+        <!-- Main scrollable content -->
+        <div ref="guideContentRef" class="flex-1 overflow-y-auto">
+          <div class="max-w-3xl mx-auto py-8 px-6">
+            <!-- Collection header -->
+            <div id="guide-section-collection" class="mb-8 pb-6 border-b border-border-default scroll-mt-8">
+              <h1 class="text-2xl font-semibold text-text-primary">{{ data.collection.name }}</h1>
+              <p v-if="data.collection.description" class="text-sm text-text-secondary mt-2">
+                {{ data.collection.description }}
+              </p>
+              <div v-if="data.collection.baseUrl" class="mt-3 flex items-center gap-2">
+                <span class="text-[11px] text-text-muted uppercase tracking-wide">Base URL</span>
+                <code class="text-xs font-mono text-text-primary bg-bg-input px-2 py-1 rounded">{{ data.collection.baseUrl }}</code>
+              </div>
             </div>
-          </div>
 
-          <!-- Collection-level doc blocks -->
-          <DocBlockRenderer
-            v-for="block in collectionLevelBlocks"
-            :key="block.id"
-            :block="block"
-            :base-url="data.collection.baseUrl"
-            :endpoints="data.endpoints"
-          />
-
-          <!-- Root endpoints (not in folders) -->
-          <div v-for="req in filteredRootRequests" :key="req.id" class="mb-8">
+            <!-- Collection-level doc blocks -->
             <DocBlockRenderer
-              v-for="block in requestBlocksBefore(req.id)"
-              :key="block.id"
-              :block="block"
-              :base-url="data.collection.baseUrl"
-              :endpoints="data.endpoints"
-            />
-            <ApiEndpointBlock :endpoint="req" :base-url="data.collection.baseUrl" />
-            <DocBlockRenderer
-              v-for="block in requestBlocksAfter(req.id)"
-              :key="block.id"
-              :block="block"
-              :base-url="data.collection.baseUrl"
-              :endpoints="data.endpoints"
-            />
-          </div>
-
-          <!-- Render folders and their requests as sections -->
-          <div v-for="folder in data.folders" :key="folder.id" class="mb-12">
-            <h2 class="text-lg font-semibold text-text-primary mb-4">{{ folder.name }}</h2>
-
-            <!-- Folder-level doc blocks -->
-            <DocBlockRenderer
-              v-for="block in folderBlocks(folder.id)"
+              v-for="block in collectionLevelBlocks"
               :key="block.id"
               :block="block"
               :base-url="data.collection.baseUrl"
               :endpoints="data.endpoints"
             />
 
-            <!-- Requests in this folder -->
-            <div v-for="req in folder.requests" :key="req.id" class="mb-8">
+            <!-- Root endpoints (not in folders) -->
+            <div
+              v-for="req in filteredRootRequests"
+              :id="`guide-section-endpoint-${req.id}`"
+              :key="req.id"
+              class="mb-8 scroll-mt-8"
+            >
               <DocBlockRenderer
                 v-for="block in requestBlocksBefore(req.id)"
                 :key="block.id"
@@ -840,6 +919,97 @@ watch(() => data.value, () => {
                 :base-url="data.collection.baseUrl"
                 :endpoints="data.endpoints"
               />
+            </div>
+
+            <!-- Render folders and their requests as sections -->
+            <div v-for="folder in data.folders" :key="folder.id" class="mb-12">
+              <h2
+                :id="`guide-section-folder-${folder.id}`"
+                class="text-lg font-semibold text-text-primary mb-4 scroll-mt-8"
+              >
+                {{ folder.name }}
+              </h2>
+
+              <!-- Folder-level doc blocks -->
+              <DocBlockRenderer
+                v-for="block in folderBlocks(folder.id)"
+                :key="block.id"
+                :block="block"
+                :base-url="data.collection.baseUrl"
+                :endpoints="data.endpoints"
+              />
+
+              <!-- Requests in this folder -->
+              <div
+                v-for="req in folder.requests"
+                :id="`guide-section-endpoint-${req.id}`"
+                :key="req.id"
+                class="mb-8 scroll-mt-8"
+              >
+                <DocBlockRenderer
+                  v-for="block in requestBlocksBefore(req.id)"
+                  :key="block.id"
+                  :block="block"
+                  :base-url="data.collection.baseUrl"
+                  :endpoints="data.endpoints"
+                />
+                <ApiEndpointBlock :endpoint="req" :base-url="data.collection.baseUrl" />
+                <DocBlockRenderer
+                  v-for="block in requestBlocksAfter(req.id)"
+                  :key="block.id"
+                  :block="block"
+                  :base-url="data.collection.baseUrl"
+                  :endpoints="data.endpoints"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right sidebar: Outline / Minimap -->
+        <div class="hidden lg:flex w-60 border-l border-border-default bg-bg-sidebar flex-shrink-0 flex-col">
+          <div class="px-3 py-3 border-b border-border-default">
+            <h4 class="text-[11px] font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+              On this page
+            </h4>
+          </div>
+          <div class="flex-1 overflow-y-auto py-2 px-2">
+            <div class="space-y-0.5">
+              <button
+                v-for="item in guideOutline"
+                :key="item.id"
+                @click="scrollToSection(item.id)"
+                :class="[
+                  'w-full text-left px-2 py-1 rounded text-[11px] transition-colors truncate',
+                  activeSectionId === item.id
+                    ? 'bg-accent-orange/10 text-accent-orange font-medium'
+                    : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
+                ]"
+                :style="{ paddingLeft: `${8 + item.depth * 12}px` }"
+              >
+                <span
+                  v-if="item.type === 'endpoint' && item.method"
+                  class="text-[9px] font-bold font-mono mr-1 uppercase"
+                  :style="{ color: getMethodColor(item.method) }"
+                >
+                  {{ item.method }}
+                </span>
+                <span
+                  v-if="item.type === 'folder'"
+                  class="text-[9px] font-bold text-text-muted mr-1 uppercase tracking-wide"
+                >
+                  FOLDER
+                </span>
+                {{ item.label }}
+              </button>
             </div>
           </div>
         </div>

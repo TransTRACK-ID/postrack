@@ -1,5 +1,5 @@
-import { db } from '../../../../db';
-import { collectionDocBlocks } from '../../../../db/schema';
+import { db } from '../../../../../db';
+import { collectionDocBlocks } from '../../../../../db/schema';
 import { eq } from 'drizzle-orm';
 
 interface ReorderDocBlocksBody {

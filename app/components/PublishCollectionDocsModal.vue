@@ -236,7 +236,7 @@ const copyUrl = async () => {
                 class="w-full py-2 px-3 bg-bg-input border border-border-default rounded-md text-text-primary text-sm focus:outline-none focus:border-accent-blue"
               />
               <p class="text-[11px] text-text-muted mt-1">
-                Displayed in docs. Your saved requests can still use {{ '{{url}}' }} variables.
+                Displayed in docs. Your saved requests can still use <span v-pre>{{url}}</span> variables.
               </p>
             </div>
           </div>
