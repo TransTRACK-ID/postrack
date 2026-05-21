@@ -16,6 +16,7 @@ interface PublicEndpoint {
   method: string;
   url: string;
   path: string;
+  cleanPath: string;
   summary: string;
   description: string;
   tags: string[];
@@ -213,6 +214,14 @@ function buildResponsesFromExamples(
   return responses;
 }
 
+function cleanUrlPath(url: string): string {
+  // Strip environment variable placeholders like {{url}}, {{baseUrl}}, etc.
+  // Examples: "{{url}}/api/v1/auth" → "/api/v1/auth"
+  //           "{{baseUrl}}/users" → "/users"
+  //           "https://api.example.com/users" → "https://api.example.com/users" (unchanged)
+  return url.replace(/\{\{\w+\}\}/g, '').replace(/^\/+/, '/');
+}
+
 function createPublicEndpoint(
   req: typeof savedRequests.$inferSelect,
   allExamples: typeof requestExamples.$inferSelect[]
@@ -279,8 +288,9 @@ function createPublicEndpoint(
     method: req.method,
     url: req.url,
     path: req.url,
+    cleanPath: cleanUrlPath(req.url),
     summary: req.name,
-    description: `${req.method} ${req.url}`,
+    description: `${req.method} ${cleanUrlPath(req.url)}`,
     tags: ['General'],
     parameters: pathParams,
     requestBody,

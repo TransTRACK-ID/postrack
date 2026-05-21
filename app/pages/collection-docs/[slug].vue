@@ -15,6 +15,7 @@ interface CollectionDocsResponse {
     method: string;
     url: string;
     path: string;
+    cleanPath: string;
     summary: string;
     description: string;
     tags: string[];
@@ -294,7 +295,7 @@ watch(() => data.value, () => {
                     ]"
                   >
                     <MethodBadge :method="endpoint.method" size="sm" />
-                    <span class="truncate font-mono">{{ endpoint.path }}</span>
+                    <span class="truncate font-mono">{{ endpoint.cleanPath }}</span>
                   </button>
                 </div>
               </div>
@@ -307,7 +308,7 @@ watch(() => data.value, () => {
             <div class="mb-4 pb-3 border-b border-border-default">
               <h3 class="text-lg font-semibold text-text-primary mb-1 flex items-center gap-2">
                 <MethodBadge :method="selectedEndpoint.method" size="lg" />
-                <span class="font-mono">{{ selectedEndpoint.path }}</span>
+                <span class="font-mono">{{ selectedEndpoint.cleanPath }}</span>
               </h3>
               <p v-if="selectedEndpoint.summary" class="text-sm text-text-secondary m-0">{{ selectedEndpoint.summary }}</p>
             </div>
