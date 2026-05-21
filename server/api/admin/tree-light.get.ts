@@ -231,6 +231,8 @@ export default defineEventHandler(async (event) => {
                 authConfig: parseJsonField<Record<string, unknown>>(collection.authConfig),
                 isPublic: collection.isPublic,
                 publicSlug: collection.publicSlug,
+                docMode: collection.docMode,
+                baseUrl: collection.baseUrl,
                 folders: folderTree,
                 requests: collectionRootRequests,
                 folderCount,

@@ -1,6 +1,7 @@
 import { db } from '../../../db';
 import { collections } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
+import { cache } from '../../../utils/cache';
 
 interface UpdateCollectionBody {
   name?: string;
@@ -201,6 +202,10 @@ export default defineEventHandler(async (event) => {
       .set(updateData)
       .where(eq(collections.id, id))
       .returning())[0];
+
+    // Invalidate cache for all users who might see this collection
+    // We can't know exactly which users have access, so we clear all tree caches
+    cache.deletePattern('tree:');
 
     return updatedCollection;
   } catch (error: any) {
