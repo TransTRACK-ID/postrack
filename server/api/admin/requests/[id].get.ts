@@ -58,7 +58,15 @@ export default defineEventHandler(async (event) => {
         responseHeaders: Record<string, string>;
       } | null>(request.mockConfig),
       pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(request.pathVariables),
-      paramNotes: parseJsonField<Record<string, Record<string, string>>>(request.paramNotes)
+      paramNotes: parseJsonField<Record<string, Record<string, string>>>(request.paramNotes),
+      paramSchema: parseJsonField<Array<{
+        name: string;
+        dataType: string;
+        required: boolean;
+        exampleValue: string;
+        description: string;
+        in: string;
+      }>>(request.paramSchema)
     };
   } catch (error: any) {
     // Re-throw if it's already an H3 error

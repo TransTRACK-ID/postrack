@@ -12,6 +12,8 @@ export const collections = pgTable('collections', {
   authConfig: text('auth_config').$type<Record<string, unknown>>(),
   isPublic: boolean('is_public').notNull().default(false),
   publicSlug: text('public_slug'),
+  docMode: text('doc_mode').notNull().default('explorer'),
+  baseUrl: text('base_url'),
   createdAt: timestamp('created_at')
     .notNull()
     .defaultNow()

@@ -1,5 +1,5 @@
 import { db } from '../../../db';
-import { savedRequests, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type MockConfig, type RequestPathVariables, type RequestParamNotes } from '../../../db/schema';
+import { savedRequests, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type MockConfig, type RequestPathVariables, type RequestParamNotes, type ParamSchema } from '../../../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { trackResourceAction } from '../../../services/usageTracking';
 import { cache, CacheKeys } from '../../../utils/cache';
@@ -31,6 +31,9 @@ interface UpdateRequestBody {
   postScript?: string;
   pathVariables?: RequestPathVariables;
   paramNotes?: RequestParamNotes;
+  notes?: string;
+  paramSchema?: ParamSchema[];
+  curlExample?: string;
   order?: number;
 }
 
@@ -88,6 +91,9 @@ export default defineEventHandler(async (event) => {
       postScript: string | null;
       pathVariables: RequestPathVariables | null;
       paramNotes: RequestParamNotes | null;
+      notes: string | null;
+      paramSchema: ParamSchema[] | null;
+      curlExample: string | null;
       order: number;
       updatedAt: Date;
     }> = {
@@ -213,6 +219,21 @@ export default defineEventHandler(async (event) => {
       updateData.paramNotes = body.paramNotes;
     }
 
+    // Set notes (can be null or string)
+    if (body.notes !== undefined) {
+      updateData.notes = body.notes || null;
+    }
+
+    // Set paramSchema (can be null or array)
+    if (body.paramSchema !== undefined) {
+      updateData.paramSchema = body.paramSchema;
+    }
+
+    // Set curlExample (can be null or string)
+    if (body.curlExample !== undefined) {
+      updateData.curlExample = body.curlExample || null;
+    }
+
     // Validate and set order
     if (body.order !== undefined) {
       if (typeof body.order !== 'number' || !Number.isInteger(body.order)) {
@@ -268,7 +289,8 @@ export default defineEventHandler(async (event) => {
         responseHeaders: Record<string, string>;
       } | null>(updatedRequest.mockConfig),
       pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(updatedRequest.pathVariables),
-      paramNotes: parseJsonField<Record<string, Record<string, string>>>(updatedRequest.paramNotes)
+      paramNotes: parseJsonField<Record<string, Record<string, string>>>(updatedRequest.paramNotes),
+      paramSchema: parseJsonField<ParamSchema[]>(updatedRequest.paramSchema)
     };
   } catch (error: any) {
     // Re-throw if it's already an H3 error

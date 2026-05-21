@@ -15,6 +15,8 @@ import ShareWorkspaceModal from '~/components/ShareWorkspaceModal.vue';
 import TeamCollectionWarningDialog from '~/components/TeamCollectionWarningDialog.vue';
 import VariableInput from '~/components/VariableInput.vue';
 import EnvironmentManager from '~/components/EnvironmentManager.vue';
+import RequestDocumentationPanel from '~/components/RequestDocumentationPanel.vue';
+import CollectionDocBlocksEditor from '~/components/CollectionDocBlocksEditor.vue';
 import { useKeyboardShortcuts } from '~/composables/useKeyboardShortcuts';
 import { useExampleData } from '~/composables/useExampleData';
 import { useToast } from '~/composables/useToast';
@@ -84,6 +86,16 @@ interface HttpRequest {
     type: 'text' | 'file';
   }>;
   paramNotes?: Record<string, Record<string, string>> | null;
+  notes?: string | null;
+  paramSchema?: Array<{
+    name: string;
+    dataType: string;
+    required: boolean;
+    exampleValue: string;
+    description: string;
+    in: 'query' | 'path' | 'header' | 'body';
+  }> | null;
+  curlExample?: string | null;
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -408,6 +420,9 @@ const normalizeRequestForTab = (request: Partial<HttpRequest>): HttpRequest => {
   paramNotes: request.paramNotes && typeof request.paramNotes === 'object' && !Array.isArray(request.paramNotes)
     ? request.paramNotes as NonNullable<HttpRequest['paramNotes']>
     : null,
+  notes: typeof request.notes === 'string' ? request.notes : null,
+  paramSchema: Array.isArray(request.paramSchema) ? request.paramSchema : null,
+  curlExample: typeof request.curlExample === 'string' ? request.curlExample : null,
   order: typeof request.order === 'number' ? request.order : 0,
   createdAt: request.createdAt ? new Date(request.createdAt) : new Date(),
   updatedAt: request.updatedAt ? new Date(request.updatedAt) : new Date()
@@ -1359,6 +1374,10 @@ if (error.value && error.value.statusCode === 401) {
 // Modals
 const showResourceModal = ref(false);
 const showSettingsModal = ref(false);
+const showDocPanel = ref(false);
+const showDocBlocksModal = ref(false);
+const docBlocksCollectionId = ref('');
+const docBlocksEndpoints = ref<Array<{ id: string; name: string; method: string; cleanPath: string }>>([]);
 const showPreviewModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showCollectionModal = ref(false);
@@ -2120,6 +2139,75 @@ const saveSettings = async () => {
     showSettingsModal.value = false;
 };
 
+const handleSaveDocs = async (data: { notes: string | null; paramSchema: any[] | null; curlExample: string | null }) => {
+  if (!selectedRequest.value) return;
+  const wsId = workspaceIdForRequestContext(selectedRequest.value);
+  if (wsId && !canEditWorkspaceById(wsId)) return;
+  if (!canEditWorkspace.value) return;
+
+  try {
+    await $fetch(`/api/admin/requests/${selectedRequest.value.id}`, {
+      method: 'PUT',
+      body: {
+        notes: data.notes,
+        paramSchema: data.paramSchema,
+        curlExample: data.curlExample
+      }
+    });
+
+    // Update local state
+    if (selectedRequest.value) {
+      selectedRequest.value.notes = data.notes;
+      selectedRequest.value.paramSchema = data.paramSchema;
+      selectedRequest.value.curlExample = data.curlExample;
+    }
+
+    // Update in tabs
+    const tabIdx = openTabs.value.findIndex(t => t.key === activeTabKey.value);
+    if (tabIdx !== -1 && openTabs.value[tabIdx].request.id === selectedRequest.value?.id) {
+      openTabs.value[tabIdx].request = { ...openTabs.value[tabIdx].request, ...data };
+    }
+
+    showToast('Documentation saved successfully', 'success');
+  } catch (e: any) {
+    showToast('Failed to save documentation: ' + (e.data?.message || e.message), 'error');
+  }
+};
+
+const openDocBlocksEditor = (collectionId: string) => {
+  const wsId = workspaceIdForCollectionId(collectionId);
+  if (wsId && !canEditWorkspaceById(wsId)) return;
+
+  // Gather endpoints for this collection
+  const endpoints: Array<{ id: string; name: string; method: string; cleanPath: string }> = [];
+  if (workspaces.value) {
+    for (const workspace of workspaces.value) {
+      for (const project of workspace.projects) {
+        for (const collection of project.collections) {
+          if (collection.id === collectionId) {
+            const gatherRequests = (folders: any[]) => {
+              for (const folder of folders) {
+                folder.requests?.forEach((r: any) => {
+                  endpoints.push({ id: r.id, name: r.name, method: r.method, cleanPath: r.url || r.cleanPath || '' });
+                });
+                gatherRequests(folder.children || []);
+              }
+            };
+            collection.requests?.forEach((r: any) => {
+              endpoints.push({ id: r.id, name: r.name, method: r.method, cleanPath: r.url || r.cleanPath || '' });
+            });
+            gatherRequests(collection.folders || []);
+          }
+        }
+      }
+    }
+  }
+
+  docBlocksCollectionId.value = collectionId;
+  docBlocksEndpoints.value = endpoints;
+  showDocBlocksModal.value = true;
+};
+
 const exportOpenAPI = async () => {
    try {
       // Fetch the YAML export from the server
@@ -2477,7 +2565,10 @@ const executeSave = async (request: any) => {
       preScript: request.preScript,
       postScript: request.postScript,
       pathVariables: request.pathVariables,
-      paramNotes: request.paramNotes
+      paramNotes: request.paramNotes,
+      notes: request.notes,
+      paramSchema: request.paramSchema,
+      curlExample: request.curlExample
     };
     
     console.log('[Frontend Save] Sending body:', JSON.stringify(body, null, 2));
@@ -4144,6 +4235,36 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
             @reorder-tabs="handleReorderTabs"
           />
 
+          <!-- Documentation Toolbar -->
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-header border-b border-border-default">
+            <button
+              v-if="selectedRequest"
+              @click="showDocPanel = true"
+              class="flex items-center gap-1.5 px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
+              title="Edit request documentation"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              Docs
+            </button>
+            <button
+              v-if="activeCollectionId"
+              @click="openDocBlocksEditor(activeCollectionId)"
+              class="flex items-center gap-1.5 px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
+              title="Edit collection documentation content"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Content Blocks
+            </button>
+          </div>
+
           <!-- Request Builder with Code Examples Sidebar -->
           <div v-if="selectedRequest && activeTabKey" class="flex-1 flex flex-col md:flex-row overflow-hidden">
             <!-- Main Request Builder -->
@@ -4603,11 +4724,44 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         </div>
       </div>
       <template #footer>
-        <button class="btn btn-secondary" @click="showCollectionModal = false">Cancel</button>
-        <button class="btn btn-primary" @click="saveCollection">
-          {{ collectionModalMode === 'create' ? 'Create Collection' : 'Save Changes' }}
-        </button>
+        <div class="flex items-center gap-2 w-full">
+          <button
+            v-if="collectionModalMode === 'edit' && collectionForm.id"
+            @click="openDocBlocksEditor(collectionForm.id); showCollectionModal = false;"
+            class="btn btn-secondary text-xs"
+            title="Edit collection documentation content blocks"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            Content Blocks
+          </button>
+          <div class="flex-1"></div>
+          <button class="btn btn-secondary" @click="showCollectionModal = false">Cancel</button>
+          <button class="btn btn-primary" @click="saveCollection">
+            {{ collectionModalMode === 'create' ? 'Create Collection' : 'Save Changes' }}
+          </button>
+        </div>
       </template>
+    </Modal>
+
+    <!-- Request Documentation Panel Modal -->
+    <Modal :show="showDocPanel" title=" " @close="showDocPanel = false">
+      <RequestDocumentationPanel
+        :request="selectedRequest"
+        :read-only="!canEditWorkspace"
+        @save="handleSaveDocs"
+      />
+    </Modal>
+
+    <!-- Collection Doc Blocks Editor Modal -->
+    <Modal :show="showDocBlocksModal" title=" " @close="showDocBlocksModal = false">
+      <CollectionDocBlocksEditor
+        :collection-id="docBlocksCollectionId"
+        :endpoints="docBlocksEndpoints"
+        @close="showDocBlocksModal = false"
+      />
     </Modal>
 
     <!-- Delete Project Confirmation Modal -->

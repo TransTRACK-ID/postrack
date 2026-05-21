@@ -8,6 +8,8 @@ interface UpdateCollectionBody {
   authConfig?: Record<string, unknown> | null;
   isPublic?: boolean;
   publicSlug?: string;
+  docMode?: string;
+  baseUrl?: string | null;
 }
 
 export default defineEventHandler(async (event) => {
@@ -129,6 +131,30 @@ export default defineEventHandler(async (event) => {
 
       if (!body.isPublic) {
         updateData.publicSlug = null;
+      }
+    }
+
+    if (body.docMode !== undefined) {
+      const validModes = ['explorer', 'guide', 'hybrid'];
+      if (!validModes.includes(body.docMode)) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `Invalid docMode. Must be one of: ${validModes.join(', ')}`
+        });
+      }
+      updateData.docMode = body.docMode;
+    }
+
+    if (body.baseUrl !== undefined) {
+      if (body.baseUrl === null) {
+        updateData.baseUrl = null;
+      } else if (typeof body.baseUrl === 'string') {
+        updateData.baseUrl = body.baseUrl.trim() || null;
+      } else {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'baseUrl must be a string or null'
+        });
       }
     }
 

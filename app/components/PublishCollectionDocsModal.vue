@@ -19,6 +19,8 @@ const emit = defineEmits<{
 
 const isPublic = ref(false);
 const publicSlug = ref('');
+const docMode = ref('explorer');
+const baseUrl = ref('');
 const isSubmitting = ref(false);
 const error = ref('');
 const successMessage = ref('');
@@ -39,6 +41,8 @@ const canSubmit = computed(() => {
 const resetForm = () => {
   isPublic.value = props.collection?.isPublic || false;
   publicSlug.value = props.collection?.publicSlug || '';
+  docMode.value = (props.collection as any)?.docMode || 'explorer';
+  baseUrl.value = (props.collection as any)?.baseUrl || '';
   error.value = '';
   successMessage.value = '';
   copiedUrl.value = false;
@@ -75,7 +79,9 @@ const updateDocs = async () => {
 
   try {
     const updateData: Record<string, any> = {
-      isPublic: isPublic.value
+      isPublic: isPublic.value,
+      docMode: docMode.value,
+      baseUrl: baseUrl.value.trim() || null
     };
 
     if (isPublic.value) {
@@ -199,6 +205,40 @@ const copyUrl = async () => {
               </button>
             </div>
             <code class="text-[11px] text-text-primary font-mono break-all">{{ appUrl }}</code>
+          </div>
+        </div>
+
+        <!-- Documentation Settings -->
+        <div class="border-t border-border-default pt-4 mt-4">
+          <h4 class="text-sm font-medium text-text-primary mb-3">Documentation Settings</h4>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
+                Documentation Mode
+              </label>
+              <select v-model="docMode" class="w-full py-2 px-3 bg-bg-input border border-border-default rounded-md text-text-primary text-sm focus:outline-none focus:border-accent-blue">
+                <option value="explorer">Explorer (Sidebar + Detail Panel)</option>
+                <option value="guide">Guide (Scrollable Document)</option>
+                <option value="hybrid">Hybrid (Both, user can toggle)</option>
+              </select>
+              <p class="text-[11px] text-text-muted mt-1">
+                Explorer is best for API references. Guide is best for onboarding docs with prose and images.
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
+                Base URL for Documentation
+              </label>
+              <input
+                v-model="baseUrl"
+                placeholder="https://api.example.com"
+                class="w-full py-2 px-3 bg-bg-input border border-border-default rounded-md text-text-primary text-sm focus:outline-none focus:border-accent-blue"
+              />
+              <p class="text-[11px] text-text-muted mt-1">
+                Displayed in docs. Your saved requests can still use {{ '{{url}}' }} variables.
+              </p>
+            </div>
           </div>
         </div>
       </div>

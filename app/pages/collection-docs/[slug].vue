@@ -140,6 +140,9 @@ export const FolderTree = defineComponent({
 </script>
 
 <script setup lang="ts">
+import DocBlockRenderer from '~/components/DocBlockRenderer.vue';
+import ApiEndpointBlock from '~/components/ApiEndpointBlock.vue';
+
 const slug = useRoute().params.slug as string;
 
 interface CollectionDocsResponse {
@@ -147,6 +150,8 @@ interface CollectionDocsResponse {
     id: string;
     name: string;
     description: string | null;
+    docMode: string;
+    baseUrl: string | null;
   };
   endpoints: Array<{
     id: string;
@@ -157,6 +162,7 @@ interface CollectionDocsResponse {
     cleanPath: string;
     summary: string;
     description: string;
+    notes: string | null;
     tags: string[];
     parameters: Array<{
       name: string;
@@ -165,6 +171,14 @@ interface CollectionDocsResponse {
       description: string;
       schema: any;
     }>;
+    paramSchema: Array<{
+      name: string;
+      dataType: string;
+      required: boolean;
+      exampleValue: string;
+      description: string;
+      in: string;
+    }> | null;
     requestBody: {
       description: string;
       content: Record<string, any>;
@@ -182,6 +196,7 @@ interface CollectionDocsResponse {
       type: string;
       credentials?: Record<string, string>;
     } | null;
+    curlExample: string | null;
   }>;
   folders: Array<{
     id: string;
@@ -195,6 +210,14 @@ interface CollectionDocsResponse {
     totalEndpoints: number;
     methods: Record<string, number>;
   };
+  docBlocks: Array<{
+    id: string;
+    type: string;
+    content: any;
+    order: number;
+    folderId: string | null;
+    requestId: string | null;
+  }>;
 }
 
 const { data, pending, error } = await useFetch<CollectionDocsResponse>(
@@ -211,6 +234,55 @@ useHead({
 
 const searchTerm = ref('');
 const selectedEndpoint = ref<CollectionDocsResponse['endpoints'][0] | null>(null);
+
+// View mode: 'explorer' | 'guide' — defaults from collection.docMode
+const viewMode = ref<'explorer' | 'guide'>('explorer');
+
+watch(() => data.value, () => {
+  if (data.value?.collection.docMode) {
+    const mode = data.value.collection.docMode;
+    if (mode === 'guide') {
+      viewMode.value = 'guide';
+    } else if (mode === 'explorer') {
+      viewMode.value = 'explorer';
+    } else if (mode === 'hybrid') {
+      // hybrid defaults to explorer, user can toggle
+      viewMode.value = 'explorer';
+    }
+  }
+}, { immediate: true });
+
+const showViewToggle = computed(() => {
+  const mode = data.value?.collection.docMode;
+  return mode === 'hybrid' || mode === 'guide';
+});
+
+// Guide view helpers
+const collectionLevelBlocks = computed(() => {
+  if (!data.value?.docBlocks) return [];
+  return data.value.docBlocks.filter(b => !b.folderId && !b.requestId).sort((a, b) => a.order - b.order);
+});
+
+const folderBlocks = (folderId: string) => {
+  if (!data.value?.docBlocks) return [];
+  return data.value.docBlocks
+    .filter(b => b.folderId === folderId && !b.requestId)
+    .sort((a, b) => a.order - b.order);
+};
+
+const requestBlocksBefore = (requestId: string) => {
+  if (!data.value?.docBlocks) return [];
+  return data.value.docBlocks
+    .filter(b => b.requestId === requestId && b.order < 0)
+    .sort((a, b) => a.order - b.order);
+};
+
+const requestBlocksAfter = (requestId: string) => {
+  if (!data.value?.docBlocks) return [];
+  return data.value.docBlocks
+    .filter(b => b.requestId === requestId && b.order >= 0)
+    .sort((a, b) => a.order - b.order);
+};
 
 // Sidebar resize (same pattern as AppSidebar)
 const { width: sidebarWidth, isResizing, startResize } = useSidebarResize({
@@ -382,10 +454,27 @@ watch(() => data.value, () => {
             </svg>
             Public
           </span>
+
+          <!-- View mode toggle -->
+          <div v-if="showViewToggle" class="flex items-center bg-bg-tertiary rounded-md p-0.5 ml-2">
+            <button
+              @click="viewMode = 'explorer'"
+              :class="['px-2 py-1 text-[11px] rounded transition-colors', viewMode === 'explorer' ? 'bg-bg-active text-text-primary' : 'text-text-muted hover:text-text-primary']"
+            >
+              Explorer
+            </button>
+            <button
+              @click="viewMode = 'guide'"
+              :class="['px-2 py-1 text-[11px] rounded transition-colors', viewMode === 'guide' ? 'bg-bg-active text-text-primary' : 'text-text-muted hover:text-text-primary']"
+            >
+              Guide
+            </button>
+          </div>
         </div>
       </header>
 
-      <div class="flex-1 flex overflow-hidden" :class="{ 'cursor-col-resize': isResizing }">
+      <!-- EXPLORER VIEW -->
+      <div v-if="viewMode === 'explorer'" class="flex-1 flex overflow-hidden" :class="{ 'cursor-col-resize': isResizing }">
         <div
           class="border-r border-border-default flex flex-col bg-bg-sidebar relative flex-shrink-0"
           :style="{ width: sidebarWidth + 'px' }"
@@ -673,6 +762,84 @@ watch(() => data.value, () => {
               </div>
               <p class="text-sm font-medium text-text-secondary mb-1">Select an endpoint</p>
               <p class="text-xs text-text-muted">Choose an endpoint from the sidebar to view its full documentation, parameters, and response examples.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GUIDE VIEW -->
+      <div v-if="viewMode === 'guide'" class="flex-1 overflow-y-auto">
+        <div class="max-w-3xl mx-auto py-8 px-6">
+          <!-- Collection header -->
+          <div class="mb-8 pb-6 border-b border-border-default">
+            <h1 class="text-2xl font-semibold text-text-primary">{{ data.collection.name }}</h1>
+            <p v-if="data.collection.description" class="text-sm text-text-secondary mt-2">
+              {{ data.collection.description }}
+            </p>
+            <div v-if="data.collection.baseUrl" class="mt-3 flex items-center gap-2">
+              <span class="text-[11px] text-text-muted uppercase tracking-wide">Base URL</span>
+              <code class="text-xs font-mono text-text-primary bg-bg-input px-2 py-1 rounded">{{ data.collection.baseUrl }}</code>
+            </div>
+          </div>
+
+          <!-- Collection-level doc blocks -->
+          <DocBlockRenderer
+            v-for="block in collectionLevelBlocks"
+            :key="block.id"
+            :block="block"
+            :base-url="data.collection.baseUrl"
+            :endpoints="data.endpoints"
+          />
+
+          <!-- Root endpoints (not in folders) -->
+          <div v-for="req in filteredRootRequests" :key="req.id" class="mb-8">
+            <DocBlockRenderer
+              v-for="block in requestBlocksBefore(req.id)"
+              :key="block.id"
+              :block="block"
+              :base-url="data.collection.baseUrl"
+              :endpoints="data.endpoints"
+            />
+            <ApiEndpointBlock :endpoint="req" :base-url="data.collection.baseUrl" />
+            <DocBlockRenderer
+              v-for="block in requestBlocksAfter(req.id)"
+              :key="block.id"
+              :block="block"
+              :base-url="data.collection.baseUrl"
+              :endpoints="data.endpoints"
+            />
+          </div>
+
+          <!-- Render folders and their requests as sections -->
+          <div v-for="folder in data.folders" :key="folder.id" class="mb-12">
+            <h2 class="text-lg font-semibold text-text-primary mb-4">{{ folder.name }}</h2>
+
+            <!-- Folder-level doc blocks -->
+            <DocBlockRenderer
+              v-for="block in folderBlocks(folder.id)"
+              :key="block.id"
+              :block="block"
+              :base-url="data.collection.baseUrl"
+              :endpoints="data.endpoints"
+            />
+
+            <!-- Requests in this folder -->
+            <div v-for="req in folder.requests" :key="req.id" class="mb-8">
+              <DocBlockRenderer
+                v-for="block in requestBlocksBefore(req.id)"
+                :key="block.id"
+                :block="block"
+                :base-url="data.collection.baseUrl"
+                :endpoints="data.endpoints"
+              />
+              <ApiEndpointBlock :endpoint="req" :base-url="data.collection.baseUrl" />
+              <DocBlockRenderer
+                v-for="block in requestBlocksAfter(req.id)"
+                :key="block.id"
+                :block="block"
+                :base-url="data.collection.baseUrl"
+                :endpoints="data.endpoints"
+              />
             </div>
           </div>
         </div>
