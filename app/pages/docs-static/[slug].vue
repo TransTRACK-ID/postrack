@@ -10,7 +10,8 @@ const { data, pending, error } = await useFetch(`/api/public/docs/markdown/${slu
 useHead({
   title: computed(() => data.value?.title || 'Documentation'),
   meta: [
-    { name: 'description', content: computed(() => `Documentation for ${data.value?.title || 'this topic'}`) }
+    { name: 'description', content: computed(() => `Documentation for ${data.value?.title || 'this topic'}`) },
+    { name: 'robots', content: 'noindex, nofollow' }
   ]
 });
 

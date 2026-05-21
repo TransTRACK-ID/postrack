@@ -2991,6 +2991,18 @@ const handleViewDefinitionDocs = (definition: any) => {
   showDefinitionDocs.value = true;
 };
 
+const showPublishCollectionDocs = ref(false);
+const collectionToPublish = ref<any>(null);
+
+const handlePublishCollectionDocs = (collection: any) => {
+  collectionToPublish.value = collection;
+  showPublishCollectionDocs.value = true;
+};
+
+const handleCollectionDocsUpdated = async () => {
+  await refreshWorkspaces();
+};
+
 const handleGenerateDefinitionMocks = (definition: any) => {
   if (!canEditWorkspace.value) return;
   selectedDefinition.value = definition;
@@ -3765,6 +3777,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         @delete-project="confirmDeleteProject"
         @edit-collection="openEditCollection"
         @rename-collection="openRenameCollection"
+        @publish-collection-docs="handlePublishCollectionDocs"
         @delete-collection="confirmDeleteCollection"
         @delete-group="confirmDeleteGroup"
         @delete-folder="confirmDeleteFolder"
@@ -4775,6 +4788,14 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       :spec="definitionDocs?.parsedInfo || null"
       :definition-name="definitionDocs?.name || 'API Documentation'"
       @close="showDefinitionDocs = false"
+    />
+
+    <!-- Publish Collection Docs Modal -->
+    <PublishCollectionDocsModal
+      :show="showPublishCollectionDocs"
+      :collection="collectionToPublish || {}"
+      @close="showPublishCollectionDocs = false; collectionToPublish = null"
+      @updated="handleCollectionDocsUpdated"
     />
 
     <!-- Generate Mocks Modal -->

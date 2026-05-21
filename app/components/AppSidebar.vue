@@ -159,6 +159,7 @@ const emit = defineEmits<{
   deleteProject: [project: { id: string; name: string }];
   editCollection: [collection: { id: string; name: string; description: string }];
   renameCollection: [collection: { id: string; name: string }];
+  publishCollectionDocs: [collection: any];
   deleteCollection: [collectionId: string];
   deleteGroup: [collectionId: string, groupName: string, mocks: Mock[]];
   deleteFolder: [folderId: string];
@@ -1011,6 +1012,8 @@ const handleContextAction = (action: string) => {
         emit('editCollection', data);
       } else if (action === 'rename-collection') {
         emit('renameCollection', data);
+      } else if (action === 'publish-docs') {
+        emit('publishCollectionDocs', data);
       } else if (action === 'delete-collection') {
         emit('deleteCollection', data);
       }
@@ -2003,6 +2006,21 @@ defineExpose({
                 <polyline points="8 6 2 12 8 18"></polyline>
               </svg>
               Import from cURL
+            </button>
+            <button
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              @click.stop="handleContextAction('publish-docs')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              <span class="flex items-center gap-1.5">
+                Publish API Documentation
+                <span v-if="contextMenu.data?.isPublic" class="inline-block w-2 h-2 rounded-full bg-accent-green"></span>
+              </span>
             </button>
             <div v-if="canEdit" class="border-t border-border-default my-1"></div>
             <button

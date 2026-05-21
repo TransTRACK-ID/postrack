@@ -21,7 +21,8 @@ const { data, pending, error } = await useFetch<PublicDocsResponse>(
 useHead({
   title: computed(() => data.value?.definition.name || 'API Documentation'),
   meta: [
-    { name: 'description', content: computed(() => `View API documentation for ${data.value?.definition.name || 'this API'}`) }
+    { name: 'description', content: computed(() => `View API documentation for ${data.value?.definition.name || 'this API'}`) },
+    { name: 'robots', content: 'noindex, nofollow' }
   ]
 });
 

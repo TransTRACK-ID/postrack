@@ -59,6 +59,8 @@ interface CollectionWithFolders {
   name: string;
   description: string | null;
   authConfig: Record<string, unknown> | null;
+  isPublic: boolean;
+  publicSlug: string | null;
   createdAt: Date;
   folders: FolderWithRequestsAndChildren[];
   requests: RequestItem[];

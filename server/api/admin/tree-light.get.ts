@@ -30,6 +30,8 @@ interface CollectionWithFolders {
   name: string;
   description: string | null;
   authConfig: Record<string, unknown> | null;
+  isPublic: boolean;
+  publicSlug: string | null;
   folders: FolderWithRequestsAndChildren[];
   requests: RequestItem[];
   folderCount: number;
@@ -225,6 +227,8 @@ export default defineEventHandler(async (event) => {
                 name: collection.name,
                 description: collection.description,
                 authConfig: parseJsonField<Record<string, unknown>>(collection.authConfig),
+                isPublic: collection.isPublic,
+                publicSlug: collection.publicSlug,
                 folders: folderTree,
                 requests: collectionRootRequests,
                 folderCount,
