@@ -1455,20 +1455,8 @@ defineExpose({
     <!-- Workspace search (Postman-style: search requests, folders, collections) -->
     <div v-if="activeView === 'hierarchy' && currentWorkspace" class="p-2 border-b border-border-default">
       <div class="flex items-center gap-1.5 bg-bg-input border border-border-default rounded-lg overflow-hidden">
-          <button
-            v-if="canEdit"
-            type="button"
-            class="flex items-center justify-center w-8 h-8 shrink-0 text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
-            @click="emit('createProject', currentWorkspace.id)"
-            title="New Project"
-          >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
-        <span v-if="canEdit" class="w-px h-5 bg-border-default shrink-0" aria-hidden="true"></span>
-        <label class="flex-1 flex items-center gap-2 min-w-0">
+
+        <label class="flex-1 flex items-center gap-2 min-w-0 pl-2">
           <svg class="w-4 h-4 text-text-muted shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
