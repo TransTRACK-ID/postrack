@@ -213,6 +213,14 @@ useHead({
 const searchTerm = ref('');
 const selectedEndpoint = ref<CollectionDocsResponse['endpoints'][0] | null>(null);
 
+// Sidebar resize (same pattern as AppSidebar)
+const { width: sidebarWidth, isResizing, startResize } = useSidebarResize({
+  storageKey: 'docsSidebarWidth',
+  defaultWidth: 256,
+  minWidth: 180,
+  maxWidth: 480
+});
+
 // Track which response sections are collapsed (all expanded by default)
 // Key format: "endpointId::statusCode"
 const collapsedResponses = ref<Set<string>>(new Set());
@@ -378,8 +386,17 @@ watch(() => data.value, () => {
         </div>
       </header>
 
-      <div class="flex-1 flex overflow-hidden">
-        <div class="w-64 border-r border-border-default flex flex-col bg-bg-sidebar">
+      <div class="flex-1 flex overflow-hidden" :class="{ 'cursor-col-resize': isResizing }">
+        <div
+          class="border-r border-border-default flex flex-col bg-bg-sidebar relative flex-shrink-0"
+          :style="{ width: sidebarWidth + 'px' }"
+        >
+          <!-- Resizer handle -->
+          <div
+            class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent-orange/50 z-50 transition-colors"
+            :class="{ 'bg-accent-orange/50': isResizing }"
+            @mousedown="startResize"
+          ></div>
           <div class="flex items-center gap-2 py-2.5 px-3 border-b border-border-default">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted flex-shrink-0">
               <circle cx="11" cy="11" r="8"></circle>
