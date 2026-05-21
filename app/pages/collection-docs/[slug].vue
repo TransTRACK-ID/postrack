@@ -143,7 +143,8 @@ export const FolderTree = defineComponent({
 import DocBlockRenderer from '~/components/DocBlockRenderer.vue';
 import ApiEndpointBlock from '~/components/ApiEndpointBlock.vue';
 
-const slug = useRoute().params.slug as string;
+const route = useRoute();
+const slug = computed(() => route.params.slug as string);
 
 interface CollectionDocsResponse {
   collection: {
@@ -221,7 +222,10 @@ interface CollectionDocsResponse {
 }
 
 const { data, pending, error } = await useFetch<CollectionDocsResponse>(
-  `/api/public/collection-docs/${slug}`
+  () => `/api/public/collection-docs/${slug.value}`,
+  {
+    key: () => `collection-docs-${slug.value}`,
+  }
 );
 
 useHead({
@@ -237,6 +241,16 @@ const selectedEndpoint = ref<CollectionDocsResponse['endpoints'][0] | null>(null
 
 // View mode: 'explorer' | 'guide' — defaults from collection.docMode
 const viewMode = ref<'explorer' | 'guide'>('explorer');
+
+// Reset local state when navigating between different collection docs
+watch(() => slug.value, (newSlug, oldSlug) => {
+  if (newSlug && newSlug !== oldSlug) {
+    selectedEndpoint.value = null;
+    searchTerm.value = '';
+    collapsedResponses.value.clear();
+    viewMode.value = 'explorer';
+  }
+});
 
 watch(() => data.value, () => {
   if (data.value?.collection.docMode) {
