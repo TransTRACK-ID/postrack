@@ -216,10 +216,13 @@ function buildResponsesFromExamples(
 
 function cleanUrlPath(url: string): string {
   // Strip environment variable placeholders like {{url}}, {{baseUrl}}, etc.
+  // Also strip query string for display purposes.
   // Examples: "{{url}}/api/v1/auth" → "/api/v1/auth"
   //           "{{baseUrl}}/users" → "/users"
   //           "https://api.example.com/users" → "https://api.example.com/users" (unchanged)
-  return url.replace(/\{\{\w+\}\}/g, '').replace(/^\/+/, '/');
+  const withoutVars = url.replace(/\{\{\w+\}\}/g, '').replace(/^\/+/, '/');
+  const withoutQuery = withoutVars.split('?')[0];
+  return withoutQuery;
 }
 
 function createPublicEndpoint(
@@ -243,16 +246,18 @@ function createPublicEndpoint(
       body: parseJsonField<any>(ex.body)
     }));
 
-  // Parse URL to extract path parameters
-  const pathParams: Array<{ name: string; in: string; required: boolean; description: string; schema: any }> = [];
+  // Parse URL to extract path and query parameters
+  const allParams: Array<{ name: string; in: string; required: boolean; description: string; schema: any }> = [];
 
   // Extract path variables from URL pattern like {{baseUrl}}/users/{{userId}}
   const pathMatches = req.url.match(/\{\{(\w+)\}\}/g);
   if (pathMatches) {
     pathMatches.forEach(match => {
       const paramName = match.replace(/\{\{|\}\}/g, '');
+      // Skip environment variable placeholders (uppercase or common names)
+      if (/^(URL|BASEURL|BASE_URL|HOST|DOMAIN|API_URL)$/i.test(paramName)) return;
       const paramInfo = pathVariables?.[paramName];
-      pathParams.push({
+      allParams.push({
         name: paramName,
         in: 'path',
         required: true,
@@ -260,6 +265,28 @@ function createPublicEndpoint(
         schema: { type: 'string' }
       });
     });
+  }
+
+  // Extract query parameters from URL like ?foo=bar&baz=qux
+  try {
+    // Replace {{var}} placeholders with a dummy value so URL parsing works
+    const urlForParsing = req.url.replace(/\{\{\w+\}\}/g, 'placeholder');
+    const parsedUrl = new URL(urlForParsing.startsWith('http') ? urlForParsing : 'http://example.com' + urlForParsing);
+    parsedUrl.searchParams.forEach((value, key) => {
+      // Avoid duplicates (if paramNotes has it, use that description)
+      const existing = allParams.find(p => p.name === key);
+      if (!existing) {
+        allParams.push({
+          name: key,
+          in: 'query',
+          required: false,
+          description: value ? `Example: ${value.length > 40 ? value.slice(0, 40) + '...' : value}` : 'Query parameter',
+          schema: { type: 'string' }
+        });
+      }
+    });
+  } catch {
+    // URL parsing failed, ignore query params
   }
 
   // Build request body if present
@@ -292,7 +319,7 @@ function createPublicEndpoint(
     summary: req.name,
     description: `${req.method} ${cleanUrlPath(req.url)}`,
     tags: ['General'],
-    parameters: pathParams,
+    parameters: allParams,
     requestBody,
     responses,
     headers,
