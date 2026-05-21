@@ -51,6 +51,19 @@ export type RequestParamNotes = {
   urlencoded?: Record<string, string>;
 };
 
+/**
+ * Parameter schema for documentation — structured field table data
+ * Attribute | Data Type | Required | Example Value | Description
+ */
+export type ParamSchema = {
+  name: string;
+  dataType: string;
+  required: boolean;
+  exampleValue: string;
+  description: string;
+  in: 'query' | 'path' | 'header' | 'body';
+};
+
 export const savedRequests = pgTable('saved_requests', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   folderId: text('folder_id')
@@ -69,6 +82,9 @@ export const savedRequests = pgTable('saved_requests', {
   postScript: text('post_script'),
   pathVariables: text('path_variables').$type<RequestPathVariables>(),
   paramNotes: text('param_notes').$type<RequestParamNotes>(),
+  notes: text('notes'),
+  paramSchema: text('param_schema').$type<ParamSchema[]>(),
+  curlExample: text('curl_example'),
   order: integer('order').notNull().default(0),
   createdAt: timestamp('created_at')
     .notNull()

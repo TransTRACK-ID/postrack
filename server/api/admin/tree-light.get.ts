@@ -32,6 +32,8 @@ interface CollectionWithFolders {
   authConfig: Record<string, unknown> | null;
   isPublic: boolean;
   publicSlug: string | null;
+  docMode: string;
+  baseUrl: string | null;
   folders: FolderWithRequestsAndChildren[];
   requests: RequestItem[];
   folderCount: number;

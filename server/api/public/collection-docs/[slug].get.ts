@@ -1,5 +1,5 @@
 import { db } from '../../../db';
-import { collections, folders, savedRequests, requestExamples } from '../../../db/schema';
+import { collections, folders, savedRequests, requestExamples, collectionDocBlocks } from '../../../db/schema';
 import { eq, asc, or, inArray } from 'drizzle-orm';
 
 interface ExampleResponse {
@@ -19,6 +19,7 @@ interface PublicEndpoint {
   cleanPath: string;
   summary: string;
   description: string;
+  notes: string | null;
   tags: string[];
   parameters: Array<{
     name: string;
@@ -27,6 +28,14 @@ interface PublicEndpoint {
     description: string;
     schema: any;
   }>;
+  paramSchema: Array<{
+    name: string;
+    dataType: string;
+    required: boolean;
+    exampleValue: string;
+    description: string;
+    in: string;
+  }> | null;
   requestBody: {
     description: string;
     content: Record<string, any>;
@@ -44,6 +53,7 @@ interface PublicEndpoint {
     type: string;
     credentials?: Record<string, string>;
   } | null;
+  curlExample: string | null;
 }
 
 interface PublicFolder {
@@ -59,6 +69,8 @@ interface CollectionDocsResponse {
     id: string;
     name: string;
     description: string | null;
+    docMode: string;
+    baseUrl: string | null;
   };
   endpoints: PublicEndpoint[];
   folders: PublicFolder[];
@@ -67,6 +79,14 @@ interface CollectionDocsResponse {
     totalEndpoints: number;
     methods: Record<string, number>;
   };
+  docBlocks: Array<{
+    id: string;
+    type: string;
+    content: any;
+    order: number;
+    folderId: string | null;
+    requestId: string | null;
+  }>;
 }
 
 function parseJsonField<T>(value: unknown): T | null {
@@ -342,6 +362,15 @@ function createPublicEndpoint(
   // Build responses from real examples
   const responses = buildResponsesFromExamples(reqExamples, req.method);
 
+  const paramSchema = parseJsonField<Array<{
+    name: string;
+    dataType: string;
+    required: boolean;
+    exampleValue: string;
+    description: string;
+    in: string;
+  }>>(req.paramSchema);
+
   return {
     id: req.id,
     name: req.name,
@@ -351,12 +380,15 @@ function createPublicEndpoint(
     cleanPath: cleanUrlPath(req.url),
     summary: req.name,
     description: `${req.method} ${cleanUrlPath(req.url)}`,
+    notes: req.notes,
     tags: ['General'],
     parameters: allParams,
+    paramSchema,
     requestBody,
     responses,
     headers,
-    auth
+    auth,
+    curlExample: req.curlExample
   };
 }
 
@@ -471,11 +503,39 @@ export default defineEventHandler(async (event) => {
       methods[ep.method] = (methods[ep.method] || 0) + 1;
     });
 
+    // Fetch doc blocks for this collection
+    const allDocBlocks = await db
+      .select()
+      .from(collectionDocBlocks)
+      .where(eq(collectionDocBlocks.collectionId, collection.id))
+      .orderBy(asc(collectionDocBlocks.order));
+
+    const parsedDocBlocks = allDocBlocks.map(block => {
+      let parsedContent: any = block.content;
+      if (typeof block.content === 'string') {
+        try {
+          parsedContent = JSON.parse(block.content);
+        } catch {
+          parsedContent = block.content;
+        }
+      }
+      return {
+        id: block.id,
+        type: block.type,
+        content: parsedContent,
+        order: block.order,
+        folderId: block.folderId,
+        requestId: block.requestId
+      };
+    });
+
     const result: CollectionDocsResponse = {
       collection: {
         id: collection.id,
         name: collection.name,
-        description: collection.description
+        description: collection.description,
+        docMode: collection.docMode || 'explorer',
+        baseUrl: collection.baseUrl
       },
       endpoints: allEndpoints,
       folders: folderTree,
@@ -483,7 +543,8 @@ export default defineEventHandler(async (event) => {
       stats: {
         totalEndpoints: allEndpoints.length,
         methods
-      }
+      },
+      docBlocks: parsedDocBlocks
     };
 
     return result;

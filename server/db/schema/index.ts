@@ -16,3 +16,4 @@ export * from './settings';
 export * from './feedback';
 export * from './usageAnalytics';
 export * from './errorReport';
+export * from './collectionDocBlock';

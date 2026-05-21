@@ -37,6 +37,16 @@ interface RequestItem {
   postScript: string | null;
   pathVariables: Record<string, { value: string; description?: string }> | null;
   paramNotes: Record<string, Record<string, string>> | null;
+  notes: string | null;
+  paramSchema: Array<{
+    name: string;
+    dataType: string;
+    required: boolean;
+    exampleValue: string;
+    description: string;
+    in: string;
+  }> | null;
+  curlExample: string | null;
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +71,8 @@ interface CollectionWithFolders {
   authConfig: Record<string, unknown> | null;
   isPublic: boolean;
   publicSlug: string | null;
+  docMode: string;
+  baseUrl: string | null;
   createdAt: Date;
   folders: FolderWithRequestsAndChildren[];
   requests: RequestItem[];
@@ -246,6 +258,7 @@ export default defineEventHandler(async (event) => {
         mockConfig: parseJsonField<RequestItem['mockConfig']>(req.mockConfig),
         pathVariables: parseJsonField<RequestItem['pathVariables']>(req.pathVariables),
         paramNotes: parseJsonField<RequestItem['paramNotes']>(req.paramNotes),
+        paramSchema: parseJsonField<RequestItem['paramSchema']>(req.paramSchema),
         examples: requestExamplesList
       };
     });
