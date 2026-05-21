@@ -1,6 +1,4 @@
 <script setup lang="ts">
-<!-- MethodBadge replaced with inline styled spans for sidebar consistency -->
-
 const slug = useRoute().params.slug as string;
 
 interface CollectionDocsResponse {
