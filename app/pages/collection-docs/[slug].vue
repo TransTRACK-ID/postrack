@@ -1,3 +1,145 @@
+<script lang="ts">
+import { defineComponent, h } from 'vue';
+
+export const EndpointItem = defineComponent({
+  props: {
+    endpoint: { type: Object, required: true },
+    selectedId: { type: String, default: null }
+  },
+  emits: ['select'],
+  setup(props, { emit }) {
+    const getMethodColor = (method: string): string => {
+      const colors: Record<string, string> = {
+        GET: '#3b82f6', POST: '#22c55e', PUT: '#f59e0b',
+        PATCH: '#a855f7', DELETE: '#ef4444', HEAD: '#6b7280', OPTIONS: '#14b8a6'
+      };
+      return colors[method] || '#6b7280';
+    };
+
+    return () => h('button', {
+      class: [
+        'w-full flex items-center gap-1.5 py-1 px-2 text-left rounded transition-all duration-fast text-[10px] leading-tight',
+        props.selectedId === props.endpoint.id
+          ? 'bg-bg-hover text-text-primary'
+          : 'text-text-muted hover:bg-bg-tertiary hover:text-text-secondary'
+      ],
+      onClick: () => emit('select', props.endpoint)
+    }, [
+      h('span', {
+        class: 'text-[8px] font-bold font-mono px-1 py-px rounded flex-shrink-0 leading-none',
+        style: {
+          backgroundColor: getMethodColor(props.endpoint.method) + '18',
+          color: getMethodColor(props.endpoint.method)
+        }
+      }, props.endpoint.method),
+      h('span', { class: 'truncate font-mono' }, props.endpoint.cleanPath)
+    ]);
+  }
+});
+
+export const FolderTree = defineComponent({
+  name: 'FolderTree',
+  props: {
+    folder: { type: Object, required: true },
+    selectedId: { type: String, default: null },
+    expandedIds: { type: Object as () => Set<string>, required: true },
+    searchTerm: { type: String, default: '' },
+    depth: { type: Number, default: 0 }
+  },
+  emits: ['toggle', 'select'],
+  setup(props, { emit }) {
+    const endpointMatches = (ep: any, term: string) => {
+      if (!term) return true;
+      const t = term.toLowerCase();
+      return ep.cleanPath?.toLowerCase().includes(t) ||
+        ep.name?.toLowerCase().includes(t) ||
+        ep.method?.toLowerCase().includes(t);
+    };
+
+    const folderHasMatch = (folder: any, term: string): boolean => {
+      if (!term) return true;
+      if (folder.requests?.some((r: any) => endpointMatches(r, term))) return true;
+      if (folder.children?.some((c: any) => folderHasMatch(c, term))) return true;
+      return false;
+    };
+
+    const isExpanded = () => props.expandedIds.has(props.folder.id);
+
+    return () => {
+      if (!folderHasMatch(props.folder, props.searchTerm)) return null;
+
+      const filteredRequests = (props.folder.requests || [])
+        .filter((r: any) => endpointMatches(r, props.searchTerm));
+      const filteredChildren = (props.folder.children || [])
+        .filter((c: any) => folderHasMatch(c, props.searchTerm));
+
+      return h('div', { class: props.depth > 0 ? 'pl-2 border-l border-border-subtle ml-1' : '' }, [
+        // Folder header
+        h('button', {
+          class: 'w-full flex items-center justify-between py-1.5 px-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors select-none rounded',
+          onClick: () => emit('toggle', props.folder.id)
+        }, [
+          h('span', { class: 'flex items-center gap-1.5' }, [
+            h('svg', {
+              width: 10,
+              height: 10,
+              viewBox: '0 0 24 24',
+              fill: 'none',
+              stroke: 'currentColor',
+              'stroke-width': 2.5,
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              class: ['transition-transform duration-fast flex-shrink-0', isExpanded() ? 'rotate-90' : '']
+            }, [h('polyline', { points: '9 18 15 12 9 6' })]),
+            h('svg', {
+              width: 12,
+              height: 12,
+              viewBox: '0 0 24 24',
+              fill: 'none',
+              stroke: 'currentColor',
+              'stroke-width': 2,
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              class: 'text-text-muted flex-shrink-0'
+            }, [h('path', { d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' })]),
+            h('span', { class: 'uppercase tracking-wide' }, props.folder.name)
+          ]),
+          h('span', { class: 'text-[10px] text-text-muted tabular-nums' },
+            String((filteredRequests?.length || 0) + (props.folder.children?.length || 0))
+          )
+        ]),
+
+        // Folder contents
+        isExpanded() ? h('div', { class: 'mt-0.5 space-y-px pl-1' }, [
+          // Requests in this folder
+          ...(filteredRequests || []).map((req: any) =>
+            h(EndpointItem, {
+              key: req.id,
+              endpoint: req,
+              selectedId: props.selectedId,
+              onSelect: (ep: any) => emit('select', ep)
+            })
+          ),
+          // Nested folders
+          ...(filteredChildren || []).map((child: any) =>
+            h(FolderTree, {
+              key: child.id,
+              folder: child,
+              selectedId: props.selectedId,
+              expandedIds: props.expandedIds,
+              searchTerm: props.searchTerm,
+              depth: props.depth + 1,
+              onToggle: (id: string) => emit('toggle', id),
+              onSelect: (ep: any) => emit('select', ep)
+            })
+          )
+        ]) : null
+      ]);
+    };
+  }
+});
+</script>
+
 <script setup lang="ts">
 const slug = useRoute().params.slug as string;
 
@@ -70,7 +212,6 @@ useHead({
 
 const searchTerm = ref('');
 const selectedEndpoint = ref<CollectionDocsResponse['endpoints'][0] | null>(null);
-const expandedTags = ref<Set<string>>(new Set());
 
 // Track which response sections are collapsed (all expanded by default)
 // Key format: "endpointId::statusCode"
@@ -96,53 +237,58 @@ watch(() => selectedEndpoint.value?.id, () => {
   collapsedResponses.value.clear();
 });
 
-const endpointsByTag = computed(() => {
-  if (!data.value?.endpoints) return {};
+// ---- Sidebar folder tree state ----
+const expandedFolders = ref<Set<string>>(new Set());
 
-  const grouped: Record<string, any[]> = {};
-
-  data.value.endpoints.forEach((endpoint: any) => {
-    const tag = endpoint.tags?.[0] || 'General';
-    if (!grouped[tag]) {
-      grouped[tag] = [];
-    }
-    grouped[tag].push(endpoint);
-  });
-
-  return grouped;
-});
-
-const filteredEndpointsByTag = computed(() => {
-  const grouped: Record<string, any[]> = {};
-  const term = searchTerm.value.toLowerCase();
-
-  for (const [tag, endpoints] of Object.entries(endpointsByTag.value)) {
-    const filtered = endpoints.filter((ep: any) => {
-      const matchesPath = ep.path.toLowerCase().includes(term);
-      const matchesSummary = ep.summary?.toLowerCase().includes(term);
-      const matchesMethod = ep.method.toLowerCase().includes(term);
-      return matchesPath || matchesSummary || matchesMethod;
-    });
-
-    if (filtered.length > 0) {
-      grouped[tag] = filtered;
-    }
-  }
-
-  return grouped;
-});
-
-const isTagExpanded = (tag: string) => {
-  return expandedTags.value.has(tag);
-};
-
-const toggleTag = (tag: string) => {
-  if (expandedTags.value.has(tag)) {
-    expandedTags.value.delete(tag);
+const isFolderExpanded = (folderId: string) => expandedFolders.value.has(folderId);
+const toggleFolder = (folderId: string) => {
+  if (expandedFolders.value.has(folderId)) {
+    expandedFolders.value.delete(folderId);
   } else {
-    expandedTags.value.add(tag);
+    expandedFolders.value.add(folderId);
   }
 };
+
+// Filter helpers
+const endpointMatches = (ep: any, term: string) => {
+  if (!term) return true;
+  const t = term.toLowerCase();
+  return ep.cleanPath?.toLowerCase().includes(t) ||
+    ep.name?.toLowerCase().includes(t) ||
+    ep.method?.toLowerCase().includes(t);
+};
+
+const folderHasMatch = (folder: any, term: string): boolean => {
+  if (!term) return true;
+  if (folder.requests?.some((r: any) => endpointMatches(r, term))) return true;
+  if (folder.children?.some((c: any) => folderHasMatch(c, term))) return true;
+  return false;
+};
+
+const filteredRootRequests = computed(() => {
+  if (!data.value?.endpoints) return [];
+  const term = searchTerm.value;
+  // Collection-level endpoints are those NOT in any folder
+  // We identify them by checking if they exist in folder trees
+  const folderEndpointIds = new Set<string>();
+  const collectIds = (folders: any[]) => {
+    for (const f of folders) {
+      f.requests?.forEach((r: any) => folderEndpointIds.add(r.id));
+      collectIds(f.children || []);
+    }
+  };
+  collectIds(data.value.folders || []);
+
+  return data.value.endpoints.filter((ep: any) =>
+    !folderEndpointIds.has(ep.id) && endpointMatches(ep, term)
+  );
+});
+
+const filteredFolders = computed(() => {
+  if (!data.value?.folders) return [];
+  const term = searchTerm.value;
+  return data.value.folders.filter((f: any) => folderHasMatch(f, term));
+});
 
 const selectEndpoint = (endpoint: any) => {
   selectedEndpoint.value = endpoint;
@@ -162,14 +308,14 @@ const getMethodColor = (method: string): string => {
 };
 
 onMounted(() => {
-  if (data.value?.endpoints?.length) {
-    expandedTags.value = new Set(Object.keys(endpointsByTag.value));
+  if (data.value?.folders?.length) {
+    expandedFolders.value = new Set(data.value.folders.map((f: any) => f.id));
   }
 });
 
 watch(() => data.value, () => {
-  if (data.value?.endpoints?.length) {
-    expandedTags.value = new Set(Object.keys(endpointsByTag.value));
+  if (data.value?.folders?.length) {
+    expandedFolders.value = new Set(data.value.folders.map((f: any) => f.id));
   }
 });
 </script>
@@ -248,7 +394,8 @@ watch(() => data.value, () => {
           </div>
 
           <div class="flex-1 overflow-y-auto py-2">
-            <div v-if="Object.keys(filteredEndpointsByTag).length === 0" class="px-3 py-8 text-xs text-text-muted text-center">
+            <!-- Empty state -->
+            <div v-if="filteredRootRequests.length === 0 && filteredFolders.length === 0" class="px-3 py-8 text-xs text-text-muted text-center">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-2 opacity-40">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -256,60 +403,29 @@ watch(() => data.value, () => {
               No endpoints match
             </div>
 
-            <div v-else class="space-y-2 px-2">
-              <div
-                v-for="([tag, endpoints]) in Object.entries(filteredEndpointsByTag)"
-                :key="tag"
-              >
-                <button
-                  @click="toggleTag(tag)"
-                  class="w-full flex items-center justify-between py-1.5 px-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors uppercase tracking-wide"
-                >
-                  <span class="flex items-center gap-1.5">
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      :class="{ 'rotate-90': isTagExpanded(tag) }"
-                      class="transition-transform duration-fast flex-shrink-0"
-                    >
-                      <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                    <span>{{ tag }}</span>
-                  </span>
-                  <span class="text-[10px] text-text-muted tabular-nums">{{ endpoints.length }}</span>
-                </button>
-
-                <div v-if="isTagExpanded(tag)" class="mt-0.5 space-y-px pl-2">
-                  <button
-                    v-for="endpoint in endpoints"
-                    :key="endpoint.id"
-                    @click="selectEndpoint(endpoint)"
-                    :class="[
-                      'w-full flex items-center gap-1.5 py-1 px-2 text-left rounded transition-all duration-fast text-[10px] leading-tight',
-                      selectedEndpoint?.id === endpoint.id
-                        ? 'bg-bg-hover text-text-primary'
-                        : 'text-text-muted hover:bg-bg-tertiary hover:text-text-secondary'
-                    ]"
-                  >
-                    <span
-                      class="text-[8px] font-bold font-mono px-1 py-px rounded flex-shrink-0 leading-none"
-                      :style="{
-                        backgroundColor: getMethodColor(endpoint.method) + '18',
-                        color: getMethodColor(endpoint.method)
-                      }"
-                    >
-                      {{ endpoint.method }}
-                    </span>
-                    <span class="truncate font-mono">{{ endpoint.cleanPath }}</span>
-                  </button>
-                </div>
+            <div v-else class="space-y-1">
+              <!-- Collection-level (root) endpoints -->
+              <div v-if="filteredRootRequests.length > 0" class="px-2">
+                <EndpointItem
+                  v-for="endpoint in filteredRootRequests"
+                  :key="endpoint.id"
+                  :endpoint="endpoint"
+                  :selected-id="selectedEndpoint?.id"
+                  @select="selectEndpoint"
+                />
               </div>
+
+              <!-- Folder tree -->
+              <FolderTree
+                v-for="folder in filteredFolders"
+                :key="folder.id"
+                :folder="folder"
+                :selected-id="selectedEndpoint?.id"
+                :expanded-ids="expandedFolders"
+                :search-term="searchTerm"
+                @toggle="toggleFolder"
+                @select="selectEndpoint"
+              />
             </div>
           </div>
         </div>
@@ -547,4 +663,5 @@ watch(() => data.value, () => {
       </div>
     </div>
   </div>
+
 </template>
