@@ -3,6 +3,7 @@ interface Props {
   show: boolean;
   collectionId: string;
   collectionName: string;
+  parentFolderId?: string;
 }
 
 const props = defineProps<Props>();
@@ -14,7 +15,7 @@ const emit = defineEmits<{
 
 const form = ref({
   name: '',
-  parentFolderId: ''
+  parentFolderId: props.parentFolderId || ''
 });
 
 const isSubmitting = ref(false);
@@ -25,7 +26,7 @@ const canSubmit = computed(() => {
 });
 
 const resetForm = () => {
-  form.value = { name: '', parentFolderId: '' };
+  form.value = { name: '', parentFolderId: props.parentFolderId || '' };
   error.value = '';
 };
 

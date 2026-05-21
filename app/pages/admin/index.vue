@@ -1473,10 +1473,11 @@ const openShareWorkspace = (workspace: { id: string; name: string }) => {
   shareWorkspaceName.value = workspace.name;
   showShareModal.value = true;
 };
-const showFolderModal = ref(false);
-const folderCollectionId = ref<string | null>(null);
-const folderCollectionName = ref<string>('');
-const showRequestModal = ref(false);
+  const showFolderModal = ref(false);
+  const folderCollectionId = ref<string | null>(null);
+  const folderCollectionName = ref<string>('');
+  const folderParentFolderId = ref<string | null>(null);
+  const showRequestModal = ref(false);
 const requestFolderId = ref<string | null>(null);
 const requestFolderName = ref<string>('');
 const requestCollectionId = ref<string | null>(null);
@@ -2901,13 +2902,14 @@ const handleCurlImported = async (result: any) => {
   }
 };
 
-const openCreateFolder = (collectionId?: string) => {
+const openCreateFolder = (collectionId?: string, parentFolderId?: string) => {
   if (collectionId) {
     const wsId = workspaceIdForCollectionId(collectionId);
     if (wsId && !canEditWorkspaceById(wsId)) return;
     const collection = findCollectionInWorkspaces(collectionId);
     folderCollectionId.value = collectionId;
     folderCollectionName.value = collection?.name || 'Unknown Collection';
+    folderParentFolderId.value = parentFolderId || null;
     showFolderModal.value = true;
   } else {
     alert('Please select a collection first');
@@ -2918,6 +2920,7 @@ const handleFolderModalClose = () => {
   showFolderModal.value = false;
   folderCollectionId.value = null;
   folderCollectionName.value = '';
+  folderParentFolderId.value = null;
 };
 
 const handleFolderCreated = async () => {
@@ -4907,6 +4910,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       :show="showFolderModal"
       :collection-id="folderCollectionId || ''"
       :collection-name="folderCollectionName"
+      :parent-folder-id="folderParentFolderId || undefined"
       @close="handleFolderModalClose"
       @created="handleFolderCreated"
     />
