@@ -11,7 +11,7 @@ interface ToastOptions {
 interface ToastState {
   show: boolean;
   message: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
 }
 
 export const useToast = () => {
@@ -25,7 +25,7 @@ export const useToast = () => {
   // Timeout reference - client-only
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success', options: ToastOptions = {}) => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', options: ToastOptions = {}) => {
     const { duration = 3000 } = options;
 
     // Clear existing timeout (client-only)

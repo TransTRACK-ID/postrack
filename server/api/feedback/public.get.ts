@@ -20,6 +20,7 @@ interface PublicSubmission {
   createdAt: string;
   userVoted: boolean;
   comments: Comment[];
+  isOwn: boolean;
 }
 
 interface Filters {
@@ -117,7 +118,8 @@ export default defineEventHandler(async (event) => {
       upvotes: sub.upvotes,
       createdAt: sub.createdAt.toISOString(),
       userVoted: user?.id ? userVotes.has(sub.id) : false,
-      comments: commentsMap.get(sub.id) || []
+      comments: commentsMap.get(sub.id) || [],
+      isOwn: user?.id ? sub.userId === user.id : false
     }));
 
     return {

@@ -296,6 +296,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useUser } from '~/composables/useUser';
 import { useFeedback } from '~/composables/useFeedback';
+import { useFeedbackPolling } from '~/composables/useFeedbackPolling';
 
 type FeedbackStatus = 'open' | 'pending' | 'process' | 'resolved' | 'closed';
 
@@ -317,11 +318,13 @@ interface PublicSubmission {
   createdAt: string;
   userVoted: boolean;
   comments: Comment[];
+  isOwn: boolean;
   _showComments?: boolean;
 }
 
 const { user, isAuthenticated, fetchUser } = useUser();
 const { feedbackStatus, fetchStatus, remainingTime, submitFeedback } = useFeedback();
+const { markSubmissionSeen } = useFeedbackPolling();
 
 // State
 const submissions = ref<PublicSubmission[]>([]);
@@ -419,8 +422,10 @@ const addComment = async (submission: PublicSubmission) => {
       // Add comment to local state
       submission.comments.unshift(response.comment);
       commentText.value[submission.id] = '';
+      // Tell global polling this is our own action — don't toast
+      markSubmissionSeen(submission.id, submission.comments.length);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to add comment:', e);
   } finally {
     isCommenting.value[submission.id] = false;
@@ -456,7 +461,7 @@ const handleFeedbackSubmit = async (data: { responses: Record<string, unknown>; 
     await submitFeedback(data);
     // Refresh the list to show the new submission if it's public
     await fetchPublicSubmissions();
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to submit feedback:', e);
   }
 };
