@@ -215,14 +215,27 @@ function buildResponsesFromExamples(
 }
 
 function cleanUrlPath(url: string): string {
-  // Strip environment variable placeholders like {{url}}, {{baseUrl}}, etc.
-  // Also strip query string for display purposes.
-  // Examples: "{{url}}/api/v1/auth" → "/api/v1/auth"
-  //           "{{baseUrl}}/users" → "/users"
-  //           "https://api.example.com/users" → "https://api.example.com/users" (unchanged)
-  const withoutVars = url.replace(/\{\{\w+\}\}/g, '').replace(/^\/+/, '/');
-  const withoutQuery = withoutVars.split('?')[0];
-  return withoutQuery;
+  // Clean a URL for display:
+  // 1. Strip the leading env-var base URL (e.g. {{url}}, {{baseUrl}})
+  // 2. Convert remaining {{var}} path variables to {var} (standard docs convention)
+  // 3. Strip query string
+  //
+  // Examples:
+  //   "{{url}}/api/v1/auth"              → "/api/v1/auth"
+  //   "{{url}}/users/{{userId}}"         → "/users/{userId}"
+  //   "https://api.example.com/users"    → "https://api.example.com/users"
+
+  // Step 1: strip leading env-var
+  let cleaned = url.replace(/^\{\{\w+\}\}/, '');
+
+  // Step 2: convert remaining {{var}} to {var} (standard OpenAPI/docs convention)
+  cleaned = cleaned.replace(/\{\{(\w+)\}\}/g, '{$1}');
+
+  // Step 3: normalize leading slashes and strip query string
+  cleaned = cleaned.replace(/^\/+/, '/');
+  cleaned = cleaned.split('?')[0];
+
+  return cleaned;
 }
 
 function createPublicEndpoint(
@@ -249,13 +262,28 @@ function createPublicEndpoint(
   // Parse URL to extract path and query parameters
   const allParams: Array<{ name: string; in: string; required: boolean; description: string; schema: any }> = [];
 
-  // Extract path variables from URL pattern like {{baseUrl}}/users/{{userId}}
-  const pathMatches = req.url.match(/\{\{(\w+)\}\}/g);
-  if (pathMatches) {
-    pathMatches.forEach(match => {
+  // Parse paramNotes for query param descriptions
+  const paramNotes = parseJsonField<{
+    queryParams?: Record<string, string>;
+    headers?: Record<string, string>;
+    formData?: Record<string, string>;
+    urlencoded?: Record<string, string>;
+  }>(req.paramNotes);
+
+  // --- PATH VARIABLES ---
+  // Strategy: strip the leading env-var base URL first, then any remaining {{var}}
+  // in the path are real path parameters.
+  // e.g. "{{url}}/api/v1/users/{{userId}}"  → after strip env var: "/api/v1/users/{{userId}}"
+  // e.g. "{{baseUrl}}/health"               → after strip env var: "/health" (no path vars)
+
+  // Detect and strip leading env-var placeholder (anything at the very start before a /)
+  const urlAfterEnvVar = req.url.replace(/^\{\{\w+\}\}/, '');
+
+  // Find remaining {{var}} patterns — these are actual path variables
+  const remainingPathVars = urlAfterEnvVar.match(/\{\{(\w+)\}\}/g);
+  if (remainingPathVars) {
+    remainingPathVars.forEach(match => {
       const paramName = match.replace(/\{\{|\}\}/g, '');
-      // Skip environment variable placeholders (uppercase or common names)
-      if (/^(URL|BASEURL|BASE_URL|HOST|DOMAIN|API_URL)$/i.test(paramName)) return;
       const paramInfo = pathVariables?.[paramName];
       allParams.push({
         name: paramName,
@@ -267,23 +295,28 @@ function createPublicEndpoint(
     });
   }
 
-  // Extract query parameters from URL like ?foo=bar&baz=qux
+  // --- QUERY PARAMETERS ---
   try {
     // Replace {{var}} placeholders with a dummy value so URL parsing works
     const urlForParsing = req.url.replace(/\{\{\w+\}\}/g, 'placeholder');
     const parsedUrl = new URL(urlForParsing.startsWith('http') ? urlForParsing : 'http://example.com' + urlForParsing);
+
     parsedUrl.searchParams.forEach((value, key) => {
-      // Avoid duplicates (if paramNotes has it, use that description)
+      // Skip if this key is already a path variable (rare edge case)
       const existing = allParams.find(p => p.name === key);
-      if (!existing) {
-        allParams.push({
-          name: key,
-          in: 'query',
-          required: false,
-          description: value ? `Example: ${value.length > 40 ? value.slice(0, 40) + '...' : value}` : 'Query parameter',
-          schema: { type: 'string' }
-        });
-      }
+      if (existing) return;
+
+      // Prefer description from paramNotes if available
+      const noteDesc = paramNotes?.queryParams?.[key];
+      const displayValue = value.length > 40 ? value.slice(0, 40) + '...' : value;
+
+      allParams.push({
+        name: key,
+        in: 'query',
+        required: false,
+        description: noteDesc || (value ? `Example: ${displayValue}` : 'Query parameter'),
+        schema: { type: 'string' }
+      });
     });
   } catch {
     // URL parsing failed, ignore query params
