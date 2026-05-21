@@ -483,77 +483,96 @@ onMounted(() => {
                     />
                   </div>
                   
-                  <div class="flex-1 overflow-y-auto py-2">
+                  <div class="flex-1 overflow-y-auto py-3">
                     <div v-if="activeSection === 'endpoints'">
-                      <div v-if="Object.keys(filteredEndpointsByTag).length === 0" class="px-3 py-4 text-xs text-text-muted text-center">
+                      <div v-if="Object.keys(filteredEndpointsByTag).length === 0" class="px-4 py-6 text-xs text-text-muted text-center">
                         No endpoints match
                       </div>
                       
-                      <div v-else class="space-y-1 px-2">
+                      <div v-else class="px-3">
                         <div 
-                          v-for="([tag, endpoints]) in Object.entries(filteredEndpointsByTag)" 
+                          v-for="([tag, endpoints], tagIndex) in Object.entries(filteredEndpointsByTag)" 
                           :key="tag"
+                          :class="{ 'mt-3': tagIndex > 0 }"
                         >
                           <button
                             @click="toggleTag(tag)"
-                            class="w-full flex items-center justify-between py-1.5 px-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+                            class="w-full flex items-center gap-2 py-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-tertiary"
                           >
-                            <span class="flex items-center gap-1.5">
-                              <svg 
-                                width="12" 
-                                height="12" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                stroke-width="2" 
-                                stroke-linecap="round" 
-                                stroke-linejoin="round"
-                                :class="[
-                                  'transition-transform duration-fast',
-                                  { 'rotate-90': isTagExpanded(tag) }
-                                ]"
-                              >
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                              </svg>
-                              <span>{{ tag === 'default' ? 'General' : tag }}</span>
+                            <svg 
+                              width="12" 
+                              height="12" 
+                              viewBox="0 0 24 24" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              stroke-width="2.5" 
+                              stroke-linecap="round" 
+                              stroke-linejoin="round"
+                              :class="[
+                                'transition-transform duration-fast flex-shrink-0',
+                                { 'rotate-90': isTagExpanded(tag) }
+                              ]"
+                            >
+                              <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                            <svg 
+                              width="12" 
+                              height="12" 
+                              viewBox="0 0 24 24" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              stroke-width="2" 
+                              stroke-linecap="round" 
+                              stroke-linejoin="round"
+                              class="flex-shrink-0 text-text-muted"
+                            >
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span class="flex-1 text-left truncate">{{ tag === 'default' ? 'General' : tag }}</span>
+                            <span class="flex-shrink-0 text-[10px] font-bold text-text-muted bg-bg-tertiary py-0.5 px-1.5 rounded-md">
+                              {{ endpoints.length }}
                             </span>
-                            <span class="text-[10px] text-text-muted">{{ endpoints.length }}</span>
                           </button>
                           
-                          <div v-if="isTagExpanded(tag)" class="mt-1 space-y-0.5 pl-4 border-l border-border-subtle">
+                          <div v-if="isTagExpanded(tag)" class="mt-1 space-y-0.5 pl-[22px]">
                             <button
                               v-for="endpoint in endpoints"
                               :key="`${endpoint.method}:${endpoint.path}`"
                               @click="selectEndpoint(endpoint)"
                               :class="[
-                                'w-full flex items-center gap-2 py-1.5 px-2 text-left rounded-md transition-all duration-fast text-[11px]',
+                                'w-full flex items-center gap-2 py-2 px-2.5 text-left rounded-md transition-all duration-fast',
                                 selectedEndpoint?.path === endpoint.path && selectedEndpoint?.method === endpoint.method
-                                  ? 'bg-bg-hover text-text-primary border-l-2 border-accent-orange -ml-2 pl-4'
+                                  ? 'bg-bg-active text-text-primary'
                                   : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
                               ]"
                             >
-                              <MethodBadge :method="endpoint.method" size="sm" />
-                              <span class="truncate font-mono">{{ endpoint.path.replace(/["']/g, '') }}</span>
+                              <MethodBadge :method="endpoint.method" size="xs" />
+                              <span 
+                                class="truncate font-mono text-[11px]" 
+                                :title="endpoint.path.replace(/[&#34;']/g, '')"
+                              >
+                                {{ endpoint.path.replace(/["']/g, '') }}
+                              </span>
                             </button>
                           </div>
                         </div>
                       </div>
                     </div>
                     
-                    <div v-else class="space-y-1 px-2">
-                      <div v-if="Object.keys(filteredSchemas).length === 0" class="px-3 py-4 text-xs text-text-muted text-center">
+                    <div v-else class="px-3 space-y-0.5">
+                      <div v-if="Object.keys(filteredSchemas).length === 0" class="px-4 py-6 text-xs text-text-muted text-center">
                         No schemas match
                       </div>
                       
-                      <div v-else>
+                      <div v-else class="space-y-0.5">
                         <button
                           v-for="(schema, name) in filteredSchemas"
                           :key="name"
                           @click="selectSchema(name)"
                           :class="[
-                            'w-full flex items-center gap-2 py-1.5 px-2 text-left rounded-md transition-all duration-fast text-[11px]',
+                            'w-full flex items-center gap-2 py-2 px-2.5 text-left rounded-md transition-all duration-fast text-xs',
                             selectedSchema === name
-                              ? 'bg-bg-hover text-text-primary border-l-2 border-accent-orange -ml-2 pl-4'
+                              ? 'bg-bg-active text-text-primary'
                               : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
                           ]"
                         >
@@ -562,7 +581,7 @@ onMounted(() => {
                             <line x1="4" y1="12" x2="20" y2="12"></line>
                             <line x1="12" y1="4" x2="12" y2="20"></line>
                           </svg>
-                          <span class="truncate">{{ schema.title || name }}</span>
+                          <span class="truncate" :title="schema.title || name">{{ schema.title || name }}</span>
                         </button>
                       </div>
                     </div>

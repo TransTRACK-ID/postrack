@@ -18,15 +18,16 @@ export const EndpointItem = defineComponent({
 
     return () => h('button', {
       class: [
-        'w-full flex items-center gap-1.5 py-1 px-2 text-left rounded transition-all duration-fast text-[10px] leading-tight',
+        'w-full flex items-center gap-2 py-1.5 px-2.5 text-left rounded-md transition-all duration-fast text-[11px]',
         props.selectedId === props.endpoint.id
-          ? 'bg-bg-hover text-text-primary'
-          : 'text-text-muted hover:bg-bg-tertiary hover:text-text-secondary'
+          ? 'bg-bg-active text-text-primary'
+          : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
       ],
+      title: props.endpoint.cleanPath,
       onClick: () => emit('select', props.endpoint)
     }, [
       h('span', {
-        class: 'text-[8px] font-bold font-mono px-1 py-px rounded flex-shrink-0 leading-none',
+        class: 'text-[9px] font-bold font-mono px-1 py-0.5 rounded flex-shrink-0 tracking-wide uppercase',
         style: {
           backgroundColor: getMethodColor(props.endpoint.method) + '18',
           color: getMethodColor(props.endpoint.method)
@@ -73,44 +74,42 @@ export const FolderTree = defineComponent({
       const filteredChildren = (props.folder.children || [])
         .filter((c: any) => folderHasMatch(c, props.searchTerm));
 
-      return h('div', { class: props.depth > 0 ? 'pl-2 border-l border-border-subtle ml-1' : '' }, [
+      return h('div', { class: props.depth > 0 ? 'pl-3' : '' }, [
         // Folder header
         h('button', {
-          class: 'w-full flex items-center justify-between py-1.5 px-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors select-none rounded',
+          class: 'w-full flex items-center gap-2 py-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors select-none rounded-md hover:bg-bg-tertiary',
           onClick: () => emit('toggle', props.folder.id)
         }, [
-          h('span', { class: 'flex items-center gap-1.5' }, [
-            h('svg', {
-              width: 10,
-              height: 10,
-              viewBox: '0 0 24 24',
-              fill: 'none',
-              stroke: 'currentColor',
-              'stroke-width': 2.5,
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              class: ['transition-transform duration-fast flex-shrink-0', isExpanded() ? 'rotate-90' : '']
-            }, [h('polyline', { points: '9 18 15 12 9 6' })]),
-            h('svg', {
-              width: 12,
-              height: 12,
-              viewBox: '0 0 24 24',
-              fill: 'none',
-              stroke: 'currentColor',
-              'stroke-width': 2,
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              class: 'text-text-muted flex-shrink-0'
-            }, [h('path', { d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' })]),
-            h('span', { class: 'uppercase tracking-wide' }, props.folder.name)
-          ]),
-          h('span', { class: 'text-[10px] text-text-muted tabular-nums' },
+          h('svg', {
+            width: 12,
+            height: 12,
+            viewBox: '0 0 24 24',
+            fill: 'none',
+            stroke: 'currentColor',
+            'stroke-width': 2.5,
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round',
+            class: ['transition-transform duration-fast flex-shrink-0', isExpanded() ? 'rotate-90' : '']
+          }, [h('polyline', { points: '9 18 15 12 9 6' })]),
+          h('svg', {
+            width: 12,
+            height: 12,
+            viewBox: '0 0 24 24',
+            fill: 'none',
+            stroke: 'currentColor',
+            'stroke-width': 2,
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round',
+            class: 'text-text-muted flex-shrink-0'
+          }, [h('path', { d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' })]),
+          h('span', { class: 'flex-1 text-left truncate' }, props.folder.name),
+          h('span', { class: 'text-[10px] font-bold text-text-muted bg-bg-tertiary py-0.5 px-1.5 rounded-md tabular-nums flex-shrink-0' },
             String((filteredRequests?.length || 0) + (props.folder.children?.length || 0))
           )
         ]),
 
         // Folder contents
-        isExpanded() ? h('div', { class: 'mt-0.5 space-y-px pl-1' }, [
+        isExpanded() ? h('div', { class: 'mt-1 space-y-0.5 pl-[22px]' }, [
           // Requests in this folder
           ...(filteredRequests || []).map((req: any) =>
             h(EndpointItem, {
@@ -410,9 +409,9 @@ watch(() => data.value, () => {
             />
           </div>
 
-          <div class="flex-1 overflow-y-auto py-2">
+          <div class="flex-1 overflow-y-auto py-3">
             <!-- Empty state -->
-            <div v-if="filteredRootRequests.length === 0 && filteredFolders.length === 0" class="px-3 py-8 text-xs text-text-muted text-center">
+            <div v-if="filteredRootRequests.length === 0 && filteredFolders.length === 0" class="px-4 py-8 text-xs text-text-muted text-center">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-2 opacity-40">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -420,9 +419,9 @@ watch(() => data.value, () => {
               No endpoints match
             </div>
 
-            <div v-else class="space-y-1">
+            <div v-else class="px-3 space-y-2">
               <!-- Collection-level (root) endpoints -->
-              <div v-if="filteredRootRequests.length > 0" class="px-2">
+              <div v-if="filteredRootRequests.length > 0" class="space-y-0.5">
                 <EndpointItem
                   v-for="endpoint in filteredRootRequests"
                   :key="endpoint.id"

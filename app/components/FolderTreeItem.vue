@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import MethodBadge from '~/components/MethodBadge.vue';
+
 interface HttpRequest {
   id: string;
   folderId: string | null;
@@ -259,7 +261,7 @@ const isBeforeRequestsDrop = computed(() =>
             <div
               v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
               :class="[
-                'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
+                'flex items-center gap-2 py-2 px-3 mx-1.5 rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
                 dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10' : ''
               ]"
               :draggable="true"
@@ -272,12 +274,7 @@ const isBeforeRequestsDrop = computed(() =>
               @dragleave="handleDragLeave"
               @drop="handleDrop($event, 'request', request.id, index === 0 ? 'before' : 'after')"
             >
-              <span
-                class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                :style="{ backgroundColor: getMethodColor(request.method) + '20', color: getMethodColor(request.method) }"
-              >
-                {{ request.method }}
-              </span>
+              <MethodBadge :method="request.method" size="xs" />
               <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="request.name">
                 {{ request.name }}
               </span>

@@ -9,7 +9,8 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const sizeClasses = {
-  sm: 'text-[9px] py-0.5 px-1.5 min-w-[40px]',
+  xs: 'text-[8px] py-[2px] px-1 min-w-[28px] tracking-wider',
+  sm: 'text-[9px] py-0.5 px-1.5 min-w-[40px] tracking-wide',
   md: 'text-[11px] py-0.5 px-2 min-w-[52px]',
   lg: 'text-xs py-1 px-2.5 min-w-[60px]'
 };

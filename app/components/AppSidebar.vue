@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import RequestHistoryPanel from './RequestHistoryPanel.vue';
 import ApiDefinitionsPanel from './ApiDefinitionsPanel.vue';
+import MethodBadge from '~/components/MethodBadge.vue';
 
 // Toast notification
 const { showToast } = useToast();
@@ -1697,12 +1698,7 @@ defineExpose({
                         @mouseenter="emit('hoverRequest', item.data.id)"
                         @contextmenu.prevent="handleContextMenu($event, 'request', item.data)"
                       >
-                        <span
-                          class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                          :style="{ backgroundColor: getMethodColor(item.data.method) + '20', color: getMethodColor(item.data.method) }"
-                        >
-                          {{ item.data.method }}
-                        </span>
+                        <MethodBadge :method="item.data.method" size="xs" />
                         <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="item.data.name">
                           {{ item.data.name }}
                         </span>
