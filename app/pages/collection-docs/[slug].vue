@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import MethodBadge from '~/components/MethodBadge.vue';
+<!-- MethodBadge replaced with inline styled spans for sidebar consistency -->
 
 const slug = useRoute().params.slug as string;
 
@@ -73,7 +73,6 @@ useHead({
 const searchTerm = ref('');
 const selectedEndpoint = ref<CollectionDocsResponse['endpoints'][0] | null>(null);
 const expandedTags = ref<Set<string>>(new Set());
-const activeSection = ref<'endpoints' | 'folders'>('endpoints');
 
 // Track which response sections are collapsed (all expanded by default)
 // Key format: "endpointId::statusCode"
@@ -200,43 +199,45 @@ watch(() => data.value, () => {
 
   <div v-else-if="data" class="min-h-screen bg-bg-secondary">
     <div class="flex flex-col h-screen">
-      <header class="flex items-center justify-between py-4 px-6 border-b border-border-default bg-bg-header">
+      <header class="flex items-center justify-between py-3 px-5 border-b border-border-default bg-bg-header">
         <div class="flex items-center gap-3">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accent-orange">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-          </svg>
+          <div class="flex items-center justify-center w-8 h-8 rounded-md bg-accent-orange/10 text-accent-orange">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </div>
           <div>
-            <h1 class="text-lg font-semibold text-text-primary m-0">{{ data.collection.name }}</h1>
-            <p v-if="data.collection.description" class="text-xs text-text-muted m-0 mt-0.5">{{ data.collection.description }}</p>
+            <h1 class="text-base font-semibold text-text-primary m-0 leading-tight">{{ data.collection.name }}</h1>
+            <p v-if="data.collection.description" class="text-[11px] text-text-muted m-0 mt-0.5">{{ data.collection.description }}</p>
           </div>
         </div>
 
         <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2 text-xs text-text-muted">
-            <span class="px-2 py-1 bg-bg-tertiary rounded">{{ data.stats.totalEndpoints }} endpoints</span>
+          <div class="hidden sm:flex items-center gap-1.5 text-[10px] text-text-muted">
+            <span class="px-1.5 py-0.5 bg-bg-tertiary rounded">{{ data.stats.totalEndpoints }} endpoints</span>
             <template v-for="(count, method) in data.stats.methods" :key="method">
-              <span class="px-2 py-1 rounded font-mono text-[10px]" :style="{ backgroundColor: getMethodColor(method) + '20', color: getMethodColor(method) }">
+              <span class="px-1.5 py-0.5 rounded font-mono text-[9px]" :style="{ backgroundColor: getMethodColor(method) + '15', color: getMethodColor(method) }">
                 {{ method }} {{ count }}
               </span>
             </template>
           </div>
-          <span class="inline-flex items-center gap-1 px-2 py-1 bg-accent-green/15 text-accent-green rounded text-xs">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-green/10 text-accent-green rounded text-[10px] font-medium">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
-            Public Documentation
+            Public
           </span>
         </div>
       </header>
 
       <div class="flex-1 flex overflow-hidden">
-        <div class="w-72 border-r border-border-default flex flex-col bg-bg-sidebar">
-          <div class="flex items-center gap-2 py-2 px-3 border-b border-border-default">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+        <div class="w-64 border-r border-border-default flex flex-col bg-bg-sidebar">
+          <div class="flex items-center gap-2 py-2.5 px-3 border-b border-border-default">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted flex-shrink-0">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
@@ -249,52 +250,64 @@ watch(() => data.value, () => {
           </div>
 
           <div class="flex-1 overflow-y-auto py-2">
-            <div v-if="Object.keys(filteredEndpointsByTag).length === 0" class="px-3 py-4 text-xs text-text-muted text-center">
+            <div v-if="Object.keys(filteredEndpointsByTag).length === 0" class="px-3 py-8 text-xs text-text-muted text-center">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-2 opacity-40">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
               No endpoints match
             </div>
 
-            <div v-else class="space-y-1 px-2">
+            <div v-else class="space-y-2 px-2">
               <div
                 v-for="([tag, endpoints]) in Object.entries(filteredEndpointsByTag)"
                 :key="tag"
               >
                 <button
                   @click="toggleTag(tag)"
-                  class="w-full flex items-center justify-between py-1.5 px-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+                  class="w-full flex items-center justify-between py-1.5 px-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors uppercase tracking-wide"
                 >
                   <span class="flex items-center gap-1.5">
                     <svg
-                      width="12"
-                      height="12"
+                      width="10"
+                      height="10"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
-                      stroke-width="2"
+                      stroke-width="2.5"
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       :class="{ 'rotate-90': isTagExpanded(tag) }"
-                      class="transition-transform duration-fast"
+                      class="transition-transform duration-fast flex-shrink-0"
                     >
                       <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                     <span>{{ tag }}</span>
                   </span>
-                  <span class="text-[10px] text-text-muted">{{ endpoints.length }}</span>
+                  <span class="text-[10px] text-text-muted tabular-nums">{{ endpoints.length }}</span>
                 </button>
 
-                <div v-if="isTagExpanded(tag)" class="mt-1 space-y-0.5 pl-4 border-l border-border-subtle">
+                <div v-if="isTagExpanded(tag)" class="mt-0.5 space-y-px pl-2">
                   <button
                     v-for="endpoint in endpoints"
                     :key="endpoint.id"
                     @click="selectEndpoint(endpoint)"
                     :class="[
-                      'w-full flex items-center gap-2 py-1.5 px-2 text-left rounded-md transition-all duration-fast text-[11px]',
+                      'w-full flex items-center gap-1.5 py-1 px-2 text-left rounded transition-all duration-fast text-[10px] leading-tight',
                       selectedEndpoint?.id === endpoint.id
-                        ? 'bg-bg-hover text-text-primary border-l-2 border-accent-orange -ml-2 pl-4'
-                        : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                        ? 'bg-bg-hover text-text-primary'
+                        : 'text-text-muted hover:bg-bg-tertiary hover:text-text-secondary'
                     ]"
                   >
-                    <MethodBadge :method="endpoint.method" size="sm" />
+                    <span
+                      class="text-[8px] font-bold font-mono px-1 py-px rounded flex-shrink-0 leading-none"
+                      :style="{
+                        backgroundColor: getMethodColor(endpoint.method) + '18',
+                        color: getMethodColor(endpoint.method)
+                      }"
+                    >
+                      {{ endpoint.method }}
+                    </span>
                     <span class="truncate font-mono">{{ endpoint.cleanPath }}</span>
                   </button>
                 </div>
@@ -305,16 +318,32 @@ watch(() => data.value, () => {
 
         <div class="flex-1 flex flex-col overflow-hidden">
           <div v-if="selectedEndpoint" class="flex-1 overflow-y-auto p-5">
-            <div class="mb-4 pb-3 border-b border-border-default">
-              <h3 class="text-lg font-semibold text-text-primary mb-1 flex items-center gap-2">
-                <MethodBadge :method="selectedEndpoint.method" size="lg" />
-                <span class="font-mono">{{ selectedEndpoint.cleanPath }}</span>
+            <div class="mb-6 pb-4 border-b border-border-default">
+              <div class="flex items-center gap-2 mb-2">
+                <span
+                  class="text-xs font-bold font-mono px-2 py-1 rounded leading-none"
+                  :style="{
+                    backgroundColor: getMethodColor(selectedEndpoint.method) + '18',
+                    color: getMethodColor(selectedEndpoint.method)
+                  }"
+                >
+                  {{ selectedEndpoint.method }}
+                </span>
+                <span class="text-xs text-text-muted">{{ selectedEndpoint.name }}</span>
+              </div>
+              <h3 class="text-xl font-semibold text-text-primary m-0 font-mono">
+                {{ selectedEndpoint.cleanPath }}
               </h3>
-              <p v-if="selectedEndpoint.summary" class="text-sm text-text-secondary m-0">{{ selectedEndpoint.summary }}</p>
             </div>
 
-            <div v-if="selectedEndpoint.auth" class="mb-4">
-              <h4 class="text-xs font-semibold text-text-primary uppercase tracking-wide mb-2">Authentication</h4>
+            <div v-if="selectedEndpoint.auth" class="mb-6">
+              <h4 class="text-[11px] font-semibold text-text-secondary mb-2 flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                Authentication
+              </h4>
               <div class="bg-bg-tertiary border border-border-default rounded-md p-3">
                 <span class="text-xs text-text-secondary">
                   Type: <span class="font-medium text-text-primary">{{ selectedEndpoint.auth.type }}</span>
@@ -322,8 +351,15 @@ watch(() => data.value, () => {
               </div>
             </div>
 
-            <div v-if="selectedEndpoint.headers && Object.keys(selectedEndpoint.headers).length > 0" class="mb-4">
-              <h4 class="text-xs font-semibold text-text-primary uppercase tracking-wide mb-2">Headers</h4>
+            <div v-if="selectedEndpoint.headers && Object.keys(selectedEndpoint.headers).length > 0" class="mb-6">
+              <h4 class="text-[11px] font-semibold text-text-secondary mb-2 flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+                  <line x1="4" y1="6" x2="20" y2="6"></line>
+                  <line x1="4" y1="12" x2="20" y2="12"></line>
+                  <line x1="4" y1="18" x2="20" y2="18"></line>
+                </svg>
+                Headers
+              </h4>
               <div class="bg-bg-tertiary border border-border-default rounded-md divide-y divide-border-default">
                 <div
                   v-for="(value, key) in selectedEndpoint.headers"
@@ -336,8 +372,14 @@ watch(() => data.value, () => {
               </div>
             </div>
 
-            <div v-if="selectedEndpoint.parameters && selectedEndpoint.parameters.length > 0" class="mb-4">
-              <h4 class="text-xs font-semibold text-text-primary uppercase tracking-wide mb-2">Parameters</h4>
+            <div v-if="selectedEndpoint.parameters && selectedEndpoint.parameters.length > 0" class="mb-6">
+              <h4 class="text-[11px] font-semibold text-text-secondary mb-2 flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                Parameters
+              </h4>
               <div class="bg-bg-tertiary border border-border-default rounded-md divide-y divide-border-default">
                 <div
                   v-for="param in selectedEndpoint.parameters"
@@ -362,8 +404,16 @@ watch(() => data.value, () => {
               </div>
             </div>
 
-            <div v-if="selectedEndpoint.requestBody" class="mb-4">
-              <h4 class="text-xs font-semibold text-text-primary uppercase tracking-wide mb-2">Request Body</h4>
+            <div v-if="selectedEndpoint.requestBody" class="mb-6">
+              <h4 class="text-[11px] font-semibold text-text-secondary mb-2 flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+                  <line x1="21" y1="10" x2="3" y2="10"></line>
+                  <line x1="21" y1="6" x2="3" y2="6"></line>
+                  <line x1="21" y1="14" x2="3" y2="14"></line>
+                  <line x1="21" y1="18" x2="3" y2="18"></line>
+                </svg>
+                Request Body
+              </h4>
               <div class="bg-bg-tertiary border border-border-default rounded-md p-3">
                 <div v-if="selectedEndpoint.requestBody.description" class="text-[11px] text-text-secondary mb-2">
                   {{ selectedEndpoint.requestBody.description }}
@@ -382,8 +432,13 @@ watch(() => data.value, () => {
               </div>
             </div>
 
-            <div v-if="selectedEndpoint.responses && Object.keys(selectedEndpoint.responses).length > 0" class="mb-4">
-              <h4 class="text-xs font-semibold text-text-primary uppercase tracking-wide mb-2">Responses</h4>
+            <div v-if="selectedEndpoint.responses && Object.keys(selectedEndpoint.responses).length > 0" class="mb-6">
+              <h4 class="text-[11px] font-semibold text-text-secondary mb-2 flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                Responses
+              </h4>
               <div class="space-y-2">
                 <div
                   v-for="([statusCode, response]) in Object.entries(selectedEndpoint.responses)"
@@ -479,12 +534,15 @@ watch(() => data.value, () => {
           </div>
 
           <div v-else class="flex-1 flex items-center justify-center text-text-muted">
-            <div class="text-center">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="opacity-30 mx-auto mb-3">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polygon points="10 8 16 12 10 16 10 8"></polygon>
-              </svg>
-              <p class="text-sm">Select an endpoint from the sidebar to view documentation</p>
+            <div class="text-center max-w-xs px-6">
+              <div class="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mx-auto mb-4">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-40">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+              </div>
+              <p class="text-sm font-medium text-text-secondary mb-1">Select an endpoint</p>
+              <p class="text-xs text-text-muted">Choose an endpoint from the sidebar to view its full documentation, parameters, and response examples.</p>
             </div>
           </div>
         </div>
