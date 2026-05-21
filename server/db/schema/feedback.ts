@@ -124,3 +124,23 @@ export const feedbackVotes = pgTable('feedback_votes', {
 
 export type FeedbackVote = typeof feedbackVotes.$inferSelect;
 export type NewFeedbackVote = typeof feedbackVotes.$inferInsert;
+
+/**
+ * Feedback comments - allows users to comment on submissions
+ */
+export const feedbackComments = pgTable('feedback_comments', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+
+  submissionId: text('submission_id').notNull(),
+  userId: text('user_id').notNull(),
+  userEmail: text('user_email'),
+
+  // Comment content
+  content: text('content').notNull(),
+
+  // Metadata
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export type FeedbackComment = typeof feedbackComments.$inferSelect;
+export type NewFeedbackComment = typeof feedbackComments.$inferInsert;

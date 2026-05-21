@@ -2,6 +2,14 @@ import { db, schema } from '../../db';
 import { desc, eq, and, inArray } from 'drizzle-orm';
 import type { FeedbackStatus } from '../../db/schema/feedback';
 
+interface Comment {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  content: string;
+  createdAt: string;
+}
+
 interface PublicSubmission {
   id: string;
   responses: Record<string, unknown>;
@@ -11,6 +19,7 @@ interface PublicSubmission {
   upvotes: number;
   createdAt: string;
   userVoted: boolean;
+  comments: Comment[];
 }
 
 interface Filters {
@@ -60,17 +69,41 @@ export default defineEventHandler(async (event) => {
 
     // Get user's votes if authenticated
     let userVotes = new Set<string>();
-    if (user?.id) {
-      const submissionIds = submissions.map(s => s.id);
-      if (submissionIds.length > 0) {
-        const votes = await db
-          .select({ submissionId: schema.feedbackVotes.submissionId })
-          .from(schema.feedbackVotes)
-          .where(
+    const submissionIds = submissions.map(s => s.id);
+
+    if (user?.id && submissionIds.length > 0) {
+      const votes = await db
+        .select({ submissionId: schema.feedbackVotes.submissionId })
+        .from(schema.feedbackVotes)
+        .where(
+          and(
             inArray(schema.feedbackVotes.submissionId, submissionIds),
             eq(schema.feedbackVotes.userId, user.id)
-          );
-        userVotes = new Set(votes.map(v => v.submissionId));
+          )
+        );
+      userVotes = new Set(votes.map(v => v.submissionId));
+    }
+
+    // Fetch comments for all submissions
+    let commentsMap = new Map<string, Comment[]>();
+    if (submissionIds.length > 0) {
+      const comments = await db
+        .select()
+        .from(schema.feedbackComments)
+        .where(inArray(schema.feedbackComments.submissionId, submissionIds))
+        .orderBy(desc(schema.feedbackComments.createdAt));
+
+      for (const comment of comments) {
+        if (!commentsMap.has(comment.submissionId)) {
+          commentsMap.set(comment.submissionId, []);
+        }
+        commentsMap.get(comment.submissionId)!.push({
+          id: comment.id,
+          userId: comment.userId,
+          userEmail: comment.userEmail,
+          content: comment.content,
+          createdAt: comment.createdAt.toISOString()
+        });
       }
     }
 
@@ -83,7 +116,8 @@ export default defineEventHandler(async (event) => {
       status: sub.status as FeedbackStatus,
       upvotes: sub.upvotes,
       createdAt: sub.createdAt.toISOString(),
-      userVoted: user?.id ? userVotes.has(sub.id) : false
+      userVoted: user?.id ? userVotes.has(sub.id) : false,
+      comments: commentsMap.get(sub.id) || []
     }));
 
     return {

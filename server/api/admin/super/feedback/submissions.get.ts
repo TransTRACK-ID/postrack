@@ -18,6 +18,14 @@ interface StatusHistoryRecord {
   changedAt: string;
 }
 
+interface Comment {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  content: string;
+  createdAt: string;
+}
+
 interface SubmissionWithHistory {
   id: string;
   userId: string | null;
@@ -30,6 +38,7 @@ interface SubmissionWithHistory {
   createdAt: string;
   userAgent: string | null;
   recentHistory: StatusHistoryRecord[];
+  comments: Comment[];
 }
 
 interface Analytics {
@@ -135,11 +144,35 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Combine submissions with their recent history
+    // Fetch comments for all submissions
+    let commentsMap = new Map<string, Comment[]>();
+    if (submissionIds.length > 0) {
+      const comments = await db
+        .select()
+        .from(schema.feedbackComments)
+        .where(inArray(schema.feedbackComments.submissionId, submissionIds))
+        .orderBy(desc(schema.feedbackComments.createdAt));
+
+      for (const comment of comments) {
+        if (!commentsMap.has(comment.submissionId)) {
+          commentsMap.set(comment.submissionId, []);
+        }
+        commentsMap.get(comment.submissionId)!.push({
+          id: comment.id,
+          userId: comment.userId,
+          userEmail: comment.userEmail,
+          content: comment.content,
+          createdAt: comment.createdAt.toISOString()
+        });
+      }
+    }
+
+    // Combine submissions with their recent history and comments
     const submissionsWithHistory: SubmissionWithHistory[] = submissions.map(sub => ({
       ...sub,
       createdAt: sub.createdAt.toISOString(),
-      recentHistory: historyMap.get(sub.id) || []
+      recentHistory: historyMap.get(sub.id) || [],
+      comments: commentsMap.get(sub.id) || []
     }));
     
     // Calculate analytics

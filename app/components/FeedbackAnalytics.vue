@@ -335,6 +335,7 @@
                 <th class="px-4 py-2 text-left text-[10px] font-medium text-text-muted uppercase tracking-wider">Rating</th>
                 <th class="px-4 py-2 text-left text-[10px] font-medium text-text-muted uppercase tracking-wider">Status</th>
                 <th class="px-4 py-2 text-left text-[10px] font-medium text-text-muted uppercase tracking-wider">Comment</th>
+                <th class="px-4 py-2 text-left text-[10px] font-medium text-text-muted uppercase tracking-wider">Comments</th>
                 <th class="px-4 py-2 text-left text-[10px] font-medium text-text-muted uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -376,6 +377,18 @@
                 </td>
                 <td class="px-4 py-2 text-[11px] text-text-secondary max-w-xs truncate">
                   {{ submission.comment || '-' }}
+                </td>
+                <td class="px-4 py-2 whitespace-nowrap">
+                  <span
+                    v-if="submission.comments.length"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent-blue/10 text-accent-blue"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    {{ submission.comments.length }}
+                  </span>
+                  <span v-else class="text-text-muted">-</span>
                 </td>
                 <td class="px-4 py-2 whitespace-nowrap text-[11px]">
                   <button
@@ -694,6 +707,30 @@
                 </div>
               </div>
             </div>
+
+            <!-- Comments Section -->
+            <div v-if="selectedSubmission.comments.length" class="border border-border-default rounded-lg overflow-hidden">
+              <div class="px-3 py-2.5 bg-bg-tertiary flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-text-muted">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span class="text-[12px] font-medium text-text-primary">Comments</span>
+                <span class="text-[11px] text-text-muted">({{ selectedSubmission.comments.length }})</span>
+              </div>
+              <div class="p-3 bg-bg-secondary space-y-2">
+                <div
+                  v-for="comment in selectedSubmission.comments"
+                  :key="comment.id"
+                  class="p-2.5 bg-bg-tertiary rounded border border-border-default"
+                >
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-medium text-text-primary">{{ comment.userEmail || 'Anonymous' }}</span>
+                    <span class="text-[10px] text-text-muted">{{ formatDateFull(comment.createdAt) }}</span>
+                  </div>
+                  <p class="text-[12px] text-text-secondary whitespace-pre-wrap">{{ comment.content }}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -715,6 +752,14 @@ interface StatusHistoryRecord {
   changedAt: string;
 }
 
+interface Comment {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  content: string;
+  createdAt: string;
+}
+
 interface Submission {
   id: string;
   userId: string | null;
@@ -727,6 +772,7 @@ interface Submission {
   createdAt: string;
   userAgent: string | null;
   recentHistory?: StatusHistoryRecord[];
+  comments: Comment[];
 }
 
 interface Analytics {

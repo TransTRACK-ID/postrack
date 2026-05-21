@@ -122,17 +122,17 @@
       "breakpoints": true
     },
     {
-      "idx": 17,
-      "version": "7",
-      "when": 1777833600000,
-      "tag": "0018_add_collection_public_docs",
-      "breakpoints": true
-    },
-    {
       "idx": 18,
       "version": "7",
       "when": 1779333680308,
       "tag": "0018_cynical_tusk",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1779336218941,
+      "tag": "0019_typical_norman_osborn",
       "breakpoints": true
     }
   ]

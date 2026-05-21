@@ -185,6 +185,98 @@
                 </div>
               </div>
             </div>
+
+            <!-- Comments Section -->
+            <div class="mt-4 pt-3 border-t border-border-default">
+              <!-- Header -->
+              <button
+                @click="submission._showComments = !submission._showComments"
+                class="w-full flex items-center justify-between group mb-2"
+              >
+                <div class="flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-text-muted group-hover:text-text-secondary transition-colors">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <span class="text-[11px] text-text-muted uppercase group-hover:text-text-secondary transition-colors">
+                    Comments
+                  </span>
+                  <span class="text-[11px] text-text-secondary">
+                    ({{ submission.comments.length }})
+                  </span>
+                </div>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="text-text-muted transition-transform duration-200"
+                  :class="{ 'rotate-180': submission._showComments !== false }"
+                >
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              <!-- Comments Body -->
+              <div v-show="submission._showComments !== false" class="space-y-3">
+                <!-- Comments List -->
+                <div v-if="submission.comments.length" class="space-y-2">
+                  <div
+                    v-for="comment in submission.comments"
+                    :key="comment.id"
+                    class="p-2.5 bg-bg-tertiary rounded border border-border-default"
+                  >
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-[11px] font-medium text-text-primary">
+                        {{ comment.userEmail || 'Anonymous' }}
+                      </span>
+                      <span class="text-[10px] text-text-muted">
+                        {{ formatDateFull(comment.createdAt) }}
+                      </span>
+                    </div>
+                    <p class="text-[12px] text-text-secondary whitespace-pre-wrap">{{ comment.content }}</p>
+                  </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else class="py-3 px-2 text-center">
+                  <p class="text-[11px] text-text-muted italic">No comments yet. Be the first to share your thoughts!</p>
+                </div>
+
+                <!-- Add Comment Form -->
+                <div v-if="isAuthenticated" class="flex gap-2">
+                  <textarea
+                    v-model="commentText[submission.id]"
+                    :disabled="isCommenting[submission.id]"
+                    rows="2"
+                    placeholder="Write a comment..."
+                    class="flex-1 px-3 py-2 text-[12px] bg-bg-tertiary border border-border-default rounded-md focus:ring-1 focus:ring-accent-orange focus:border-accent-orange text-text-primary placeholder-text-muted transition-all resize-none"
+                    @keydown.enter.prevent="(e) => { if (!e.shiftKey) addComment(submission); }"
+                  />
+                  <button
+                    @click="addComment(submission)"
+                    :disabled="isCommenting[submission.id] || !commentText[submission.id]?.trim()"
+                    class="px-3 py-2 bg-accent-orange text-white rounded-md hover:bg-accent-orange-hover transition-colors text-[12px] font-medium disabled:opacity-50 self-end"
+                  >
+                    <span v-if="isCommenting[submission.id]">
+                      <svg class="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                      </svg>
+                    </span>
+                    <span v-else>Post</span>
+                  </button>
+                </div>
+
+                <!-- Not Authenticated Hint -->
+                <div v-else class="py-2 px-2 text-center">
+                  <p class="text-[11px] text-text-muted">
+                    <NuxtLink to="/login" class="text-accent-orange hover:text-accent-orange-hover underline">Sign in</NuxtLink>
+                    to leave a comment
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -207,6 +299,14 @@ import { useFeedback } from '~/composables/useFeedback';
 
 type FeedbackStatus = 'open' | 'pending' | 'process' | 'resolved' | 'closed';
 
+interface Comment {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  content: string;
+  createdAt: string;
+}
+
 interface PublicSubmission {
   id: string;
   responses: Record<string, unknown>;
@@ -216,15 +316,19 @@ interface PublicSubmission {
   upvotes: number;
   createdAt: string;
   userVoted: boolean;
+  comments: Comment[];
+  _showComments?: boolean;
 }
 
-const { user, isAuthenticated } = useUser();
+const { user, isAuthenticated, fetchUser } = useUser();
 const { feedbackStatus, fetchStatus, remainingTime, submitFeedback } = useFeedback();
 
 // State
 const submissions = ref<PublicSubmission[]>([]);
 const isLoading = ref(true);
 const isVoting = ref<Record<string, boolean>>({});
+const isCommenting = ref<Record<string, boolean>>({});
+const commentText = ref<Record<string, string>>({});
 const error = ref<string | null>(null);
 const sortBy = ref<'popular' | 'recent'>('recent');
 const showFeedbackModal = ref(false);
@@ -296,6 +400,33 @@ const toggleVote = async (submission: PublicSubmission) => {
   }
 };
 
+// Add comment
+const addComment = async (submission: PublicSubmission) => {
+  if (!isAuthenticated.value) return;
+
+  const text = commentText.value[submission.id]?.trim();
+  if (!text) return;
+
+  isCommenting.value[submission.id] = true;
+
+  try {
+    const response = await $fetch(`/api/feedback/${submission.id}/comment`, {
+      method: 'POST',
+      body: { content: text }
+    });
+
+    if (response.success) {
+      // Add comment to local state
+      submission.comments.unshift(response.comment);
+      commentText.value[submission.id] = '';
+    }
+  } catch (e) {
+    console.error('Failed to add comment:', e);
+  } finally {
+    isCommenting.value[submission.id] = false;
+  }
+};
+
 // Helper functions
 const hasResponses = (responses: Record<string, unknown>) => {
   const keys = Object.keys(responses).filter(k => k !== 'errorContext');
@@ -339,7 +470,8 @@ watch(sortBy, () => {
 onMounted(async () => {
   await Promise.all([
     fetchPublicSubmissions(),
-    fetchStatus()
+    fetchStatus(),
+    fetchUser()
   ]);
 });
 </script>
