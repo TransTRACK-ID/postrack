@@ -3390,7 +3390,7 @@ defineExpose({
             :variables="environmentVariables"
             :path-variables="pathVariables.filter(v => v.enabled).map(v => v.key)"
             placeholder="https://api.example.com/endpoint"
-            class="flex-1 min-w-0 py-2.5 px-3 bg-transparent border-none text-text-primary font-mono text-sm focus:outline-none placeholder:text-text-muted overflow-hidden"
+            class="flex-1 min-w-0 text-text-primary font-mono text-sm placeholder:text-text-muted overflow-hidden url-input-inline"
             @keyup.enter="sendRequest"
           />
           <button
@@ -5492,5 +5492,14 @@ button:active:not(:disabled) {
   .mobile-response-panel {
     display: none;
   }
+}
+
+/* Inline URL input styling to match method select and send button height */
+:deep(.url-input-inline .variable-editor) {
+  border: none;
+  background: transparent;
+  padding: 10px 12px;
+  min-height: auto;
+  border-radius: 0;
 }
 </style>
