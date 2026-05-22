@@ -221,7 +221,7 @@ const getBlockMeta = (type: string) => blockTypeMeta[type] || { label: type, ico
           </svg>
         </div>
         <p class="text-sm font-medium text-text-secondary mb-1">No content blocks yet</p>
-        <p class="text-xs text-text-muted max-w-[240px]">Add your first block below to start building the collection guide.</p>
+              <p class="text-xs text-text-muted max-w-[240px]">Add your first block below. These blocks appear at the top of the published collection guide.</p>
       </div>
 
       <!-- Blocks list -->

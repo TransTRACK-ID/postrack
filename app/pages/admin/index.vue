@@ -4251,19 +4251,8 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
               </svg>
               Docs
             </button>
-            <button
-              v-if="activeCollectionId"
-              @click="openDocBlocksEditor(activeCollectionId)"
-              class="flex items-center gap-1.5 px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
-              title="Edit collection documentation content"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-              Content Blocks
-            </button>
-          </div>
+
+           </div>
 
           <!-- Request Builder with Code Examples Sidebar -->
           <div v-if="selectedRequest && activeTabKey" class="flex-1 flex flex-col md:flex-row overflow-hidden">
@@ -4723,20 +4712,30 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
           </div>
         </div>
       </div>
-      <template #footer>
-        <div class="flex items-center gap-2 w-full">
+
+      <!-- Collection Documentation Section (only for edit mode) -->
+      <div v-if="collectionModalMode === 'edit'" class="mb-4 pt-4 border-t border-border-default">
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="text-xs font-medium text-text-secondary uppercase tracking-wide">Collection Documentation</label>
+            <p class="text-[10px] text-text-muted mt-0.5">Intro content shown at the top of the published API guide</p>
+          </div>
           <button
-            v-if="collectionModalMode === 'edit' && collectionForm.id"
+            v-if="collectionForm.id"
             @click="openDocBlocksEditor(collectionForm.id); showCollectionModal = false;"
-            class="btn btn-secondary text-xs"
-            title="Edit collection documentation content blocks"
+            class="btn btn-secondary text-xs flex items-center gap-1.5"
+            title="Edit the collection-level intro shown at the top of published docs"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
-            Content Blocks
+            Edit Collection Docs
           </button>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex items-center gap-2 w-full">
           <div class="flex-1"></div>
           <button class="btn btn-secondary" @click="showCollectionModal = false">Cancel</button>
           <button class="btn btn-primary" @click="saveCollection">
@@ -4756,7 +4755,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
     </Modal>
 
     <!-- Collection Doc Blocks Editor Modal -->
-    <Modal :show="showDocBlocksModal" title="Documentation Content" size="lg" @close="showDocBlocksModal = false">
+    <Modal :show="showDocBlocksModal" title="Collection Documentation" size="lg" @close="showDocBlocksModal = false">
       <CollectionDocBlocksEditor
         :collection-id="docBlocksCollectionId"
         :endpoints="docBlocksEndpoints"
