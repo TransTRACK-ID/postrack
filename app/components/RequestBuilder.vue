@@ -189,6 +189,8 @@ const emit = defineEmits<{
   stateChange: [state: { response: any; activeTab: TabType; scriptLogs: any[]; expandedNodes: string[] }];
   // Collection settings
   openCollectionSettings: [collectionId: string];
+  // Variable inline editing
+  'update:variable': [variable: Variable, key: string, value: string, isSecret: boolean];
 }>();
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
@@ -3391,6 +3393,7 @@ defineExpose({
             :path-variables="pathVariables.filter(v => v.enabled).map(v => v.key)"
             placeholder="https://api.example.com/endpoint"
             class="flex-1 min-w-0 text-text-primary font-mono text-sm placeholder:text-text-muted overflow-hidden url-input-inline"
+            @update:variable="(...args) => emit('update:variable', ...args)"
             @keyup.enter="sendRequest"
           />
           <button
@@ -3494,6 +3497,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Key"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <VariableInput
                   :model-value="param.value"
@@ -3502,6 +3506,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Value"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <input
                   :value="param.note"
@@ -3569,6 +3574,7 @@ defineExpose({
                     :variables="environmentVariables"
                     placeholder="Value"
                     class="flex-1 min-w-0"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                   <input
                     :value="variable.description"
@@ -3626,6 +3632,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Header Name"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <VariableInput
                   :model-value="header.value"
@@ -3634,6 +3641,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Header Value"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <input
                   :value="header.note"
@@ -3710,6 +3718,7 @@ defineExpose({
   &quot;key&quot;: &quot;value&quot;
 }"
                   class="w-full"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <div class="absolute top-2 right-2 flex items-center gap-1.5">
                   <button
@@ -3758,6 +3767,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Key"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <select
                   :value="param.type"
@@ -3776,6 +3786,7 @@ defineExpose({
                     :variables="environmentVariables"
                     placeholder="Value"
                     class="w-full"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                 </div>
                 <div v-else class="flex-1">
@@ -3844,6 +3855,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Key"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <VariableInput
                   :model-value="param.value"
@@ -3852,6 +3864,7 @@ defineExpose({
                   :variables="environmentVariables"
                   placeholder="Value"
                   class="flex-1 min-w-0"
+                  @update:variable="(...args) => emit('update:variable', ...args)"
                 />
                 <input
                   :value="param.note"
@@ -3903,6 +3916,7 @@ defineExpose({
                 :rows="12"
                 placeholder="Enter raw body content..."
                 class="w-full"
+                @update:variable="(...args) => emit('update:variable', ...args)"
               />
             </div>
 
@@ -4026,6 +4040,7 @@ defineExpose({
                     :variables="environmentVariables"
                     placeholder="Enter key name (e.g., X-API-Key)"
                     class="w-full"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                 </div>
                 <div class="space-y-2">
@@ -4036,6 +4051,7 @@ defineExpose({
                     type="password"
                     placeholder="Enter API key value"
                     class="w-full"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                 </div>
                 <div class="space-y-2">
@@ -4076,6 +4092,7 @@ defineExpose({
                     type="password"
                     placeholder="Enter bearer token"
                     class="w-full"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                 </div>
                 <div class="text-xs text-text-muted">
@@ -4091,6 +4108,7 @@ defineExpose({
                     :variables="environmentVariables"
                     placeholder="Enter username"
                     class="w-full"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                 </div>
                 <div class="space-y-2">
@@ -4101,6 +4119,7 @@ defineExpose({
                     type="password"
                     placeholder="Enter password"
                     class="w-full"
+                    @update:variable="(...args) => emit('update:variable', ...args)"
                   />
                 </div>
                 <div class="text-xs text-text-muted">
@@ -4140,6 +4159,7 @@ defineExpose({
                       :variables="environmentVariables"
                       placeholder="https://example.com/oauth/authorize"
                       class="w-full"
+                      @update:variable="(...args) => emit('update:variable', ...args)"
                     />
                   </div>
 
@@ -4150,6 +4170,7 @@ defineExpose({
                       :variables="environmentVariables"
                       placeholder="https://example.com/oauth/token"
                       class="w-full"
+                      @update:variable="(...args) => emit('update:variable', ...args)"
                     />
                   </div>
 
@@ -4161,6 +4182,7 @@ defineExpose({
                         :variables="environmentVariables"
                         placeholder="Enter client ID"
                         class="w-full"
+                        @update:variable="(...args) => emit('update:variable', ...args)"
                       />
                     </div>
                     <div class="space-y-2">
@@ -4171,6 +4193,7 @@ defineExpose({
                         type="password"
                         placeholder="Enter client secret"
                         class="w-full"
+                        @update:variable="(...args) => emit('update:variable', ...args)"
                       />
                     </div>
                   </div>
@@ -4182,6 +4205,7 @@ defineExpose({
                       :variables="environmentVariables"
                       placeholder="openid profile email"
                       class="w-full"
+                      @update:variable="(...args) => emit('update:variable', ...args)"
                     />
                     <p class="text-[10px] text-text-muted">Space-separated list of scopes</p>
                   </div>
@@ -4193,6 +4217,7 @@ defineExpose({
                       :variables="environmentVariables"
                       :placeholder="`${window.location.origin}/api/oauth/callback`"
                       class="w-full"
+                      @update:variable="(...args) => emit('update:variable', ...args)"
                     />
                     <p class="text-[10px] text-text-muted">Must match the callback URL configured in your OAuth provider</p>
                   </div>
@@ -4250,6 +4275,7 @@ defineExpose({
                         type="password"
                         placeholder="Access token"
                         class="w-full"
+                        @update:variable="(...args) => emit('update:variable', ...args)"
                       />
                     </div>
 
@@ -4261,6 +4287,7 @@ defineExpose({
                         type="password"
                         placeholder="Refresh token"
                         class="w-full"
+                        @update:variable="(...args) => emit('update:variable', ...args)"
                       />
                     </div>
 
@@ -4338,6 +4365,7 @@ defineExpose({
                         type="password"
                         placeholder="Access token"
                         class="w-full"
+                        @update:variable="(...args) => emit('update:variable', ...args)"
                       />
                     </div>
 

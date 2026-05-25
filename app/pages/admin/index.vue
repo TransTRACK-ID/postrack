@@ -1077,6 +1077,8 @@ const addVariableFromSettings = async (environment: Environment) => {
       }
     });
     await refreshEnvironmentSettings();
+    await refreshEnvironments();
+    await refreshWorkspaces();
     environmentRefreshTrigger.value++;
   } catch (e: any) {
     alert('Error adding variable: ' + (e.data?.message || e.message));
@@ -1106,13 +1108,15 @@ const updateVariableFromSettings = async (variable: EnvironmentVariable, key: st
       }
     });
     await refreshEnvironmentSettings();
+    await refreshEnvironments();
+    await refreshWorkspaces();
     environmentRefreshTrigger.value++;
   } catch (e: any) {
     alert('Error updating variable: ' + (e.data?.message || e.message));
   }
 };
 
-const toggleSecretFromSettings = (variable: EnvironmentVariable) => {
+const toggleSecretFromSettings = async (variable: EnvironmentVariable) => {
   if (!canEditWorkspace.value) return;
   const newIsSecret = !variable.isSecret;
 
@@ -1125,29 +1129,32 @@ const toggleSecretFromSettings = (variable: EnvironmentVariable) => {
     if (environmentSettingsSecretValues.value[variable.id]) {
       variable.value = environmentSettingsSecretValues.value[variable.id];
     } else {
-      $fetch(`/api/admin/variables/${variable.id}`)
-        .then((data: any) => {
-          environmentSettingsSecretValues.value[variable.id] = data.value;
-          if (!variable.isSecret) {
-            variable.value = data.value;
-          }
-        })
-        .catch((e: any) => {
-          console.error('Failed to fetch secret value:', e);
-        });
+      try {
+        const data = await $fetch<{ value: string }>(`/api/admin/variables/${variable.id}`);
+        environmentSettingsSecretValues.value[variable.id] = data.value;
+        if (!variable.isSecret) {
+          variable.value = data.value;
+        }
+      } catch (e: any) {
+        console.error('Failed to fetch secret value:', e);
+      }
     }
   }
 
-  $fetch(`/api/admin/variables/${variable.id}`, {
-    method: 'PUT',
-    body: {
-      key: variable.key,
-      value: environmentSettingsSecretValues.value[variable.id] || variable.value,
-      isSecret: newIsSecret
-    }
-  }).then(() => {
+  try {
+    await $fetch(`/api/admin/variables/${variable.id}`, {
+      method: 'PUT',
+      body: {
+        key: variable.key,
+        value: environmentSettingsSecretValues.value[variable.id] || variable.value,
+        isSecret: newIsSecret
+      }
+    });
+    await refreshEnvironmentSettings();
+    await refreshEnvironments();
+    await refreshWorkspaces();
     environmentRefreshTrigger.value++;
-  }).catch((e: any) => {
+  } catch (e: any) {
     variable.isSecret = !newIsSecret;
     if (newIsSecret) {
       variable.value = environmentSettingsSecretValues.value[variable.id] || variable.value;
@@ -1155,7 +1162,7 @@ const toggleSecretFromSettings = (variable: EnvironmentVariable) => {
       variable.value = '••••••••';
     }
     alert('Error toggling secret: ' + (e.data?.message || e.message));
-  });
+  }
 };
 
 const deleteVariableFromSettings = async (variableId: string) => {
@@ -1165,6 +1172,8 @@ const deleteVariableFromSettings = async (variableId: string) => {
       method: 'DELETE'
     });
     await refreshEnvironmentSettings();
+    await refreshEnvironments();
+    await refreshWorkspaces();
     environmentRefreshTrigger.value++;
   } catch (e: any) {
     alert('Error deleting variable: ' + (e.data?.message || e.message));
@@ -4278,6 +4287,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
                 @unsaved-changes="updateTabUnsavedStatus"
                 @state-change="handleBuilderStateChange"
                 @open-collection-settings="handleOpenCollectionSettings"
+                @update:variable="updateVariableFromSettings"
               />
             </div>
             

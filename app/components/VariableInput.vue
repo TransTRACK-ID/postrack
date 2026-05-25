@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import VariableInlineEditor from './VariableInlineEditor.vue';
 
 interface Variable {
   id: string;
@@ -16,6 +17,7 @@ interface Props {
   type?: 'text' | 'password';
   disabled?: boolean;
   autoFocus?: boolean;
+  environmentName?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -26,6 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
+  'update:variable': [variable: Variable, key: string, value: string, isSecret: boolean];
 }>();
 
 const editorRef = ref<HTMLElement | null>(null);
@@ -36,6 +39,12 @@ const isComposing = ref(false);
 const searchQuery = ref('');
 const dropdownRef = ref<HTMLElement | null>(null);
 const dropdownSearchRef = ref<HTMLInputElement | null>(null);
+
+// Inline editor state
+const hoveredVariable = ref<Variable | null>(null);
+const hoveredAnchorRect = ref<DOMRect | null>(null);
+const hoverTimeout = ref<number | null>(null);
+const isHoveringPopup = ref(false);
 
 const VARIABLE_PATTERN = /\{\{([^{}]+)\}\}/g;
 const PATH_VARIABLE_PATTERN = /:(\w+)/g; // Matches :variableName
@@ -348,6 +357,90 @@ const closeAutocomplete = () => {
   }, 200);
 };
 
+// Inline editor: find variable by key
+const findVariableByKey = (key: string): Variable | undefined => {
+  return props.variables?.find(v => v.key === key.trim());
+};
+
+// Inline editor hover handlers
+const handleEditorMouseMove = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  const span = target.closest('.var-defined, .var-undefined') as HTMLElement | null;
+
+  if (!span || !editorRef.value) {
+    // If mouse is not over a variable span and not over popup, schedule close
+    if (!isHoveringPopup.value) {
+      scheduleCloseInlineEditor();
+    }
+    return;
+  }
+
+  // Extract variable name from span textContent: {{variableName}}
+  const text = span.textContent || '';
+  const match = text.match(/\{\{([^{}]+)\}\}/);
+  if (!match) {
+    scheduleCloseInlineEditor();
+    return;
+  }
+
+  const varName = match[1].trim();
+  const variable = findVariableByKey(varName);
+  if (!variable) {
+    scheduleCloseInlineEditor();
+    return;
+  }
+
+  // If already showing same variable, just update rect
+  if (hoveredVariable.value?.id === variable.id) {
+    hoveredAnchorRect.value = span.getBoundingClientRect();
+    return;
+  }
+
+  // Clear any pending close
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
+  }
+
+  // Show inline editor with small delay
+  hoverTimeout.value = window.setTimeout(() => {
+    hoveredVariable.value = variable;
+    hoveredAnchorRect.value = span.getBoundingClientRect();
+  }, 150);
+};
+
+const scheduleCloseInlineEditor = () => {
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
+  }
+  hoverTimeout.value = window.setTimeout(() => {
+    if (!isHoveringPopup.value) {
+      hoveredVariable.value = null;
+      hoveredAnchorRect.value = null;
+    }
+  }, 200);
+};
+
+const handlePopupMouseEnter = () => {
+  isHoveringPopup.value = true;
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
+  }
+};
+
+const handlePopupMouseLeave = () => {
+  isHoveringPopup.value = false;
+  scheduleCloseInlineEditor();
+};
+
+const handleInlineEditorUpdate = (value: string) => {
+  if (!hoveredVariable.value) return;
+  const v = hoveredVariable.value;
+  emit('update:variable', v, v.key, value, v.isSecret);
+};
+
 const handleSearchKeydown = (event: KeyboardEvent) => {
   if (event.key === 'ArrowDown') {
     event.preventDefault();
@@ -406,7 +499,13 @@ onMounted(() => {
   if (editorRef.value && !editorRef.value.innerHTML) {
     editorRef.value.innerHTML = highlightedContent.value;
   }
-  
+
+  // Inline editor: listen for mousemove to detect variable span hover
+  if (editorRef.value) {
+    editorRef.value.addEventListener('mousemove', handleEditorMouseMove);
+    editorRef.value.addEventListener('mouseleave', scheduleCloseInlineEditor);
+  }
+
   document.addEventListener('click', (e) => {
     if (editorRef.value && !editorRef.value.contains(e.target as Node)) {
       // Don't close if clicking inside the autocomplete dropdown
@@ -416,6 +515,16 @@ onMounted(() => {
       showAutocomplete.value = false;
     }
   });
+});
+
+onUnmounted(() => {
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+  }
+  if (editorRef.value) {
+    editorRef.value.removeEventListener('mousemove', handleEditorMouseMove);
+    editorRef.value.removeEventListener('mouseleave', scheduleCloseInlineEditor);
+  }
 });
 </script>
 
@@ -497,6 +606,18 @@ onMounted(() => {
         </div>
       </Teleport>
     </template>
+
+    <!-- Inline Variable Editor Popup -->
+    <VariableInlineEditor
+      v-if="hoveredVariable"
+      :variable="hoveredVariable"
+      :environment-name="environmentName"
+      :anchor-rect="hoveredAnchorRect"
+      @mouseenter="handlePopupMouseEnter"
+      @mouseleave="handlePopupMouseLeave"
+      @update:value="handleInlineEditorUpdate"
+      @close="hoveredVariable = null; hoveredAnchorRect = null"
+    />
   </div>
 </template>
 

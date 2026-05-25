@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { highlightJSONC, formatJSONC } from '~/utils/jsonc'
+import VariableInlineEditor from './VariableInlineEditor.vue'
 
 interface Variable {
   id: string
@@ -16,6 +17,7 @@ interface Props {
   rows?: number
   disabled?: boolean
   enableJsonc?: boolean
+  environmentName?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -26,9 +28,16 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'update:variable': [variable: Variable, key: string, value: string, isSecret: boolean]
 }>()
 
 const editorRef = ref<HTMLElement | null>(null)
+
+// Inline editor state
+const hoveredVariable = ref<Variable | null>(null)
+const hoveredAnchorRect = ref<DOMRect | null>(null)
+const hoverTimeout = ref<number | null>(null)
+const isHoveringPopup = ref(false)
 
 const VARIABLE_PATTERN = /\{\{([^{}]+)\}\}/g
 
@@ -131,6 +140,85 @@ const restoreSelection = (position: number) => {
 const handleInput = () => {
   const content = getEditorText();
   emit('update:modelValue', content);
+};
+
+// Inline editor: find variable by key
+const findVariableByKey = (key: string): Variable | undefined => {
+  return props.variables?.find(v => v.key === key.trim());
+};
+
+// Inline editor hover handlers
+const handleEditorMouseMove = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  const span = target.closest('.var-defined, .var-undefined') as HTMLElement | null;
+
+  if (!span || !editorRef.value) {
+    if (!isHoveringPopup.value) {
+      scheduleCloseInlineEditor();
+    }
+    return;
+  }
+
+  const text = span.textContent || '';
+  const match = text.match(/\{\{([^{}]+)\}\}/);
+  if (!match) {
+    scheduleCloseInlineEditor();
+    return;
+  }
+
+  const varName = match[1].trim();
+  const variable = findVariableByKey(varName);
+  if (!variable) {
+    scheduleCloseInlineEditor();
+    return;
+  }
+
+  if (hoveredVariable.value?.id === variable.id) {
+    hoveredAnchorRect.value = span.getBoundingClientRect();
+    return;
+  }
+
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
+  }
+
+  hoverTimeout.value = window.setTimeout(() => {
+    hoveredVariable.value = variable;
+    hoveredAnchorRect.value = span.getBoundingClientRect();
+  }, 150);
+};
+
+const scheduleCloseInlineEditor = () => {
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
+  }
+  hoverTimeout.value = window.setTimeout(() => {
+    if (!isHoveringPopup.value) {
+      hoveredVariable.value = null;
+      hoveredAnchorRect.value = null;
+    }
+  }, 200);
+};
+
+const handlePopupMouseEnter = () => {
+  isHoveringPopup.value = true;
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+    hoverTimeout.value = null;
+  }
+};
+
+const handlePopupMouseLeave = () => {
+  isHoveringPopup.value = false;
+  scheduleCloseInlineEditor();
+};
+
+const handleInlineEditorUpdate = (value: string) => {
+  if (!hoveredVariable.value) return;
+  const v = hoveredVariable.value;
+  emit('update:variable', v, v.key, value, v.isSecret);
 };
 
 const getSelectedLines = (text: string, startPos: number, endPos: number): { startLine: number; endLine: number } => {
@@ -243,6 +331,18 @@ const formatJSON = () => {
 onMounted(() => {
   if (editorRef.value) {
     editorRef.value.innerHTML = highlightedContent.value;
+    editorRef.value.addEventListener('mousemove', handleEditorMouseMove);
+    editorRef.value.addEventListener('mouseleave', scheduleCloseInlineEditor);
+  }
+});
+
+onUnmounted(() => {
+  if (hoverTimeout.value) {
+    clearTimeout(hoverTimeout.value);
+  }
+  if (editorRef.value) {
+    editorRef.value.removeEventListener('mousemove', handleEditorMouseMove);
+    editorRef.value.removeEventListener('mouseleave', scheduleCloseInlineEditor);
   }
 });
 
@@ -271,6 +371,18 @@ watch(() => props.modelValue, (newValue) => {
       @keydown="handleKeydown"
       spellcheck="false"
     ></div>
+
+    <!-- Inline Variable Editor Popup -->
+    <VariableInlineEditor
+      v-if="hoveredVariable"
+      :variable="hoveredVariable"
+      :environment-name="environmentName"
+      :anchor-rect="hoveredAnchorRect"
+      @mouseenter="handlePopupMouseEnter"
+      @mouseleave="handlePopupMouseLeave"
+      @update:value="handleInlineEditorUpdate"
+      @close="hoveredVariable = null; hoveredAnchorRect = null"
+    />
   </div>
 </template>
 
