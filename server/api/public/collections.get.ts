@@ -1,5 +1,5 @@
-import { db } from '../../../db';
-import { collections, savedRequests, folders } from '../../../db/schema';
+import { db } from '../../db';
+import { collections, savedRequests, folders } from '../../db/schema';
 import { eq, sql, count } from 'drizzle-orm';
 
 interface PublicCollection {
