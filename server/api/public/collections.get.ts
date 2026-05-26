@@ -1,6 +1,6 @@
 import { db } from '../../db';
 import { collections, savedRequests, folders } from '../../db/schema';
-import { eq, sql, count } from 'drizzle-orm';
+import { eq, sql, and, or, inArray } from 'drizzle-orm';
 
 interface PublicCollection {
   id: string;
@@ -15,81 +15,99 @@ interface PublicCollection {
   };
 }
 
-interface PublicCollectionsResponse {
-  collections: PublicCollection[];
-}
-
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event);
     const searchTerm = typeof query.search === 'string' ? query.search.trim() : '';
 
-    // Base query: only public collections
-    const conditions = [eq(collections.isPublic, true)];
+    // Build where clause
+    const baseCondition = eq(collections.isPublic, true);
     
-    // Add search filter if provided
+    let publicCollections;
+    
     if (searchTerm) {
       const searchPattern = `%${searchTerm}%`;
-      conditions.push(
-        sql`${collections.name} ILIKE ${searchPattern} OR ${collections.description} ILIKE ${searchPattern}`
-      );
+      publicCollections = await db
+        .select()
+        .from(collections)
+        .where(
+          and(
+            baseCondition,
+            or(
+              sql`${collections.name} ILIKE ${searchPattern}`,
+              sql`${collections.description} ILIKE ${searchPattern}`
+            )
+          )
+        )
+        .orderBy(collections.name);
+    } else {
+      publicCollections = await db
+        .select()
+        .from(collections)
+        .where(baseCondition)
+        .orderBy(collections.name);
     }
-
-    // Fetch public collections
-    const publicCollections = await db
-      .select()
-      .from(collections)
-      .where(sql`${conditions.map(c => c).join(' AND ')}`)
-      .orderBy(collections.name);
 
     // Get all collection IDs for stats lookup
     const collectionIds = publicCollections.map(c => c.id);
 
-    // Fetch all saved requests for these collections
-    const allRequests = collectionIds.length > 0
+    if (collectionIds.length === 0) {
+      return { collections: [] };
+    }
+
+    // Fetch all folders for these collections
+    const allFolders = await db
+      .select({ id: folders.id, collectionId: folders.collectionId })
+      .from(folders)
+      .where(inArray(folders.collectionId, collectionIds));
+
+    const folderIdList = allFolders.map(f => f.id);
+
+    // Build request query: collection-level OR folder-level
+    const allRequestsRaw = folderIdList.length > 0
       ? await db
           .select({
+            id: savedRequests.id,
             collectionId: savedRequests.collectionId,
             folderId: savedRequests.folderId,
             method: savedRequests.method,
           })
           .from(savedRequests)
-          .where(sql`${savedRequests.collectionId} IN ${collectionIds}`)
-      : [];
-
-    // Also get requests that belong to folders within these collections
-    const folderIds = collectionIds.length > 0
-      ? await db
-          .select({ id: folders.id })
-          .from(folders)
-          .where(sql`${folders.collectionId} IN ${collectionIds}`)
-      : [];
-
-    const folderIdList = folderIds.map(f => f.id);
-
-    const folderRequests = folderIdList.length > 0
-      ? await db
+          .where(
+            or(
+              inArray(savedRequests.collectionId, collectionIds),
+              inArray(savedRequests.folderId, folderIdList)
+            )
+          )
+      : await db
           .select({
+            id: savedRequests.id,
             collectionId: savedRequests.collectionId,
             folderId: savedRequests.folderId,
             method: savedRequests.method,
           })
           .from(savedRequests)
-          .where(sql`${savedRequests.folderId} IN ${folderIdList}`)
-      : [];
+          .where(inArray(savedRequests.collectionId, collectionIds));
 
-    // Combine all requests
-    const allRequestsMap: Record<string, { method: string }[]> = {};
+    // Group requests by collection
+    const requestsByCollection: Record<string, { method: string }[]> = {};
     
-    for (const req of [...allRequests, ...folderRequests]) {
-      const cid = req.collectionId || 'unknown';
-      if (!allRequestsMap[cid]) allRequestsMap[cid] = [];
-      allRequestsMap[cid].push({ method: req.method });
+    for (const req of allRequestsRaw) {
+      let cid = req.collectionId;
+      // If no collectionId, look up via folder
+      if (!cid && req.folderId) {
+        const folder = allFolders.find(f => f.id === req.folderId);
+        cid = folder?.collectionId || null;
+      }
+      if (cid) {
+        if (!requestsByCollection[cid]) requestsByCollection[cid] = [];
+        requestsByCollection[cid].push({ method: req.method });
+      }
     }
 
     // Build response
     const result: PublicCollection[] = publicCollections.map(collection => {
-      const requests = allRequestsMap[collection.id] || [];
+      const requests = requestsByCollection[collection.id] || [];
       const methods: Record<string, number> = {};
       
       requests.forEach(req => {
@@ -112,7 +130,7 @@ export default defineEventHandler(async (event) => {
 
     return { collections: result };
   } catch (error: any) {
-    console.error('Error fetching public collections:', error);
+    console.error('[collections-list] Error:', error?.message || error);
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to fetch public collections',
