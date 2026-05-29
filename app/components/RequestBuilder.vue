@@ -9,6 +9,13 @@ import MockConfiguration from './MockConfiguration.vue'
 import { useUsageTracking } from '~/composables/useUsageTracking'
 import { useClientRequest, isLocalUrl } from '~/composables/useClientRequest'
 import { stripComments, validateJSONC, formatJSONC } from '~/utils/jsonc'
+import {
+  resolveEnvVars,
+  buildAuthHeaders,
+  buildAuthQueryParams,
+  isUsingCollectionAuth,
+  useCollectionAuth,
+} from '~/utils/auth'
 
 // Metadata keys for body format persistence
 const BODY_FORMAT_META_KEY = '__mockServiceBodyFormat';
@@ -466,16 +473,20 @@ const oauth2 = ref({
 const isGettingToken = ref(false)
 const tokenError = ref('')
 const inheritFromParent = ref(false)
-const collectionAuth = ref<any>(null)
-const collectionName = ref<string>('')
-const collectionAuthLoading = ref(false)
+
+// Use the collection auth composable
+const {
+  collectionAuth,
+  collectionName,
+  collectionAuthLoading,
+  isUsingCollectionAuth: isUsingCollectionAuthComputed,
+  fetchCollectionAuth,
+  refreshCollectionAuth,
+} = useCollectionAuth()
 
 // Computed property to check if collection auth is effectively being used
 const isUsingCollectionAuth = computed(() => {
-  return inheritFromParent.value && 
-         collectionAuth.value && 
-         collectionAuth.value.type && 
-         collectionAuth.value.type !== 'none'
+  return inheritFromParent.value && isUsingCollectionAuthComputed.value
 })
 
 const expandedNodes = ref(new Set<string>())
@@ -1078,7 +1089,7 @@ const loadRequestData = async (request: HttpRequest) => {
     // This ensures inherited auth is available before user can send the request
     if (inheritFromParent.value && props.collectionId && !collectionAuth.value) {
       console.log('[RequestBuilder] Pre-loading collection auth for inherited request...');
-      await fetchCollectionAuth();
+      await fetchCollectionAuth(props.collectionId);
     }
   } finally {
     // Clear loading flag after a small delay to allow all reactive updates to settle
@@ -1583,95 +1594,40 @@ const buildBodyForSave = (): Record<string, unknown> | string | null => {
   }
 }
 
-const resolveEnvVars = (value: string): string => {
-  if (!value || !environmentVariables.value) return value;
-  
-  return value.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
-    const variable = environmentVariables.value.find(v => v.key === varName.trim());
-    return variable ? variable.value : match;
-  });
-};
-
-const buildAuthHeaders = (): Record<string, string> => {
-  const authHeaders: Record<string, string> = {}
-  
-  const effectiveAuth = inheritFromParent.value ? collectionAuth.value : null
-  const effectiveAuthType = inheritFromParent.value ? (effectiveAuth?.type || 'none') : authType.value
-  
-  // Determine which auth type to use:
-  // - If inheriting and collection has auth, use collection auth
-  // - If inheriting but collection has no auth, fall back to request's auth
-  // - If not inheriting, use request's auth
-  const hasCollectionAuth = inheritFromParent.value && effectiveAuth && effectiveAuth.type && effectiveAuth.type !== 'none'
-  const finalAuthType = hasCollectionAuth ? effectiveAuthType : authType.value
-  
-  if (finalAuthType === 'api-key') {
-    const keyConfig = hasCollectionAuth 
-      ? (effectiveAuth?.credentials || {})
-      : apiKey.value
-    if (keyConfig.addTo === 'header' && keyConfig.key) {
-      // Resolve environment variables in inherited collection auth
-      const resolvedKey = hasCollectionAuth ? resolveEnvVars(keyConfig.key) : keyConfig.key
-      const resolvedValue = hasCollectionAuth ? resolveEnvVars(keyConfig.value) : keyConfig.value
-      authHeaders[resolvedKey] = resolvedValue
-    }
-  } else if (finalAuthType === 'bearer') {
-    const token = hasCollectionAuth 
-      ? (effectiveAuth?.credentials?.token || '')
-      : bearerToken.value
-    if (token) {
-      // Resolve environment variables in inherited collection auth
-      const resolvedToken = hasCollectionAuth ? resolveEnvVars(token) : token
-      authHeaders['Authorization'] = `Bearer ${resolvedToken}`
-    }
-  } else if (finalAuthType === 'basic') {
-    const creds = hasCollectionAuth 
-      ? (effectiveAuth?.credentials || {})
-      : basicAuth.value
-    if (creds.username) {
-      // Resolve environment variables in inherited collection auth
-      const resolvedUsername = hasCollectionAuth ? resolveEnvVars(creds.username) : creds.username
-      const resolvedPassword = hasCollectionAuth ? resolveEnvVars(creds.password) : creds.password
-      const credentials = btoa(`${resolvedUsername}:${resolvedPassword}`)
-      authHeaders['Authorization'] = `Basic ${credentials}`
-    }
-  } else if (finalAuthType === 'oauth2') {
-    const oauthConfig = hasCollectionAuth 
-      ? (effectiveAuth?.credentials || {})
-      : oauth2.value
-    if (oauthConfig.accessToken) {
-      // Resolve environment variables in inherited collection auth
-      const resolvedToken = hasCollectionAuth ? resolveEnvVars(oauthConfig.accessToken) : oauthConfig.accessToken
-      authHeaders['Authorization'] = `${oauthConfig.tokenType || 'Bearer'} ${resolvedToken}`
-    }
-  }
-  
-  return authHeaders
+// Use utility functions for auth resolution
+const _resolveEnvVars = (value: string): string => {
+  return resolveEnvVars(value, environmentVariables.value)
 }
 
-const buildAuthQueryParams = (): Record<string, string> => {
-  const queryParams: Record<string, string> = {};
-  
-  // Determine which auth to use for query params
-  const hasCollectionApiKey = inheritFromParent.value && collectionAuth.value?.type === 'api-key'
-  const hasRequestApiKey = authType.value === 'api-key' && apiKey.value.addTo === 'query' && apiKey.value.key
-  
-  // Handle inherited collection auth for API key in query
-  if (hasCollectionApiKey) {
-    const keyConfig = collectionAuth.value.credentials || {}
-    if (keyConfig.addTo === 'query' && keyConfig.key) {
-      // Resolve environment variables
-      const resolvedKey = resolveEnvVars(keyConfig.key)
-      const resolvedValue = resolveEnvVars(keyConfig.value)
-      queryParams[resolvedKey] = resolvedValue;
-    }
-  } else if (hasRequestApiKey) {
-    // Fall back to request's API key if inheriting but no collection auth
-    queryParams[apiKey.value.key] = apiKey.value.value;
-  }
+const _buildAuthHeaders = (): Record<string, string> => {
+  return buildAuthHeaders(
+    {
+      authType: authType.value,
+      apiKey: apiKey.value,
+      bearerToken: bearerToken.value,
+      basicAuth: basicAuth.value,
+      oauth2: { accessToken: oauth2.value.accessToken, tokenType: oauth2.value.tokenType },
+      inheritFromParent: inheritFromParent.value,
+      collectionAuth: collectionAuth.value,
+    },
+    environmentVariables.value
+  )
+}
 
-  return queryParams;
-};
+const _buildAuthQueryParams = (): Record<string, string> => {
+  return buildAuthQueryParams(
+    {
+      authType: authType.value,
+      apiKey: apiKey.value,
+      bearerToken: bearerToken.value,
+      basicAuth: basicAuth.value,
+      oauth2: { accessToken: oauth2.value.accessToken, tokenType: oauth2.value.tokenType },
+      inheritFromParent: inheritFromParent.value,
+      collectionAuth: collectionAuth.value,
+    },
+    environmentVariables.value
+  )
+}
 
 const parseAuthFromRequest = (authConfig: any) => {
   if (!authConfig) {
@@ -1706,23 +1662,6 @@ const parseAuthFromRequest = (authConfig: any) => {
     oauth2.value.tokenType = authConfig.credentials.tokenType || 'Bearer';
     oauth2.value.grantType = authConfig.credentials.grantType || 'authorization_code';
     oauth2.value.PKCE = authConfig.credentials.PKCE || false;
-  }
-}
-
-const fetchCollectionAuth = async () => {
-  if (!props.collectionId) return
-  
-  collectionAuthLoading.value = true
-  try {
-    const result = await $fetch(`/api/admin/collections/${props.collectionId}/auth`)
-    collectionAuth.value = result.authConfig
-    collectionName.value = result.collectionName
-  } catch (error) {
-    console.error('Failed to fetch collection auth:', error)
-    collectionAuth.value = null
-    collectionName.value = ''
-  } finally {
-    collectionAuthLoading.value = false
   }
 }
 
@@ -2993,7 +2932,7 @@ onMounted(async () => {
   // This ensures inherited auth is loaded before user can send the request
   if (props.collectionId && inheritFromParent.value) {
     console.log('[RequestBuilder] Request has inheritAuth enabled, pre-loading collection auth...');
-    await fetchCollectionAuth();
+    await fetchCollectionAuth(props.collectionId);
   }
 });
 
@@ -3005,17 +2944,17 @@ watch(() => props.refreshTrigger, () => {
   console.log('[RequestBuilder] Refresh trigger activated, reloading environment variables and collection auth');
   fetchEnvironmentVariables();
   if (props.collectionId && inheritFromParent.value) {
-    fetchCollectionAuth();
+    fetchCollectionAuth(props.collectionId);
   }
 })
 
 watch(() => props.collectionId, () => {
-  fetchCollectionAuth()
+  fetchCollectionAuth(props.collectionId)
 })
 
 watch(inheritFromParent, (newValue) => {
   if (newValue && props.collectionId) {
-    fetchCollectionAuth()
+    fetchCollectionAuth(props.collectionId)
   }
 })
 
@@ -3039,7 +2978,7 @@ const sendRequest = async () => {
     // If still no collection auth after loading, try to fetch it
     if (!collectionAuth.value && !collectionAuthLoading.value) {
       console.log('[RequestBuilder] Collection auth not loaded, fetching...');
-      await fetchCollectionAuth();
+      await fetchCollectionAuth(props.collectionId);
     }
 
     // Check again after fetch attempt
@@ -3065,7 +3004,7 @@ const sendRequest = async () => {
   try {
     const requestBody = buildBody();
     let requestHeaders = buildHeadersRecord();
-    const authHeaders = buildAuthHeaders();
+    const authHeaders = _buildAuthHeaders();
 
     if (bodyFormat.value === 'raw') {
       requestHeaders['Content-Type'] = rawContentType.value;
@@ -3086,7 +3025,7 @@ const sendRequest = async () => {
     // Apply path variable substitution
     requestUrl = resolvePathVariables(requestUrl);
 
-    const authQueryParams = buildAuthQueryParams();
+    const authQueryParams = _buildAuthQueryParams();
     if (Object.keys(authQueryParams).length > 0) {
       try {
         const urlObj = new URL(requestUrl);
@@ -3174,7 +3113,7 @@ const sendRequest = async () => {
       await fetchEnvironmentVariables();
       // Also refresh collection auth if inheriting, as it may use the updated variables
       if (inheritFromParent.value && props.collectionId) {
-        await fetchCollectionAuth();
+        await fetchCollectionAuth(props.collectionId);
       }
     }
     
@@ -3210,7 +3149,7 @@ const sendRequest = async () => {
     
     // Check if this is a local server connection issue
     // Reuse isLocalUrl() for consistent detection across all localhost/private IP variants
-    const resolvedUrl = resolveEnvVars(requestUrl);
+    const resolvedUrl = _resolveEnvVars(requestUrl);
     const isLocalTarget = isLocalUrl(resolvedUrl);
     
     if (isLocalTarget && (error.statusCode === 502 || errorMessage.includes('ECONNREFUSED') || errorMessage.includes('fetch failed'))) {
@@ -3279,7 +3218,7 @@ defineExpose({
   bearerToken,
   basicAuth,
   apiKey,
-  refreshCollectionAuth: fetchCollectionAuth,
+  refreshCollectionAuth: () => refreshCollectionAuth(props.collectionId),
   getCurrentRequestState: buildCurrentRequestState,
   captureCurrentStateAsSaved
 });

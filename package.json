@@ -20,7 +20,10 @@
     "version:major": "node scripts/bump-version.js major",
     "version:patch:push": "node scripts/bump-version.js patch --push",
     "version:minor:push": "node scripts/bump-version.js minor --push",
-    "version:major:push": "node scripts/bump-version.js major --push"
+    "version:major:push": "node scripts/bump-version.js major --push",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@datadog/browser-logs": "^5.35.1",
@@ -45,6 +48,9 @@
   },
   "devDependencies": {
     "drizzle-kit": "^0.30.1",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "vitest": "^3.0.0",
+    "jsdom": "^26.0.0",
+    "@vue/test-utils": "^2.4.0"
   }
 }
