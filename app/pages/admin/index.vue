@@ -992,7 +992,22 @@ const updateEnvironmentFromDropdown = async (environment: any, name: string, var
     }
 
     await refreshEnvironmentSources();
-    
+
+    // Ensure environments state is updated immediately for both edit collection modal
+    // and the RequestBuilder so VariableInput can resolve env vars with fresh values
+    const projectId = currentRequestProjectId.value || currentProjectId.value;
+    if (projectId) {
+      try {
+        const data = await $fetch<Environment[]>(`/api/admin/projects/${projectId}/environments`);
+        environments.value = data;
+      } catch (e) {
+        console.error('Failed to refresh environments directly:', e);
+      }
+    }
+
+    // Notify RequestBuilder to re-fetch its local environment variables
+    environmentRefreshTrigger.value++;
+
     if (partialUpdate) {
       alert('Partial update completed with errors:\n\n' + errors.join('\n'));
     }
