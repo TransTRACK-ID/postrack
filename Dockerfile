@@ -11,7 +11,7 @@ RUN curl -fsSL https://bun.sh/install | bash && \
     rm -rf /root/.bun/install
 
 COPY package.json bun.lockb ./
-RUN bun install --frozen-lockfile
+RUN bun install
 
 COPY . .
 # Generate migrations folder and ensure it exists
