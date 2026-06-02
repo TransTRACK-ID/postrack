@@ -104,6 +104,7 @@ interface SharedWorkspaceResponse {
   projectCount: number;
   permission: 'view' | 'edit';
   isShared: true;
+  folderName?: string | null;
 }
 
 function parseJsonField<T>(value: unknown): T | null {
@@ -133,6 +134,19 @@ function buildFolderTree(
       requests: allRequests.filter(req => req.folderId === folder.id),
       children: buildFolderTree(allFolders, allRequests, folder.id)
     }));
+}
+
+/**
+ * Get all descendant folder IDs (including the parent itself)
+ */
+function getDescendantFolderIds(
+  parentId: string,
+  allFolders: typeof folders.$inferSelect[]
+): string[] {
+  const children = allFolders.filter(f => f.parentFolderId === parentId);
+  const childIds = children.map(c => c.id);
+  const descendants = children.flatMap(c => getDescendantFolderIds(c.id, allFolders));
+  return [parentId, ...childIds, ...descendants];
 }
 
 export default defineEventHandler(async (event) => {
@@ -276,6 +290,23 @@ export default defineEventHandler(async (event) => {
       };
     });
 
+    // Apply folder scope filtering if this is a folder-scoped share
+    const { folderId: targetFolderId } = validation;
+    let filteredFolders = allFolders;
+    let filteredRequests = allRequests;
+    let folderName: string | null = null;
+
+    if (targetFolderId) {
+      const allowedFolderIds = getDescendantFolderIds(targetFolderId, allFolders);
+      filteredFolders = allFolders.filter(f => allowedFolderIds.includes(f.id));
+      filteredRequests = allRequests.filter(req => {
+        if (!req.folderId) return false;
+        return allowedFolderIds.includes(req.folderId);
+      });
+      const targetFolder = allFolders.find(f => f.id === targetFolderId);
+      folderName = targetFolder?.name || null;
+    }
+
     // Build the workspace tree
     const workspaceProjects = allProjects.filter(p => p.workspaceId === workspaceId);
 
@@ -304,12 +335,12 @@ export default defineEventHandler(async (event) => {
       return {
         ...project,
         collections: projectCollections.map(collection => {
-          const collectionFolders = allFolders.filter(f => f.collectionId === collection.id);
-          const folderTree = buildFolderTree(collectionFolders, allRequests);
+          const collectionFolders = filteredFolders.filter(f => f.collectionId === collection.id);
+          const folderTree = buildFolderTree(collectionFolders, filteredRequests);
 
           const folderCount = collectionFolders.length;
-          const requestCount = allRequests.filter(req => {
-            const folder = allFolders.find(f => f.id === req.folderId);
+          const requestCount = filteredRequests.filter(req => {
+            const folder = filteredFolders.find(f => f.id === req.folderId);
             return folder?.collectionId === collection.id;
           }).length;
 
@@ -319,11 +350,23 @@ export default defineEventHandler(async (event) => {
             folderCount,
             requestCount
           };
+        }).filter(collection => {
+          // For folder-scoped shares, only include collections that have visible folders
+          if (targetFolderId) {
+            return collection.folders.length > 0;
+          }
+          return true;
         }),
         collectionCount: projectCollections.length,
         environments: environmentsWithVariables,
         activeEnvironmentId: activeEnv?.id || null
       };
+    }).filter(project => {
+      // For folder-scoped shares, only include projects that have visible collections
+      if (targetFolderId) {
+        return project.collections.length > 0;
+      }
+      return true;
     });
 
     return {
@@ -331,7 +374,8 @@ export default defineEventHandler(async (event) => {
       projects: projectsWithCollections,
       projectCount: workspaceProjects.length,
       permission,
-      isShared: true
+      isShared: true,
+      folderName
     } as SharedWorkspaceResponse;
 
   } catch (error: any) {

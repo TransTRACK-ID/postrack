@@ -156,6 +156,7 @@ const emit = defineEmits<{
   createWorkspace: [];
   renameWorkspace: [workspace: { id: string; name: string }];
   shareWorkspace: [workspace: { id: string; name: string }];
+  shareFolder: [folder: any];
   renameProject: [project: { id: string; name: string }];
   deleteProject: [project: { id: string; name: string }];
   editCollection: [collection: { id: string; name: string; description: string }];
@@ -1026,6 +1027,8 @@ const handleContextAction = (action: string) => {
         emit('renameFolder', data);
       } else if (action === 'delete-folder') {
         emit('deleteFolder', data);
+      } else if (action === 'share-folder') {
+        emit('shareFolder', data);
       } else if (action === 'copy-prompt') {
         copyFolderPromptToClipboard(data);
       }
@@ -2059,6 +2062,19 @@ defineExpose({
                 <polyline points="8 6 2 12 8 18"></polyline>
               </svg>
               Import from cURL
+            </button>
+            <button
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+              @click.stop="handleContextAction('share-folder')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+              </svg>
+              Share Folder
             </button>
             <button
               class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"

@@ -34,12 +34,16 @@ interface Props {
   show: boolean;
   workspaceId: string;
   workspaceName: string;
+  folderId?: string;
+  folderName?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   show: false,
   workspaceId: '',
-  workspaceName: ''
+  workspaceName: '',
+  folderId: '',
+  folderName: ''
 });
 
 const emit = defineEmits<{
@@ -124,13 +128,17 @@ const createShare = async () => {
   error.value = '';
   successMessage.value = '';
   
-  try {
+    try {
     const body: any = {
       permission: newShareForm.value.permission
     };
     
     if (newShareForm.value.expiresInDays > 0) {
       body.expiresInDays = newShareForm.value.expiresInDays;
+    }
+    
+    if (props.folderId) {
+      body.folderId = props.folderId;
     }
     
     await $fetch(`/api/admin/workspaces/${props.workspaceId}/shares`, {
@@ -308,7 +316,7 @@ watch(() => props.workspaceId, (newVal) => {
 </script>
 
 <template>
-  <Modal :show="show" title="Share Workspace" size="lg" @close="handleClose">
+  <Modal :show="show" :title="folderName ? 'Share Folder' : 'Share Workspace'" size="lg" @close="handleClose">
     <div class="space-y-6">
       <!-- Workspace Info -->
       <div class="flex items-center gap-3 p-3 bg-bg-tertiary rounded-lg">
@@ -318,8 +326,14 @@ watch(() => props.workspaceId, (newVal) => {
           </svg>
         </div>
         <div>
-          <p class="text-sm font-semibold text-text-primary m-0">{{ workspaceName }}</p>
-          <p class="text-xs text-text-muted m-0">Share this workspace with other registered users</p>
+          <p class="text-sm font-semibold text-text-primary m-0">
+            {{ workspaceName }}
+            <span v-if="folderName" class="text-accent-blue"> → {{ folderName }}</span>
+          </p>
+          <p class="text-xs text-text-muted m-0">
+            <span v-if="folderName">Share this folder with other registered users</span>
+            <span v-else>Share this workspace with other registered users</span>
+          </p>
         </div>
       </div>
 
@@ -451,21 +465,25 @@ watch(() => props.workspaceId, (newVal) => {
                   <div class="flex items-center gap-2 mb-2">
                     <span :class="[
                       'px-2 py-0.5 rounded text-[10px] font-semibold uppercase',
-                      share.permission === 'edit' 
-                        ? 'bg-accent-orange/15 text-accent-orange' 
+                      share.permission === 'edit'
+                        ? 'bg-accent-orange/15 text-accent-orange'
                         : 'bg-accent-blue/15 text-accent-blue'
                     ]">
                       {{ share.permission === 'edit' ? 'Editor' : 'Viewer' }}
                     </span>
-                    
+
+                    <span v-if="share.folderName" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-purple/15 text-accent-purple">
+                      Folder: {{ share.folderName }}
+                    </span>
+
                     <span v-if="!share.isActive" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-red/15 text-accent-red">
                       Revoked
                     </span>
-                    
+
                     <span v-else-if="share.isExpired" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-yellow/15 text-accent-yellow">
                       Expired
                     </span>
-                    
+
                     <span v-else class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-green/15 text-accent-green">
                       Active
                     </span>

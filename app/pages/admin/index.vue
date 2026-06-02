@@ -1509,11 +1509,25 @@ const workspaceToDelete = ref<{ id: string; name: string; projectCount: number }
 const showShareModal = ref(false);
 const shareWorkspaceId = ref('');
 const shareWorkspaceName = ref('');
+const shareFolderId = ref('');
+const shareFolderName = ref('');
 
 // Open share workspace modal
 const openShareWorkspace = (workspace: { id: string; name: string }) => {
   shareWorkspaceId.value = workspace.id;
   shareWorkspaceName.value = workspace.name;
+  shareFolderId.value = '';
+  shareFolderName.value = '';
+  showShareModal.value = true;
+};
+
+// Open share folder modal
+const openShareFolder = (folder: any) => {
+  if (!currentWorkspace.value) return;
+  shareWorkspaceId.value = currentWorkspace.value.id;
+  shareWorkspaceName.value = currentWorkspace.value.name;
+  shareFolderId.value = folder.id;
+  shareFolderName.value = folder.name;
   showShareModal.value = true;
 };
   const showFolderModal = ref(false);
@@ -3888,6 +3902,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         @create-workspace="openCreateWorkspace"
         @rename-workspace="openRenameWorkspace"
         @share-workspace="openShareWorkspace"
+        @share-folder="openShareFolder"
         @rename-project="openRenameProject"
         @delete-project="confirmDeleteProject"
         @edit-collection="openEditCollection"
@@ -5090,6 +5105,8 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       :show="showShareModal"
       :workspace-id="shareWorkspaceId"
       :workspace-name="shareWorkspaceName"
+      :folder-id="shareFolderId"
+      :folder-name="shareFolderName"
       @close="showShareModal = false"
       @shared="refreshWorkspaces"
     />

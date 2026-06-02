@@ -1,5 +1,5 @@
 import { db } from '../../../../db';
-import { workspaces, workspaceShares, workspaceAccess } from '../../../../db/schema';
+import { workspaces, workspaceShares, workspaceAccess, folders } from '../../../../db/schema';
 import { eq, desc, sql, inArray } from 'drizzle-orm';
 import { canManageShares } from '../../../../utils/permissions';
 
@@ -69,9 +69,12 @@ export default defineEventHandler(async (event) => {
         expiresAt: workspaceShares.expiresAt,
         isActive: workspaceShares.isActive,
         createdAt: workspaceShares.createdAt,
-        updatedAt: workspaceShares.updatedAt
+        updatedAt: workspaceShares.updatedAt,
+        folderId: workspaceShares.folderId,
+        folderName: folders.name
       })
       .from(workspaceShares)
+      .leftJoin(folders, eq(workspaceShares.folderId, folders.id))
       .where(eq(workspaceShares.workspaceId, workspaceId))
       .orderBy(desc(workspaceShares.createdAt));
 
