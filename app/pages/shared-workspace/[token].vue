@@ -4,6 +4,7 @@ import CodeExamples from '~/components/CodeExamples.vue';
 import MethodBadge from '~/components/MethodBadge.vue';
 import FolderTreeItem from '~/components/FolderTreeItem.vue';
 import TeamCollectionWarningDialog from '~/components/TeamCollectionWarningDialog.vue';
+import EnvironmentSwitcher from '~/components/EnvironmentSwitcher.vue';
 
 
 
@@ -100,6 +101,58 @@ const workspace = ref<SharedWorkspace | null>(null);
 const isLoading = ref(true);
 const error = ref<any>(null);
 
+// Sidebar state - resizable and toggleable
+const SIDEBAR_STORAGE_KEY = computed(() => `shared-workspace-sidebar-${token.value}`);
+const sidebarWidth = ref(300);
+const sidebarVisible = ref(true);
+const isResizing = ref(false);
+
+// Right panel state - resizable and toggleable
+const RIGHT_PANEL_STORAGE_KEY = computed(() => `shared-workspace-right-panel-${token.value}`);
+const rightPanelWidth = ref(380);
+const rightPanelVisible = ref(true);
+const isResizingRight = ref(false);
+
+// Load sidebar state from localStorage
+const startResize = () => { isResizing.value = true; };
+const startResizeRight = () => { isResizingRight.value = true; };
+const onResize = (e: MouseEvent) => {
+  if (!isResizing.value && !isResizingRight.value) return;
+  if (isResizing.value) {
+    const newWidth = e.clientX;
+    sidebarWidth.value = Math.min(Math.max(newWidth, 200), 500);
+  }
+  if (isResizingRight.value) {
+    const newWidth = window.innerWidth - e.clientX;
+    rightPanelWidth.value = Math.min(Math.max(newWidth, 200), 500);
+  }
+};
+const stopResize = () => { isResizing.value = false; isResizingRight.value = false; };
+
+const toggleSidebar = () => {
+  sidebarVisible.value = !sidebarVisible.value;
+};
+
+const toggleRightPanel = () => {
+  rightPanelVisible.value = !rightPanelVisible.value;
+};
+
+// Persist sidebar state
+const saveSidebarState = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY.value, JSON.stringify({
+      width: sidebarWidth.value,
+      visible: sidebarVisible.value
+    }));
+    localStorage.setItem(RIGHT_PANEL_STORAGE_KEY.value, JSON.stringify({
+      width: rightPanelWidth.value,
+      visible: rightPanelVisible.value
+    }));
+  }
+};
+
+watch([sidebarWidth, sidebarVisible, rightPanelWidth, rightPanelVisible], saveSidebarState, { deep: true });
+
 // Environment state - track selected environment per project
 const selectedEnvironments = ref<Record<string, string>>({});
 
@@ -107,8 +160,32 @@ onMounted(async () => {
   // Check localStorage for hide warning preference
   if (typeof window !== 'undefined') {
     hideTeamWarningForever.value = localStorage.getItem('hideTeamCollectionSaveWarning') === 'true';
+
+    // Load sidebar state
+    const savedSidebar = localStorage.getItem(SIDEBAR_STORAGE_KEY.value);
+    if (savedSidebar) {
+      try {
+        const parsed = JSON.parse(savedSidebar);
+        if (parsed.width) sidebarWidth.value = parsed.width;
+        if (typeof parsed.visible === 'boolean') sidebarVisible.value = parsed.visible;
+      } catch { /* ignore */ }
+    }
+
+    // Load right panel state
+    const savedRightPanel = localStorage.getItem(RIGHT_PANEL_STORAGE_KEY.value);
+    if (savedRightPanel) {
+      try {
+        const parsed = JSON.parse(savedRightPanel);
+        if (parsed.width) rightPanelWidth.value = parsed.width;
+        if (typeof parsed.visible === 'boolean') rightPanelVisible.value = parsed.visible;
+      } catch { /* ignore */ }
+    }
+
+    // Attach resize listeners
+    document.addEventListener('mousemove', onResize);
+    document.addEventListener('mouseup', stopResize);
   }
-  
+
   try {
     isLoading.value = true;
     const response = await $fetch<SharedWorkspace>(`/api/shared-workspace/${token.value}`, {
@@ -135,6 +212,11 @@ onMounted(async () => {
   } finally {
     isLoading.value = false;
   }
+});
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onResize);
+  document.removeEventListener('mouseup', stopResize);
 });
 
 // Current selected request
@@ -376,6 +458,21 @@ const goBack = () => {
     <!-- Header -->
     <header class="flex items-center justify-between h-12 px-4 border-b border-border-default bg-bg-sidebar flex-shrink-0">
       <div class="flex items-center gap-3">
+        <button
+          @click="toggleSidebar"
+          class="flex items-center justify-center w-8 h-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          :title="sidebarVisible ? 'Hide sidebar' : 'Show sidebar'"
+        >
+          <svg v-if="sidebarVisible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="11 17 6 12 11 7"></polyline>
+            <polyline points="18 17 13 12 18 7"></polyline>
+          </svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="13 17 18 12 13 7"></polyline>
+            <polyline points="6 17 11 12 6 7"></polyline>
+          </svg>
+        </button>
+
         <button 
           @click="goBack"
           class="flex items-center justify-center w-8 h-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
@@ -412,6 +509,24 @@ const goBack = () => {
           Shared
         </span>
       </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Right Panel Toggle -->
+        <button
+          @click="toggleRightPanel"
+          class="flex items-center justify-center w-8 h-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          :title="rightPanelVisible ? 'Hide code examples' : 'Show code examples'"
+        >
+          <svg v-if="rightPanelVisible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 20 12 15 6"></polyline>
+            <polyline points="9 18 4 12 9 6"></polyline>
+          </svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="11 17 6 12 11 7"></polyline>
+            <polyline points="18 17 13 12 18 7"></polyline>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- Loading State -->
@@ -444,10 +559,13 @@ const goBack = () => {
     </div>
 
     <!-- Main Content -->
-    <div v-else-if="!isLoading && !error" class="flex flex-1 overflow-hidden">
+    <div v-else-if="!isLoading && !error" class="relative flex flex-1 overflow-hidden">
       <!-- Sidebar -->
-      <aside class="w-[300px] bg-bg-sidebar border-r border-border-default flex flex-col flex-shrink-0">
-        <div class="flex-1 overflow-y-auto p-2">
+      <aside
+        :style="{ width: sidebarVisible ? sidebarWidth + 'px' : '0px', overflow: sidebarVisible ? 'visible' : 'hidden' }"
+        class="relative bg-bg-sidebar border-r border-border-default flex flex-col flex-shrink-0 transition-[width] duration-200"
+      >
+        <div class="flex-1 overflow-y-auto p-2" v-if="sidebarVisible">
           <!-- Projects -->
           <div v-for="project in workspace?.projects" :key="project.id" class="mb-2">
             <div 
@@ -515,31 +633,41 @@ const goBack = () => {
             <p class="text-sm text-text-muted m-0">No projects in this workspace</p>
           </div>
         </div>
+        <!-- Resize Handle -->
+        <div
+          v-if="sidebarVisible"
+          class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent-blue/50 z-10"
+          @mousedown="startResize"
+        ></div>
       </aside>
+
+      <!-- Sidebar Toggle Button (when collapsed) -->
+      <button
+        v-if="!sidebarVisible"
+        @click="toggleSidebar"
+        class="flex items-center justify-center w-8 h-8 rounded-md bg-bg-sidebar border border-border-default text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors m-2 absolute z-10 left-0 top-12"
+        title="Show sidebar"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="13 17 18 12 13 7"></polyline>
+          <polyline points="6 17 11 12 6 7"></polyline>
+        </svg>
+      </button>
 
       <!-- Main Area -->
       <main class="flex-1 flex flex-col overflow-hidden bg-bg-primary">
         <!-- Environment Selector Bar -->
         <div v-if="selectedRequest && currentProjectEnvironments.length > 0" class="flex items-center gap-3 px-4 py-2 border-b border-border-default bg-bg-secondary">
           <span class="text-xs text-text-secondary">Environment:</span>
-          <select
-            :value="currentEnvironmentId"
-            @change="(e) => selectedProjectId && onEnvironmentChange(selectedProjectId, (e.target as HTMLSelectElement).value)"
-            class="px-2 py-1 text-xs bg-bg-input border border-border-default rounded text-text-primary focus:outline-none focus:border-accent-blue"
-          >
-            <option v-for="env in currentProjectEnvironments" :key="env.id" :value="env.id">
-              {{ env.isMockEnvironment ? '☁️ ' : '' }}{{ env.name }}
-            </option>
-          </select>
-          <span v-if="currentProjectEnvironments.find(e => e.id === currentEnvironmentId)?.isMockEnvironment" class="text-[10px] text-purple-400 font-medium">
-            Cloud Mock
-          </span>
-          <span v-else class="text-[10px] text-text-muted">
-            ({{ currentProjectEnvironments.find(e => e.id === currentEnvironmentId)?.variables?.length || 0 }} variables)
-          </span>
+          <EnvironmentSwitcher
+            :environments="currentProjectEnvironments"
+            :active-environment-id="currentEnvironmentId || null"
+            :can-edit-environments="false"
+            @update:active-environment-id="(id) => id && selectedProjectId && onEnvironmentChange(selectedProjectId, id)"
+          />
         </div>
         
-        <div v-if="selectedRequest" class="flex-1 flex overflow-hidden">
+        <div v-if="selectedRequest" class="relative flex-1 flex overflow-hidden">
           <div class="flex-1 overflow-auto">
             <RequestBuilder
               ref="requestBuilderRef"
@@ -551,27 +679,51 @@ const goBack = () => {
               @save-request="handleRequestSave"
             />
           </div>
-          
+
           <!-- Code Examples Sidebar -->
-          <div class="w-[380px] border-l border-border-default bg-bg-sidebar flex flex-col flex-shrink-0">
-            <CodeExamples
-              :method="requestBuilderRef?.form?.method || selectedRequest.method"
-              :url="requestBuilderRef?.form?.url || selectedRequest.url"
-              :headers="requestBuilderRef?.headers || []"
-              :query-params="requestBuilderRef?.queryParams || []"
-              :body="requestBuilderRef?.bodyFormat === 'json' ? requestBuilderRef?.jsonBody : requestBuilderRef?.bodyFormat === 'raw' ? requestBuilderRef?.rawBody : null"
-              :body-format="requestBuilderRef?.bodyFormat || 'none'"
-              :raw-content-type="requestBuilderRef?.rawContentType"
-              :form-data-params="requestBuilderRef?.formDataParams || []"
-              :auth-type="requestBuilderRef?.authType || 'none'"
-              :bearer-token="requestBuilderRef?.bearerToken"
-              :basic-auth="requestBuilderRef?.basicAuth"
-              :api-key="requestBuilderRef?.apiKey"
-              :variables="currentEnvironmentVariables"
-              :is-mock-environment="isCurrentEnvironmentMock"
-              :collection-id="currentCollectionId"
-            />
+          <div
+            :style="{ width: rightPanelVisible ? rightPanelWidth + 'px' : '0px', overflow: rightPanelVisible ? 'visible' : 'hidden' }"
+            class="relative border-l border-border-default bg-bg-sidebar flex flex-col flex-shrink-0 transition-[width] duration-200"
+          >
+            <div v-if="rightPanelVisible" class="flex flex-col h-full">
+              <CodeExamples
+                :method="requestBuilderRef?.form?.method || selectedRequest.method"
+                :url="requestBuilderRef?.form?.url || selectedRequest.url"
+                :headers="requestBuilderRef?.headers || []"
+                :query-params="requestBuilderRef?.queryParams || []"
+                :body="requestBuilderRef?.bodyFormat === 'json' ? requestBuilderRef?.jsonBody : requestBuilderRef?.bodyFormat === 'raw' ? requestBuilderRef?.rawBody : null"
+                :body-format="requestBuilderRef?.bodyFormat || 'none'"
+                :raw-content-type="requestBuilderRef?.rawContentType"
+                :form-data-params="requestBuilderRef?.formDataParams || []"
+                :auth-type="requestBuilderRef?.authType || 'none'"
+                :bearer-token="requestBuilderRef?.bearerToken"
+                :basic-auth="requestBuilderRef?.basicAuth"
+                :api-key="requestBuilderRef?.apiKey"
+                :variables="currentEnvironmentVariables"
+                :is-mock-environment="isCurrentEnvironmentMock"
+                :collection-id="currentCollectionId"
+              />
+            </div>
+            <!-- Resize Handle -->
+            <div
+              v-if="rightPanelVisible"
+              class="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent-blue/50 z-10"
+              @mousedown="startResizeRight"
+            ></div>
           </div>
+
+          <!-- Right Panel Toggle Button (when collapsed) -->
+          <button
+            v-if="!rightPanelVisible"
+            @click="toggleRightPanel"
+            class="absolute right-2 top-2 z-10 flex items-center justify-center w-8 h-8 rounded-md bg-bg-sidebar border border-border-default text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            title="Show code examples"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="11 17 6 12 11 7"></polyline>
+              <polyline points="18 17 13 12 18 7"></polyline>
+            </svg>
+          </button>
         </div>
         
         <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-8">
