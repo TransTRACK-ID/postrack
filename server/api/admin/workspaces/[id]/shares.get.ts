@@ -1,7 +1,7 @@
 import { db } from '../../../../db';
 import { workspaces, workspaceShares, workspaceAccess, folders } from '../../../../db/schema';
 import { eq, desc, sql, inArray } from 'drizzle-orm';
-import { canManageShares } from '../../../../utils/permissions';
+import { canManageShares, isSuperAdmin } from '../../../../utils/permissions';
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id');
@@ -45,9 +45,10 @@ export default defineEventHandler(async (event) => {
     workspace[0].ownerId = user.id;
   }
 
-  // Check if user can manage shares (only owner)
+  // Check if user can manage shares (only owner or super admin)
   const canManage = await canManageShares(user.id, workspaceId);
-  if (!canManage) {
+  const userIsSuperAdmin = isSuperAdmin(user.email);
+  if (!canManage && !userIsSuperAdmin) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Only workspace owners can view share links'

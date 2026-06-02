@@ -1,7 +1,7 @@
 import { db } from '../../../../db';
 import { workspaces, workspaceShares, folders, collections, projects } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
-import { canManageShares, generateShareToken } from '../../../../utils/permissions';
+import { canManageShares, canAccessWorkspace, isSuperAdmin, generateShareToken } from '../../../../utils/permissions';
 import type { SharePermission } from '../../../../db/schema/workspaceShare';
 
 interface CreateShareBody {
@@ -52,16 +52,28 @@ export default defineEventHandler(async (event) => {
     workspace[0].ownerId = user.id;
   }
 
-  // Check if user can manage shares (only owner)
+  const body = await readBody<CreateShareBody>(event);
+
+  // Check if user can manage shares (only owner for workspace-level shares)
+  // For scoped folder shares, any workspace member can create them
+  const isScopedFolderShare = !!body.folderId;
   const canManage = await canManageShares(user.id, workspaceId);
-  if (!canManage) {
+  const hasAccess = await canAccessWorkspace(user.id, workspaceId, user.email);
+  const userIsSuperAdmin = isSuperAdmin(user.email);
+
+  if (!canManage && !userIsSuperAdmin && !isScopedFolderShare) {
     throw createError({
       statusCode: 403,
-      statusMessage: 'Only workspace owners can create share links'
+      statusMessage: 'Only workspace owners can create workspace-level share links'
     });
   }
 
-  const body = await readBody<CreateShareBody>(event);
+  if (!canManage && !userIsSuperAdmin && isScopedFolderShare && !hasAccess) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'You do not have access to this workspace'
+    });
+  }
 
   // Validate permission
   if (!body.permission || !['view', 'edit'].includes(body.permission)) {
