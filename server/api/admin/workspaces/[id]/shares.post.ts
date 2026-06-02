@@ -1,12 +1,13 @@
 import { db } from '../../../../db';
-import { workspaces, workspaceShares } from '../../../../db/schema';
-import { eq } from 'drizzle-orm';
+import { workspaces, workspaceShares, folders, collections, projects } from '../../../../db/schema';
+import { eq, and } from 'drizzle-orm';
 import { canManageShares, generateShareToken } from '../../../../utils/permissions';
 import type { SharePermission } from '../../../../db/schema/workspaceShare';
 
 interface CreateShareBody {
   permission: SharePermission;
   expiresInDays?: number;
+  folderId?: string;
 }
 
 export default defineEventHandler(async (event) => {
@@ -70,6 +71,29 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // Validate folderId if provided
+  if (body.folderId) {
+    const folderValidation = await db
+      .select({ folderId: folders.id })
+      .from(folders)
+      .innerJoin(collections, eq(folders.collectionId, collections.id))
+      .innerJoin(projects, eq(collections.projectId, projects.id))
+      .where(
+        and(
+          eq(folders.id, body.folderId),
+          eq(projects.workspaceId, workspaceId)
+        )
+      )
+      .limit(1);
+
+    if (!folderValidation.length) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid folder ID or folder does not belong to this workspace'
+      });
+    }
+  }
+
   // Calculate expiration date if provided
   let expiresAt: Date | null = null;
   if (body.expiresInDays && body.expiresInDays > 0) {
@@ -86,6 +110,7 @@ export default defineEventHandler(async (event) => {
       .insert(workspaceShares)
       .values({
         workspaceId,
+        folderId: body.folderId || null,
         shareToken,
         permission: body.permission,
         createdBy: user.id,

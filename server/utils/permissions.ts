@@ -159,6 +159,7 @@ export async function hasSharedAccess(userId: string, workspaceId: string): Prom
   const now = new Date();
   
   // Find active share for this workspace that the user has accessed
+  // Only consider workspace-scoped shares (folderId is null) for workspace-level access
   const accessRecord = await db
     .select({
       permission: workspaceAccess.permission,
@@ -171,6 +172,7 @@ export async function hasSharedAccess(userId: string, workspaceId: string): Prom
       and(
         eq(workspaceAccess.userId, userId),
         eq(workspaceShares.workspaceId, workspaceId),
+        isNull(workspaceShares.folderId),
         eq(workspaceShares.isActive, true)
       )
     )
@@ -278,6 +280,7 @@ export async function getWorkspacePermissionsBatch(
         and(
           eq(workspaceAccess.userId, userId),
           inArray(workspaceShares.workspaceId, remainingIds),
+          isNull(workspaceShares.folderId),
           eq(workspaceShares.isActive, true)
         )
       );
@@ -399,16 +402,22 @@ export async function recordSharedAccess(shareId: string, userId: string, permis
       });
   }
 
-  // Auto-convert to workspace member
-  // Get workspaceId from share record
+  // Auto-convert to workspace member (only for workspace-scoped shares, not folder-scoped)
+  // Get workspaceId and folderId from share record
   const shareRecord = await db
-    .select({ workspaceId: workspaceShares.workspaceId, createdBy: workspaceShares.createdBy })
+    .select({ workspaceId: workspaceShares.workspaceId, folderId: workspaceShares.folderId, createdBy: workspaceShares.createdBy })
     .from(workspaceShares)
     .where(eq(workspaceShares.id, shareId))
     .limit(1);
 
   if (shareRecord.length) {
-    const { workspaceId, createdBy } = shareRecord[0];
+    const { workspaceId, folderId, createdBy } = shareRecord[0];
+    
+    // Only auto-create workspace member for workspace-scoped shares (folderId is null)
+    // Folder-scoped shares must not grant workspace-level membership
+    if (folderId) {
+      return;
+    }
     
     // Check if user is already a member
     const existingMember = await db
@@ -466,6 +475,7 @@ export async function getAccessibleWorkspaceIds(userId: string, userEmail?: stri
   console.log('[Permissions] Owned workspace IDs:', ownedIds);
 
   // OPTIMIZED: Single query for shared access
+  // Only include workspace-scoped shares (folderId is null) for workspace-level access
   const sharedViaAccess = await db
     .select({ workspaceId: workspaceShares.workspaceId })
     .from(workspaceAccess)
@@ -473,6 +483,7 @@ export async function getAccessibleWorkspaceIds(userId: string, userEmail?: stri
     .where(
       and(
         eq(workspaceAccess.userId, userId),
+        isNull(workspaceShares.folderId),
         eq(workspaceShares.isActive, true),
         or(
           isNull(workspaceShares.expiresAt),
