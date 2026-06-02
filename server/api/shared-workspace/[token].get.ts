@@ -144,9 +144,8 @@ function getDescendantFolderIds(
   allFolders: typeof folders.$inferSelect[]
 ): string[] {
   const children = allFolders.filter(f => f.parentFolderId === parentId);
-  const childIds = children.map(c => c.id);
   const descendants = children.flatMap(c => getDescendantFolderIds(c.id, allFolders));
-  return [parentId, ...childIds, ...descendants];
+  return [parentId, ...descendants];
 }
 
 export default defineEventHandler(async (event) => {

@@ -1,7 +1,7 @@
 import { db } from '../../../db';
 import { workspaces, workspaceShares, workspaceAccess } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
-import { canManageShares } from '../../../utils/permissions';
+import { canManageShares, isSuperAdmin } from '../../../utils/permissions';
 
 export default defineEventHandler(async (event) => {
   const token = getRouterParam(event, 'token');
@@ -38,9 +38,13 @@ export default defineEventHandler(async (event) => {
 
     const shareRecord = share[0];
 
-    // Check if user can manage shares (only owner of the workspace)
+    // Check if user can manage shares (owner of the workspace, super admin, or creator of scoped folder share)
     const canManage = await canManageShares(user.id, shareRecord.workspaceId);
-    if (!canManage) {
+    const userIsSuperAdmin = isSuperAdmin(user.email);
+    const isCreator = shareRecord.createdBy === user.id;
+    const isScopedFolderShare = !!shareRecord.folderId;
+
+    if (!canManage && !userIsSuperAdmin && !(isScopedFolderShare && isCreator)) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Only workspace owner can revoke share links'

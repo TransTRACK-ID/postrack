@@ -131,7 +131,7 @@ export default defineEventHandler(async (event) => {
       const getDescendantIds = (parentId: string, all: typeof folders.$inferSelect[]): string[] => {
         const children = all.filter(f => f.parentFolderId === parentId);
         const descendants = children.flatMap(c => getDescendantIds(c.id, all));
-        return [parentId, ...children.map(c => c.id), ...descendants];
+        return [parentId, ...descendants];
       };
 
       const allFoldersList = await db.select().from(folders);
