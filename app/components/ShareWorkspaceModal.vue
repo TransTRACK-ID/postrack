@@ -12,8 +12,11 @@ interface ShareInfo {
   expiresAt: string | null;
   isActive: boolean;
   createdAt: string;
+  updatedAt?: string;
   accessCount: number;
   isExpired: boolean;
+  folderId?: string | null;
+  folderName?: string | null;
 }
 
 interface MemberInfo {
