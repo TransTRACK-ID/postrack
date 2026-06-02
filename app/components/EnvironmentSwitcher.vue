@@ -142,8 +142,9 @@ const activeEnvironment = computed(() => {
 
 const sortedEnvironments = computed(() => {
   return [...safeEnvironments.value].sort((a, b) => {
-    if (a.isActive) return -1;
-    if (b.isActive) return 1;
+    // Always show the currently selected environment at the top
+    if (a.id === props.activeEnvironmentId) return -1;
+    if (b.id === props.activeEnvironmentId) return 1;
     return a.name.localeCompare(b.name);
   });
 });

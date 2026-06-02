@@ -4380,8 +4380,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
                   class="code-panel bg-bg-sidebar flex flex-col flex-shrink-0 overflow-hidden w-full md:w-auto"
                 >
                   <!-- Panel Header with Close Button -->
-                  <div class="flex items-center justify-between px-3 py-2 border-b border-border-default bg-bg-secondary/50">
-                    <span class="text-xs font-semibold text-text-secondary uppercase tracking-wider">Code Examples</span>
+                  <div class="flex items-center justify-end px-3 py-2 border-b border-border-default bg-bg-secondary/50">
                     <button
                       @click="toggleCodeExamples"
                       class="p-1 text-text-muted hover:text-text-primary transition-colors duration-150 rounded hover:bg-bg-hover"
