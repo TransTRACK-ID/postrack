@@ -38,6 +38,7 @@ export interface ShareTokenValidation {
   permission?: SharePermission;
   workspaceId?: string;
   shareId?: string;
+  folderId?: string | null;
   error?: string;
 }
 
@@ -357,7 +358,8 @@ export async function validateShareToken(token: string, userId?: string): Promis
     valid: true,
     permission: shareRecord.permission as SharePermission,
     workspaceId: shareRecord.workspaceId,
-    shareId: shareRecord.id
+    shareId: shareRecord.id,
+    folderId: shareRecord.folderId || null
   };
 }
 

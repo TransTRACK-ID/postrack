@@ -1,5 +1,5 @@
 import { db } from '../../../../db';
-import { workspaces, workspaceShares } from '../../../../db/schema';
+import { workspaces, workspaceShares, folders, collections, projects } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { canManageShares, generateShareToken } from '../../../../utils/permissions';
 import type { SharePermission } from '../../../../db/schema/workspaceShare';
@@ -7,6 +7,7 @@ import type { SharePermission } from '../../../../db/schema/workspaceShare';
 interface CreateShareBody {
   permission: SharePermission;
   expiresInDays?: number;
+  folderId?: string;
 }
 
 export default defineEventHandler(async (event) => {
@@ -70,6 +71,39 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // If folderId provided, verify it belongs to a collection in this workspace
+  if (body.folderId) {
+    const folder = await db
+      .select()
+      .from(folders)
+      .where(eq(folders.id, body.folderId))
+      .limit(1);
+
+    if (!folder.length) {
+      throw createError({ statusCode: 404, statusMessage: 'Folder not found' });
+    }
+
+    const collection = await db
+      .select()
+      .from(collections)
+      .where(eq(collections.id, folder[0].collectionId))
+      .limit(1);
+
+    if (!collection.length) {
+      throw createError({ statusCode: 404, statusMessage: 'Collection not found' });
+    }
+
+    const project = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, collection[0].projectId))
+      .limit(1);
+
+    if (!project.length || project[0].workspaceId !== workspaceId) {
+      throw createError({ statusCode: 403, statusMessage: 'Folder does not belong to this workspace' });
+    }
+  }
+
   // Calculate expiration date if provided
   let expiresAt: Date | null = null;
   if (body.expiresInDays && body.expiresInDays > 0) {
@@ -86,6 +120,7 @@ export default defineEventHandler(async (event) => {
       .insert(workspaceShares)
       .values({
         workspaceId,
+        folderId: body.folderId || null,
         shareToken,
         permission: body.permission,
         createdBy: user.id,

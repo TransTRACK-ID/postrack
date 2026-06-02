@@ -127,6 +127,25 @@ export default defineEventHandler(async (event) => {
       });
     }
 
+    // If folder-scoped share, verify the request is within the shared scope
+    if (validation.folderId) {
+      const getDescendantIds = (parentId: string, all: typeof folders.$inferSelect[]): string[] => {
+        const children = all.filter(f => f.parentFolderId === parentId);
+        const descendants = children.flatMap(c => getDescendantIds(c.id, all));
+        return [parentId, ...children.map(c => c.id), ...descendants];
+      };
+
+      const allFoldersList = await db.select().from(folders);
+      const allowedFolderIds = getDescendantIds(validation.folderId, allFoldersList);
+
+      if (!existingRequest[0].folderId || !allowedFolderIds.includes(existingRequest[0].folderId)) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'Request is outside the shared scope'
+        });
+      }
+    }
+
     // Update the request
     const updateData: Record<string, unknown> = {
       updatedAt: new Date()

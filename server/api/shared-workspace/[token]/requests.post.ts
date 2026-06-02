@@ -125,6 +125,25 @@ export default defineEventHandler(async (event) => {
       });
     }
 
+    // If folder-scoped share, verify the target folder is within the shared scope
+    if (validation.folderId) {
+      const getDescendantIds = (parentId: string, all: typeof folders.$inferSelect[]): string[] => {
+        const children = all.filter(f => f.parentFolderId === parentId);
+        const descendants = children.flatMap(c => getDescendantIds(c.id, all));
+        return [parentId, ...children.map(c => c.id), ...descendants];
+      };
+
+      const allFoldersList = await db.select().from(folders);
+      const allowedFolderIds = getDescendantIds(validation.folderId, allFoldersList);
+
+      if (!allowedFolderIds.includes(body.folderId)) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'Folder is outside the shared scope'
+        });
+      }
+    }
+
     // Get the highest order in this folder
     const existingRequests = await db
       .select({ order: savedRequests.order })
