@@ -655,7 +655,7 @@ const goBack = () => {
       </button>
 
       <!-- Main Area -->
-      <main class="flex-1 flex flex-col overflow-hidden bg-bg-primary">
+      <main class="relative flex-1 flex flex-col overflow-hidden bg-bg-primary z-10">
         <!-- Environment Selector Bar -->
         <div v-if="selectedRequest && currentProjectEnvironments.length > 0" class="flex items-center gap-3 px-4 py-2 border-b border-border-default bg-bg-secondary">
           <span class="text-xs text-text-secondary">Environment:</span>
