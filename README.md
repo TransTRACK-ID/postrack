@@ -1,8 +1,18 @@
-# Postrack (v0.8.12)
+# Postrack (v0.9.3)
 
-A full-stack API workspace for building, testing, mocking, documenting, and sharing APIs.
+## What Postrack Is
 
-Postrack provides a comprehensive web admin panel to manage requests and environments, run HTTP calls through a proxy or directly, generate mock endpoints, import API definitions (OpenAPI/Postman), publish documentation, track usage analytics, monitor errors, collect feedback, and collaborate with team members.
+**Postrack** is a full-stack API workspace that helps developers build, test, mock, document, and share APIs — all in one place. Think of it as a lighter, more collaborative alternative to Postman and Insomnia, designed for teams who want to move fast without the heavyweight enterprise feel.
+
+Whether you're prototyping a new API, running regression tests, generating mock responses for frontend development, or publishing public API documentation, Postrack gives you the tools to do it efficiently and beautifully.
+
+### What You Can Do With It
+- **Build & Test** — Construct HTTP requests with headers, auth, body, scripts, and multiple examples. Execute directly or through a built-in proxy to bypass CORS issues.
+- **Mock APIs** — Generate collection-aware mock endpoints with configurable responses, delays, and status codes — perfect for frontend development without a real backend.
+- **Import & Export** — Bring in OpenAPI (Swagger) and Postman collections, or export your workspace to OpenAPI spec.
+- **Document** — Publish public API documentation from imported specs, or create rich collection docs with markdown, images, tables, and endpoint references.
+- **Collaborate** — Share workspaces with teammates via unique tokens, manage access with view/edit permissions, and track request history.
+- **Monitor** — Track usage analytics, monitor errors with Datadog integration, and collect team feedback — all from a unified admin panel.
 
 ## Key Features
 
