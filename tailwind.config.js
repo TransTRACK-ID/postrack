@@ -11,28 +11,29 @@ export default {
   theme: {
     extend: {
       // Custom Colors - Matching the existing design tokens
+      // Uses CSS variables for theme-aware colors (dark/light mode)
       colors: {
         // Background colors
-        'bg-primary': '#1C1C1C',
-        'bg-secondary': '#252526',
-        'bg-tertiary': '#2D2D2D',
-        'bg-sidebar': '#1A1A1A',
-        'bg-header': '#2D2F31',
-        'bg-input': '#2D2D2D',
-        'bg-hover': '#3D3D3D',
-        'bg-active': '#404040',
+        'bg-primary': 'var(--bg-primary)',
+        'bg-secondary': 'var(--bg-secondary)',
+        'bg-tertiary': 'var(--bg-tertiary)',
+        'bg-sidebar': 'var(--bg-sidebar)',
+        'bg-header': 'var(--bg-header)',
+        'bg-input': 'var(--bg-input)',
+        'bg-hover': 'var(--bg-hover)',
+        'bg-active': 'var(--bg-active)',
 
         // Border colors
-        'border-default': '#3D3D3D',
-        'border-subtle': '#333333',
+        'border-default': 'var(--border-color)',
+        'border-subtle': 'var(--border-subtle)',
 
         // Text colors
-        'text-primary': '#E0E0E0',
-        'text-secondary': '#9E9E9E',
-        'text-muted': '#6E6E6E',
-        'text-inverse': '#1C1C1C',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted': 'var(--text-muted)',
+        'text-inverse': 'var(--text-inverse)',
 
-        // Accent colors
+        // Accent colors (static - same in both modes)
         'accent-orange': '#FF6C37',
         'accent-blue': '#007AFF',
         'accent-green': '#73BF69',
@@ -40,7 +41,7 @@ export default {
         'accent-red': '#EF5350',
         'accent-purple': '#AB47BC',
 
-        // HTTP Method colors
+        // HTTP Method colors (static)
         'method-get': '#73BF69',
         'method-post': '#FFCA28',
         'method-put': '#64B5F6',
@@ -98,10 +99,10 @@ export default {
 
       // Custom Shadows
       boxShadow: {
-        'sm': '0 1px 2px rgba(0, 0, 0, 0.3)',
-        'md': '0 4px 6px rgba(0, 0, 0, 0.4)',
-        'lg': '0 8px 16px rgba(0, 0, 0, 0.5)',
-        'xl': '0 12px 24px rgba(0, 0, 0, 0.6)',
+        'sm': 'var(--shadow-sm)',
+        'md': 'var(--shadow-md)',
+        'lg': 'var(--shadow-lg)',
+        'xl': 'var(--shadow-xl)',
         'modal': '0 12px 48px rgba(0, 0, 0, 0.5)',
       },
 

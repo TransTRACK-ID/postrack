@@ -17,6 +17,8 @@ definePageMeta({
   layout: 'empty'
 });
 
+const { isDarkMode, toggleDarkMode } = useDarkMode();
+
 const form = ref({
   email: '',
   password: ''
@@ -131,7 +133,31 @@ const checkAuthAndRedirect = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-bg-primary relative overflow-hidden">
+  <div class="min-h-screen flex items-center justify-center bg-bg-primary relative overflow-hidden transition-colors duration-normal">
+    <!-- Dark Mode Toggle -->
+    <button
+      @click="toggleDarkMode"
+      class="absolute top-4 right-4 p-2.5 rounded-full bg-bg-secondary border border-border-default text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-all duration-fast cursor-pointer z-20"
+      :title="isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+    >
+      <!-- Sun Icon (shown in dark mode) -->
+      <svg v-if="isDarkMode" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <!-- Moon Icon (shown in light mode) -->
+      <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+
     <div class="flex flex-col items-center w-full max-w-[400px] p-6 z-10">
       <!-- Logo -->
       <div class="mb-8">

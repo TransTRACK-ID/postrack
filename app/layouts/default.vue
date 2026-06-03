@@ -48,7 +48,7 @@ const handleFeedbackSubmit = async (data: { responses: Record<string, unknown>; 
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg-primary">
+  <div class="min-h-screen bg-bg-primary transition-colors duration-normal">
     <slot />
     <VersionNotification />
     <ToastNotification />
