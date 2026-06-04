@@ -24,6 +24,12 @@ interface OldCollection {
 }
 
 export default defineNitroPlugin(async () => {
+  // Skip in desktop mode
+  if (process.env.ELECTRON_DESKTOP) {
+    console.log('[Data Migration] Skipping in desktop mode')
+    return
+  }
+
   try {
     // Check if migration already completed
     const migrationStatus = (await db
@@ -147,7 +153,7 @@ export default defineNitroPlugin(async () => {
       }
     }
 
-    // Mark migration as completed in SQLite
+    // Mark migration as completed
     await db.insert(schema.settings).values({
       key: 'data_migration_completed',
       value: {

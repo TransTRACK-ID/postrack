@@ -51,6 +51,7 @@ const handleFeedbackSubmit = async (data: { responses: Record<string, unknown>; 
   <div class="min-h-screen bg-bg-primary">
     <slot />
     <VersionNotification />
+    <UpdateNotification />
     <ToastNotification />
 
     <!-- Feedback Modal -->

@@ -2,6 +2,12 @@ import tracer from 'dd-trace'
 import { getDatadogLogger } from '../utils/datadog-logger'
 
 export default defineNitroPlugin(() => {
+  // Skip in desktop mode
+  if (process.env.ELECTRON_DESKTOP) {
+    console.log('[Datadog APM] Skipping initialization in desktop mode')
+    return
+  }
+
   const config = useRuntimeConfig()
   
   // Initialize the Datadog logger (for direct log shipping)

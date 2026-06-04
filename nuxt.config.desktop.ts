@@ -20,6 +20,12 @@ export default defineNuxtConfig({
 
   app: {
     head: {
+      meta: [
+        {
+          'http-equiv': 'Content-Security-Policy',
+          content: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:3000;"
+        }
+      ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
@@ -31,6 +37,10 @@ export default defineNuxtConfig({
     }
   },
   nitro: {
+    preset: 'node',
+    output: {
+      dir: '.output-desktop'
+    },
     storage: {
       // File storage is now deprecated - all data stored in SQLite
       // Keeping minimal config for any future storage needs
@@ -40,13 +50,17 @@ export default defineNuxtConfig({
       {
         baseName: 'drizzle',
         dir: './drizzle'
+      },
+      {
+        baseName: 'drizzle-sqlite',
+        dir: './drizzle-sqlite'
       }
     ]
   },
   runtimeConfig: {
-    adminEmail: process.env.ADMIN_EMAIL || 'admin@mock.com',
-    adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
-    jwtSecret: process.env.JWT_SECRET || 'super-secret-jwt-key-change-me',
+    adminEmail: process.env.ADMIN_EMAIL || 'admin@local',
+    adminPassword: process.env.ADMIN_PASSWORD || 'admin',
+    jwtSecret: process.env.JWT_SECRET || 'desktop-local-secret',
     nodeEnv: process.env.NODE_ENV || 'development',
     
     // Server-side only (SECRET) - Datadog configuration
@@ -58,13 +72,13 @@ export default defineNuxtConfig({
     public: {
       appUrl: process.env.APP_URL || 'http://localhost:3000',
       appVersion,
-      isDesktop: false,
+      isDesktop: true,
       
-      // Datadog RUM Configuration
+      // Datadog RUM Configuration (disabled in desktop)
       datadogApplicationId: process.env.DATADOG_APPLICATION_ID,
       datadogClientToken: process.env.DATADOG_CLIENT_TOKEN,
       datadogSite: process.env.DATADOG_SITE || 'us5.datadoghq.com',
-      datadogService: 'postrack-web',
+      datadogService: 'postrack-desktop',
       datadogEnv: process.env.DATADOG_ENV || process.env.DD_ENV || 'development',
       datadogVersion: appVersion,
     }

@@ -3,17 +3,40 @@ import { isSuperAdmin } from '../utils/permissions';
 
 export default defineEventHandler((event) => {
     const path = event.path;
+    const config = useRuntimeConfig();
 
     const isApiRoute = path.startsWith('/api/admin') || 
                        path.startsWith('/api/shared-workspace') || 
                        (path.startsWith('/api/feedback') && !path.includes('/status'));
     const isProtectedPage = path.startsWith('/admin/sso');
 
+    // Desktop auto-login: if no auth token but in desktop mode, create a local user
+    if (process.env.ELECTRON_DESKTOP && !getCookie(event, 'auth_token')) {
+        const desktopToken = jwt.sign({
+            email: 'admin@local',
+            sub: 'desktop-local-user',
+            authMethod: 'desktop',
+        }, config.jwtSecret, { expiresIn: '30d' });
+        
+        setCookie(event, 'auth_token', desktopToken, {
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30 // 30 days
+        });
+        
+        setCookie(event, 'user_info', Buffer.from(JSON.stringify({
+            email: 'admin@local',
+            name: 'Local Admin'
+        })).toString('base64'), {
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30
+        });
+    }
+
     // Protect admin, shared-workspace, and feedback submit API routes
     // Also protect specific admin pages that require server-side guards (e.g. /admin/sso)
     if (isApiRoute || isProtectedPage) {
         const token = getCookie(event, 'auth_token');
-        const config = useRuntimeConfig();
 
         if (!token) {
             if (isProtectedPage) return sendRedirect(event, '/login');

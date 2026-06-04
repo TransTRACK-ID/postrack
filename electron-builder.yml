@@ -1,0 +1,52 @@
+appId: com.postrack.app
+productName: Postrack
+copyright: Copyright © 2025 Postrack
+directories:
+  output: dist-electron
+  buildResources: build-resources
+files:
+  - from: .output-desktop/server
+    to: server
+    filter:
+      - '**/*'
+  - from: drizzle-sqlite
+    to: drizzle-sqlite
+    filter:
+      - '**/*'
+  - from: electron
+    filter:
+      - '**/*'
+  - package.json
+extraResources:
+  - from: .output-desktop/public
+    to: public
+    filter:
+      - '**/*'
+asar: true
+asarUnpack:
+  - 'server/**/*'
+  - 'drizzle-sqlite/**/*'
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+win:
+  target:
+    - nsis
+    - portable
+  publisherName: Postrack
+  verifyUpdateCodeSignature: false
+linux:
+  target:
+    - AppImage
+    - deb
+    - rpm
+  category: Development
+publish:
+  provider: github
+  owner: your-org
+  repo: postrack
+  releaseType: release
