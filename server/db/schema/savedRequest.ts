@@ -52,6 +52,17 @@ export type RequestParamNotes = {
 };
 
 /**
+ * Query parameter with enabled/disabled state
+ * Preserves disabled parameters so they can be re-enabled without re-entering
+ */
+export type QueryParam = {
+  key: string;
+  value: string;
+  enabled: boolean;
+  note?: string;
+};
+
+/**
  * Parameter schema for documentation — structured field table data
  * Attribute | Data Type | Required | Example Value | Description
  */
@@ -84,6 +95,7 @@ export const savedRequests = pgTable('saved_requests', {
   paramNotes: text('param_notes').$type<RequestParamNotes>(),
   notes: text('notes'),
   paramSchema: text('param_schema').$type<ParamSchema[]>(),
+  queryParams: text('query_params').$type<QueryParam[]>(),
   curlExample: text('curl_example'),
   order: integer('order').notNull().default(0),
   createdAt: timestamp('created_at')

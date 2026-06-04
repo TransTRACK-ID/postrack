@@ -13,6 +13,7 @@ interface CreateRequestBody {
   body?: RequestBody;
   auth?: RequestAuth;
   pathVariables?: RequestPathVariables;
+  queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
 }
 
 const validMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -166,6 +167,7 @@ export default defineEventHandler(async (event) => {
         body: body.body || null,
         auth: body.auth || null,
         pathVariables: body.pathVariables || null,
+        queryParams: body.queryParams ? JSON.stringify(body.queryParams) : null,
         order: nextOrder
       })
       .returning();

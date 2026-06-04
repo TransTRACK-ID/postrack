@@ -35,6 +35,7 @@ interface RequestItem {
   } | null;
   pathVariables: Record<string, { value: string; description?: string }> | null;
   paramNotes: Record<string, Record<string, string>> | null;
+  queryParams: Array<{ key: string; value: string; enabled: boolean; note?: string }> | null;
   preScript: string | null;
   postScript: string | null;
   order: number;
@@ -283,6 +284,7 @@ export default defineEventHandler(async (event) => {
         mockConfig: parseJsonField<RequestItem['mockConfig']>(req.mockConfig),
         pathVariables: parseJsonField<RequestItem['pathVariables']>(req.pathVariables),
         paramNotes: parseJsonField<Record<string, Record<string, string>>>(req.paramNotes),
+        queryParams: parseJsonField<Array<{ key: string; value: string; enabled: boolean; note?: string }>>(req.queryParams),
         preScript: req.preScript || null,
         postScript: req.postScript || null,
         examples: requestExamplesList

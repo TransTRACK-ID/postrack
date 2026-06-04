@@ -1,5 +1,5 @@
 import { db } from '../../../db';
-import { savedRequests, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type MockConfig, type RequestPathVariables, type RequestParamNotes, type ParamSchema } from '../../../db/schema';
+import { savedRequests, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type MockConfig, type RequestPathVariables, type RequestParamNotes, type QueryParam, type ParamSchema } from '../../../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { trackResourceAction } from '../../../services/usageTracking';
 import { cache, CacheKeys } from '../../../utils/cache';
@@ -31,6 +31,7 @@ interface UpdateRequestBody {
   postScript?: string;
   pathVariables?: RequestPathVariables;
   paramNotes?: RequestParamNotes;
+  queryParams?: QueryParam[];
   notes?: string;
   paramSchema?: ParamSchema[];
   curlExample?: string;
@@ -91,6 +92,7 @@ export default defineEventHandler(async (event) => {
       postScript: string | null;
       pathVariables: RequestPathVariables | null;
       paramNotes: RequestParamNotes | null;
+      queryParams: string | null;
       notes: string | null;
       paramSchema: string | null;
       curlExample: string | null;
@@ -219,6 +221,11 @@ export default defineEventHandler(async (event) => {
       updateData.paramNotes = body.paramNotes;
     }
 
+    // Set queryParams (can be null or array)
+    if (body.queryParams !== undefined) {
+      updateData.queryParams = body.queryParams ? JSON.stringify(body.queryParams) : null;
+    }
+
     // Set notes (can be null or string)
     if (body.notes !== undefined) {
       updateData.notes = body.notes || null;
@@ -290,6 +297,7 @@ export default defineEventHandler(async (event) => {
       } | null>(updatedRequest.mockConfig),
       pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(updatedRequest.pathVariables),
       paramNotes: parseJsonField<Record<string, Record<string, string>>>(updatedRequest.paramNotes),
+      queryParams: parseJsonField<Array<{ key: string; value: string; enabled: boolean; note?: string }>>(updatedRequest.queryParams),
       paramSchema: parseJsonField<ParamSchema[]>(updatedRequest.paramSchema)
     };
   } catch (error: any) {

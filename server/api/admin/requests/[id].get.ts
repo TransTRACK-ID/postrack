@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
       } | null>(request.mockConfig),
       pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(request.pathVariables),
       paramNotes: parseJsonField<Record<string, Record<string, string>>>(request.paramNotes),
+      queryParams: parseJsonField<Array<{ key: string; value: string; enabled: boolean; note?: string }>>(request.queryParams),
       paramSchema: parseJsonField<Array<{
         name: string;
         dataType: string;

@@ -85,6 +85,7 @@ interface HttpRequest {
   mockConfig?: import('../../server/db/schema/savedRequest').MockConfig | null;
   pathVariables?: import('../../server/db/schema/savedRequest').RequestPathVariables | null;
   paramNotes?: import('../../server/db/schema/savedRequest').RequestParamNotes | null;
+  queryParams?: import('../../server/db/schema/savedRequest').QueryParam[];
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -164,6 +165,7 @@ export interface RequestDraftSnapshot {
   rawBody?: string;
   rawContentType?: string;
   formDataParams?: PersistedBodyParam[];
+  queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
 }
 
 interface Props {
@@ -711,8 +713,49 @@ const loadRequestData = async (request: HttpRequest) => {
     form.value.method = request.method as typeof HTTP_METHODS[number];
     form.value.url = request.url;
   
-    // Reset query params
-    queryParams.value = parseUrlQuery(request.url);
+    // Reset query params from URL first, then merge with persisted queryParams if available
+    const urlParams = parseUrlQuery(request.url);
+    const persistedQueryParams = (request as HttpRequest & RequestDraftSnapshot).queryParams;
+    
+    if (Array.isArray(persistedQueryParams) && persistedQueryParams.length > 0) {
+      // Merge URL params with persisted params: URL wins for enabled params
+      const mergedParams: QueryParam[] = [];
+      const urlParamsMap = new Map(urlParams.map(p => [p.key, p]));
+      const processedKeys = new Set<string>();
+      
+      for (const urlParam of urlParams) {
+        const persistedParam = persistedQueryParams.find(p => p.key === urlParam.key);
+        if (persistedParam) {
+          mergedParams.push({
+            id: crypto.randomUUID(),
+            key: urlParam.key,
+            value: urlParam.value,
+            enabled: true,
+            note: persistedParam.note
+          });
+        } else {
+          mergedParams.push(urlParam);
+        }
+        processedKeys.add(urlParam.key);
+      }
+      
+      // Add persisted params that are not in the URL (disabled params)
+      for (const persistedParam of persistedQueryParams) {
+        if (!processedKeys.has(persistedParam.key)) {
+          mergedParams.push({
+            id: crypto.randomUUID(),
+            key: persistedParam.key,
+            value: persistedParam.value || '',
+            enabled: false,
+            note: persistedParam.note
+          });
+        }
+      }
+      
+      queryParams.value = mergedParams;
+    } else {
+      queryParams.value = urlParams;
+    }
     
     // Reset headers
     if (request.headers) {
@@ -1442,6 +1485,12 @@ const buildDraftSnapshot = (): RequestDraftSnapshot => {
       value: param.value,
       enabled: param.enabled,
       type: param.type
+    })),
+    queryParams: queryParams.value.map(param => ({
+      key: param.key,
+      value: param.value,
+      enabled: param.enabled,
+      note: param.note
     }))
   };
 };
@@ -2795,6 +2844,12 @@ const buildCurrentRequestState = () => ({
   postScript: postScript.value,
   pathVariables: buildPathVariablesRecord(),
   paramNotes: buildParamNotes(),
+  queryParams: queryParams.value.map(param => ({
+    key: param.key,
+    value: param.value,
+    enabled: param.enabled,
+    note: param.note
+  })),
   order: props.request.order,
   createdAt: props.request.createdAt,
   updatedAt: new Date()
@@ -2854,6 +2909,12 @@ const openSaveAsDialog = () => {
     postScript: postScript.value,
     pathVariables: buildPathVariablesRecord(),
     paramNotes: buildParamNotes(),
+    queryParams: queryParams.value.map(param => ({
+      key: param.key,
+      value: param.value,
+      enabled: param.enabled,
+      note: param.note
+    })),
     order: props.request.order,
     createdAt: props.request.createdAt,
     updatedAt: new Date()
@@ -2868,22 +2929,36 @@ watch(() => form.value.url, (newUrl) => {
   const newParamsStr = JSON.stringify(params.map(p => ({ key: p.key, value: p.value, enabled: p.enabled })));
   
   if (currentParamsStr !== newParamsStr) {
-    // Merge params: keep existing params with their IDs, add new ones, remove deleted ones
+    // Merge params: keep existing params with their IDs, add new ones,
+    // preserve disabled params that are not in the URL (they were disabled)
     const mergedParams: QueryParam[] = [];
     const existingParamsMap = new Map(queryParams.value.map(p => [p.key, p]));
+    const processedKeys = new Set<string>();
     
     for (const newParam of params) {
       const existingParam = existingParamsMap.get(newParam.key);
       if (existingParam) {
-        // Update existing param value if changed
-        if (existingParam.value !== newParam.value || existingParam.enabled !== newParam.enabled) {
+        // Update existing param value if changed, keep it enabled since it's in URL
+        if (existingParam.value !== newParam.value || !existingParam.enabled) {
           existingParam.value = newParam.value;
-          existingParam.enabled = newParam.enabled;
+          existingParam.enabled = true;
         }
         mergedParams.push(existingParam);
       } else {
         // Add new param
         mergedParams.push(newParam);
+      }
+      processedKeys.add(newParam.key);
+    }
+    
+    // Preserve disabled params that are not in the URL
+    for (const existingParam of queryParams.value) {
+      if (!processedKeys.has(existingParam.key)) {
+        // Keep the param but mark it as disabled
+        if (existingParam.enabled) {
+          existingParam.enabled = false;
+        }
+        mergedParams.push(existingParam);
       }
     }
     

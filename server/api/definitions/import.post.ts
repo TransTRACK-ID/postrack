@@ -944,24 +944,32 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
         const paramNotes = extractParamNotes(endpoint.parameters || [], endpoint.requestBody);
         
         const newRequest = (await db
-          .insert(savedRequests)
-          .values({
-            folderId: newFolder.id,
-            name: getRequestName(endpoint),
-            method: endpoint.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
-            url: fullUrl,
-            headers: headersJson,
-            body: endpointBody ? JSON.stringify(endpointBody) : null,
-            auth: auth ? JSON.stringify(auth) : null,
-            mockConfig: JSON.stringify({
-              isEnabled: true,
-              statusCode: 200,
-              delay: 0,
-              responseBody: { message: 'Mock response' },
-              responseHeaders: { 'Content-Type': 'application/json' }
-            }),
-            paramNotes,
-            order: requestOrder++
+           .insert(savedRequests)
+           .values({
+             folderId: newFolder.id,
+             name: getRequestName(endpoint),
+             method: endpoint.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
+             url: fullUrl,
+             headers: headersJson,
+             body: endpointBody ? JSON.stringify(endpointBody) : null,
+             auth: auth ? JSON.stringify(auth) : null,
+             mockConfig: JSON.stringify({
+               isEnabled: true,
+               statusCode: 200,
+               delay: 0,
+               responseBody: { message: 'Mock response' },
+               responseHeaders: { 'Content-Type': 'application/json' }
+             }),
+             paramNotes,
+             queryParams: queryParams.length > 0
+               ? JSON.stringify(queryParams.map(p => ({
+                   key: p.key,
+                   value: p.value,
+                   enabled: true,
+                   note: p.description
+                 })))
+               : null,
+             order: requestOrder++
           })
           .returning())[0];
 
@@ -1018,24 +1026,32 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
         const paramNotes = extractParamNotes(endpoint.parameters || [], endpoint.requestBody);
         
         const newRequest = (await db
-          .insert(savedRequests)
-          .values({
-            folderId: generalFolder.id,
-            name: getRequestName(endpoint),
-            method: endpoint.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
-            url: fullUrl,
-            headers: endpointHeaders ? JSON.stringify(endpointHeaders) : null,
-            body: endpointBody ? JSON.stringify(endpointBody) : null,
-            auth: auth ? JSON.stringify(auth) : null,
-            mockConfig: JSON.stringify({
-              isEnabled: true,
-              statusCode: 200,
-              delay: 0,
-              responseBody: { message: 'Mock response' },
-              responseHeaders: { 'Content-Type': 'application/json' }
-            }),
-            paramNotes,
-            order: requestOrder++
+           .insert(savedRequests)
+           .values({
+             folderId: generalFolder.id,
+             name: getRequestName(endpoint),
+             method: endpoint.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
+             url: fullUrl,
+             headers: endpointHeaders ? JSON.stringify(endpointHeaders) : null,
+             body: endpointBody ? JSON.stringify(endpointBody) : null,
+             auth: auth ? JSON.stringify(auth) : null,
+             mockConfig: JSON.stringify({
+               isEnabled: true,
+               statusCode: 200,
+               delay: 0,
+               responseBody: { message: 'Mock response' },
+               responseHeaders: { 'Content-Type': 'application/json' }
+             }),
+             paramNotes,
+             queryParams: queryParams.length > 0
+               ? JSON.stringify(queryParams.map(p => ({
+                   key: p.key,
+                   value: p.value,
+                   enabled: true,
+                   note: p.description
+                 })))
+               : null,
+             order: requestOrder++
           })
           .returning())[0];
 

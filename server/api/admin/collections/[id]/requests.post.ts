@@ -28,6 +28,7 @@ interface CreateRequestBody {
   postScript?: string;
   pathVariables?: RequestPathVariables;
   paramNotes?: RequestParamNotes;
+  queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
   order?: number;
 }
 
@@ -174,6 +175,7 @@ export default defineEventHandler(async (event) => {
         postScript: body.postScript || null,
         pathVariables: body.pathVariables || null,
         paramNotes: body.paramNotes || null,
+        queryParams: body.queryParams ? JSON.stringify(body.queryParams) : null,
         order
       })
       .returning())[0];
@@ -200,7 +202,8 @@ export default defineEventHandler(async (event) => {
         responseHeaders: Record<string, string>;
       } | null>(newRequest.mockConfig),
       pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(newRequest.pathVariables),
-      paramNotes: parseJsonField<Record<string, Record<string, string>>>(newRequest.paramNotes)
+      paramNotes: parseJsonField<Record<string, Record<string, string>>>(newRequest.paramNotes),
+      queryParams: parseJsonField<Array<{ key: string; value: string; enabled: boolean; note?: string }>>(newRequest.queryParams)
     };
   } catch (error: any) {
     // Re-throw if it's already an H3 error
