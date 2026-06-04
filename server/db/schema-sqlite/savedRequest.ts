@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, check } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { folders } from './folder';
 import { collections } from './collection';
@@ -107,7 +107,13 @@ export const savedRequests = sqliteTable('saved_requests', {
 }, (table) => ({
   folderIdx: index('idx_requests_folder').on(table.folderId),
   collectionIdx: index('idx_requests_collection').on(table.collectionId),
-  orderIdx: index('idx_requests_order').on(table.order)
+  orderIdx: index('idx_requests_order').on(table.order),
+  folderOrCollectionCheck: check('folder_or_collection_check',
+    sql`${table.folderId} IS NOT NULL OR ${table.collectionId} IS NOT NULL`
+  ),
+  notBothCheck: check('not_both_check',
+    sql`NOT (${table.folderId} IS NOT NULL AND ${table.collectionId} IS NOT NULL)`
+  )
 }));
 
 export type SavedRequest = typeof savedRequests.$inferSelect;

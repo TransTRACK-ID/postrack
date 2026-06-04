@@ -2,7 +2,7 @@ import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import { Pool } from 'pg';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
 // Runtime detection for desktop mode
@@ -25,7 +25,7 @@ if (isDesktop) {
     : join(process.cwd(), 'postrack.db');
   
   // Ensure directory exists for the database file
-  const dbDir = join(dbPath, '..');
+  const dbDir = dirname(dbPath);
   if (!existsSync(dbDir)) {
     mkdirSync(dbDir, { recursive: true });
   }

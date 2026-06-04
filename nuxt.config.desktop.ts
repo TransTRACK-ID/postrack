@@ -58,9 +58,9 @@ export default defineNuxtConfig({
     ]
   },
   runtimeConfig: {
-    adminEmail: process.env.ADMIN_EMAIL || 'admin@local',
-    adminPassword: process.env.ADMIN_PASSWORD || 'admin',
-    jwtSecret: process.env.JWT_SECRET || 'desktop-local-secret',
+    adminEmail: process.env.ADMIN_EMAIL || '',
+    adminPassword: process.env.ADMIN_PASSWORD || '',
+    jwtSecret: process.env.JWT_SECRET || '',
     nodeEnv: process.env.NODE_ENV || 'development',
     
     // Server-side only (SECRET) - Datadog configuration

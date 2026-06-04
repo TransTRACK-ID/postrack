@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, Notification, Tray, Menu } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import { join, resolve } from 'path';
+import { join, resolve, basename } from 'path';
 import { spawn } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
@@ -46,9 +46,9 @@ function startNitroServer() {
         NODE_ENV: isDev ? 'development' : 'production',
         PORT: '3000',
         DATABASE_URL: join(app.getPath('userData'), 'postrack.db'),
-        ADMIN_EMAIL: 'admin@local',
-        ADMIN_PASSWORD: 'admin',
-        JWT_SECRET: 'desktop-local-secret',
+        ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@local',
+        ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'admin',
+        JWT_SECRET: process.env.JWT_SECRET || 'desktop-local-secret',
         NITRO_MIGRATIONS_PATH: getMigrationsPath(),
       },
       stdio: 'pipe',
@@ -258,7 +258,7 @@ ipcMain.handle('dialog:importFile', async (_, filters) => {
   
   if (!result.canceled && result.filePaths.length > 0) {
     const content = readFileSync(result.filePaths[0], 'utf-8');
-    return { success: true, content, filename: result.filePaths[0].split('/').pop() };
+    return { success: true, content, filename: basename(result.filePaths[0]) };
   }
   return { success: false };
 });

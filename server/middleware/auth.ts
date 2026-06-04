@@ -12,8 +12,9 @@ export default defineEventHandler((event) => {
 
     // Desktop auto-login: if no auth token but in desktop mode, create a local user
     if (process.env.ELECTRON_DESKTOP && !getCookie(event, 'auth_token')) {
+        const desktopEmail = config.adminEmail || 'admin@local';
         const desktopToken = jwt.sign({
-            email: 'admin@local',
+            email: desktopEmail,
             sub: 'desktop-local-user',
             authMethod: 'desktop',
         }, config.jwtSecret, { expiresIn: '30d' });
@@ -25,7 +26,7 @@ export default defineEventHandler((event) => {
         });
         
         setCookie(event, 'user_info', Buffer.from(JSON.stringify({
-            email: 'admin@local',
+            email: desktopEmail,
             name: 'Local Admin'
         })).toString('base64'), {
             sameSite: 'lax',

@@ -103,6 +103,8 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue';
+
 const updateState = ref('idle');
 const updateVersion = ref('');
 const downloadProgress = ref(0);
