@@ -1,7 +1,6 @@
-import tracer from 'dd-trace'
 import { getDatadogLogger } from '../utils/datadog-logger'
 
-export default defineNitroPlugin(() => {
+export default defineNitroPlugin(async () => {
   // Skip in desktop mode
   if (process.env.ELECTRON_DESKTOP) {
     console.log('[Datadog APM] Skipping initialization in desktop mode')
@@ -9,11 +8,11 @@ export default defineNitroPlugin(() => {
   }
 
   const config = useRuntimeConfig()
-  
+
   // Initialize the Datadog logger (for direct log shipping)
   // This creates the singleton instance early
   getDatadogLogger()
-  
+
   // Skip in development if desired (unless forced)
   const forceEnable = process.env.DD_FORCE_ENABLE === 'true'
   if (config.datadogEnv === 'development' && !forceEnable) {
@@ -21,10 +20,13 @@ export default defineNitroPlugin(() => {
     return
   }
 
+  // Lazy import dd-trace to avoid loading native bindings in Electron
+  const tracer = (await import('dd-trace')).default
+
   // Check if dd-trace is already initialized via CLI flag (--require dd-trace/init)
   // This is the recommended way to ensure proper instrumentation
   const isAlreadyInitialized = tracer._tracer !== undefined
-  
+
   if (!isAlreadyInitialized) {
     // Initialize tracer only if not already done via CLI
     tracer.init({
@@ -33,16 +35,16 @@ export default defineNitroPlugin(() => {
       version: config.public.appVersion,
       site: config.datadogSite,
       logLevel: 'warn', // Reduce noise
-      
+
       // Sampling - capture all traces initially
       sampleRate: 1,
-      
+
       // Runtime metrics
       runtimeMetrics: true,
-      
+
       // Enable log injection for correlation between logs and traces
       logInjection: true,
-      
+
       // Profiling (optional, adds some overhead but useful for performance analysis)
       profiling: config.datadogEnv === 'production',
     })
@@ -54,14 +56,14 @@ export default defineNitroPlugin(() => {
       // Enable analytics for HTTP requests
       analytics: true,
     })
-    
+
     tracer.use('net')
     tracer.use('dns')
     tracer.use('pg', {
       service: 'postrack-postgres',
       analytics: true,
     })
-    
+
     // Enable additional instrumentation
     tracer.use('fs')
 
@@ -78,14 +80,14 @@ export default defineNitroPlugin(() => {
       client: true,
       analytics: true,
     })
-    
+
     tracer.use('net')
     tracer.use('dns')
     tracer.use('pg', {
       service: 'postrack-postgres',
       analytics: true,
     })
-    
+
     tracer.use('fs')
 
     console.log('[Datadog APM] Already initialized via CLI flag', {

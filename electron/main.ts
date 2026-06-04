@@ -42,6 +42,7 @@ function startNitroServer() {
     serverProcess = spawn(process.execPath, [serverPath], {
       env: {
         ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
         ELECTRON_DESKTOP: 'true',
         NODE_ENV: isDev ? 'development' : 'production',
         PORT: '3000',
@@ -87,7 +88,7 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 800,
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: join(__dirname, 'preload.ts'),
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,

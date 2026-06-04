@@ -8,7 +8,7 @@ const appVersion = packageJson.version || '0.0.0'
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
-  devtools: { enabled: true },
+  devtools: { enabled: false },
 
   future: {
     compatibilityVersion: 4
@@ -23,7 +23,7 @@ export default defineNuxtConfig({
       meta: [
         {
           'http-equiv': 'Content-Security-Policy',
-          content: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:3000;"
+          content: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:3000;"
         }
       ],
       link: [
