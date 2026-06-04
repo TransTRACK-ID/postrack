@@ -12,6 +12,7 @@ interface UpdateRequestBody {
   body?: RequestBody;
   auth?: RequestAuth;
   pathVariables?: RequestPathVariables;
+  queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
   order?: number;
 }
 
@@ -154,6 +155,7 @@ export default defineEventHandler(async (event) => {
       body: RequestBody;
       auth: RequestAuth;
       pathVariables: RequestPathVariables | null;
+      queryParams: string | null;
       order: number;
       updatedAt: Date;
     }> = {
@@ -246,6 +248,11 @@ export default defineEventHandler(async (event) => {
     // Set pathVariables (can be null or object)
     if (body.pathVariables !== undefined) {
       updateData.pathVariables = body.pathVariables;
+    }
+
+    // Set queryParams (can be null or array)
+    if (body.queryParams !== undefined) {
+      updateData.queryParams = body.queryParams ? JSON.stringify(body.queryParams) : null;
     }
 
     // Validate and set order

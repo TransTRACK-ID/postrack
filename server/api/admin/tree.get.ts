@@ -37,6 +37,7 @@ interface RequestItem {
   postScript: string | null;
   pathVariables: Record<string, { value: string; description?: string }> | null;
   paramNotes: Record<string, Record<string, string>> | null;
+  queryParams: Array<{ key: string; value: string; enabled: boolean; note?: string }> | null;
   notes: string | null;
   paramSchema: Array<{
     name: string;
@@ -258,6 +259,7 @@ export default defineEventHandler(async (event) => {
         mockConfig: parseJsonField<RequestItem['mockConfig']>(req.mockConfig),
         pathVariables: parseJsonField<RequestItem['pathVariables']>(req.pathVariables),
         paramNotes: parseJsonField<RequestItem['paramNotes']>(req.paramNotes),
+        queryParams: parseJsonField<RequestItem['queryParams']>(req.queryParams),
         paramSchema: parseJsonField<RequestItem['paramSchema']>(req.paramSchema),
         examples: requestExamplesList
       };

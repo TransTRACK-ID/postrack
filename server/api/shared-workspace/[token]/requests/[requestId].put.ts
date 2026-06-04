@@ -12,6 +12,7 @@ interface UpdateRequestBody {
   body?: RequestBody;
   auth?: RequestAuth;
   pathVariables?: RequestPathVariables | null;
+  queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
   inheritAuth?: number;
   mockConfig?: MockConfig;
   preScript?: string;
@@ -158,6 +159,7 @@ export default defineEventHandler(async (event) => {
     if (body.body !== undefined) updateData.body = body.body;
     if (body.auth !== undefined) updateData.auth = body.auth;
     if (body.pathVariables !== undefined) updateData.pathVariables = body.pathVariables;
+    if (body.queryParams !== undefined) updateData.queryParams = body.queryParams ? JSON.stringify(body.queryParams) : null;
     if (body.inheritAuth !== undefined) updateData.inheritAuth = body.inheritAuth;
     if (body.mockConfig !== undefined) updateData.mockConfig = body.mockConfig;
     if (body.preScript !== undefined) updateData.preScript = body.preScript;

@@ -544,6 +544,14 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
               preScript: parsedRequest.preRequestScript || null,
               postScript: parsedRequest.testScript || null,
               paramNotes: parsedRequest.paramNotes,
+              queryParams: parsedRequest.queryParams?.length > 0
+                ? JSON.stringify(parsedRequest.queryParams.map(p => ({
+                    key: p.key,
+                    value: p.value,
+                    enabled: p.enabled,
+                    note: p.description
+                  })))
+                : null,
               order: parsedRequest.order
             })
             .returning())[0];
@@ -609,6 +617,14 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
             preScript: parsedRequest.preRequestScript || null,
             postScript: parsedRequest.testScript || null,
             paramNotes: parsedRequest.paramNotes,
+            queryParams: parsedRequest.queryParams?.length > 0
+              ? JSON.stringify(parsedRequest.queryParams.map(p => ({
+                  key: p.key,
+                  value: p.value,
+                  enabled: p.enabled,
+                  note: p.description
+                })))
+              : null,
             order: parsedRequest.order
           })
           .returning())[0];

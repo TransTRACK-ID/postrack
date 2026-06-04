@@ -25,6 +25,7 @@ interface HttpRequest {
     credentials?: Record<string, string>;
   } | null;
   pathVariables?: Record<string, { value: string; description?: string }> | null;
+  queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
   inheritAuth?: number;
   mockConfig?: {
     isEnabled: boolean;
@@ -399,7 +400,7 @@ const executeSharedSave = async (request: HttpRequest) => {
     await $fetch(`/api/shared-workspace/${token.value}/requests/${request.id}`, {
       method: 'PUT',
       credentials: 'include',
-      body: {
+        body: {
         name: request.name,
         method: request.method,
         url: request.url,
@@ -407,6 +408,7 @@ const executeSharedSave = async (request: HttpRequest) => {
         body: request.body,
         auth: request.auth,
         pathVariables: request.pathVariables,
+        queryParams: request.queryParams,
         inheritAuth: request.inheritAuth,
         mockConfig: request.mockConfig,
         preScript: request.preScript,

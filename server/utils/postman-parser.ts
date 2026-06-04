@@ -215,7 +215,7 @@ export interface ParsedPostmanRequest {
   method: HttpMethod;
   url: string;
   headers: RequestHeaders;
-  queryParams: Array<{ key: string; value: string; description?: string }>;
+  queryParams: Array<{ key: string; value: string; enabled: boolean; description?: string }>;
   pathVariables: Array<{ key: string; value: string; description?: string }>;
   body: RequestBody;
   bodyMode?: ParsedRequestBodyFormat;
@@ -682,16 +682,17 @@ function parsePostmanRequest(
   }
 
   // Parse query parameters
-  const queryParams: Array<{ key: string; value: string; description?: string }> = [];
+  const queryParams: Array<{ key: string; value: string; enabled: boolean; description?: string }> = [];
   const queryParamNotes: Record<string, string> = {};
   const urlObj = typeof request.url === 'object' ? request.url : null;
   if (urlObj?.query && Array.isArray(urlObj.query)) {
     for (const param of urlObj.query) {
-      if (param.key && !param.disabled) {
+      if (param.key) {
         const desc = extractDescription(param.description);
         queryParams.push({
           key: param.key,
           value: param.value || '',
+          enabled: !param.disabled,
           description: desc
         });
         if (desc) {

@@ -85,6 +85,12 @@ interface HttpRequest {
     enabled: boolean;
     type: 'text' | 'file';
   }>;
+  queryParams?: Array<{
+    key: string;
+    value: string;
+    enabled: boolean;
+    note?: string;
+  }>;
   paramNotes?: Record<string, Record<string, string>> | null;
   notes?: string | null;
   paramSchema?: Array<{
@@ -127,6 +133,7 @@ interface RequestDraftSnapshot {
   rawBody?: string;
   rawContentType?: string;
   formDataParams?: HttpRequest['formDataParams'];
+  queryParams?: HttpRequest['queryParams'];
 }
 
 const REQUEST_TABS_SETTINGS_KEY = 'requestTabsSession';
@@ -417,6 +424,14 @@ const normalizeRequestForTab = (request: Partial<HttpRequest>): HttpRequest => {
         type: param?.type === 'file' ? 'file' : 'text'
       }))
     : importedBodyPayload.formDataParams,
+  queryParams: Array.isArray(request.queryParams)
+    ? request.queryParams.map((param: any) => ({
+        key: typeof param?.key === 'string' ? param.key : '',
+        value: typeof param?.value === 'string' ? param.value : '',
+        enabled: param?.enabled !== false,
+        note: typeof param?.note === 'string' ? param.note : undefined
+      }))
+    : undefined,
   paramNotes: request.paramNotes && typeof request.paramNotes === 'object' && !Array.isArray(request.paramNotes)
     ? request.paramNotes as NonNullable<HttpRequest['paramNotes']>
     : null,
@@ -1387,6 +1402,12 @@ const buildPersistedRequestFromDraft = (request: HttpRequest, draft?: RequestDra
       value: param.value,
       enabled: param.enabled !== false,
       type: param.type === 'file' ? 'file' : 'text'
+    })),
+    queryParams: draft.queryParams?.map(param => ({
+      key: param.key,
+      value: param.value,
+      enabled: param.enabled !== false,
+      note: param.note
     }))
   });
 };
@@ -2604,6 +2625,7 @@ const executeSave = async (request: any) => {
       postScript: request.postScript,
       pathVariables: request.pathVariables,
       paramNotes: request.paramNotes,
+      queryParams: request.queryParams,
       notes: request.notes,
       paramSchema: request.paramSchema,
       curlExample: request.curlExample
@@ -2767,7 +2789,8 @@ const handleSave = async (data: any) => {
             mockConfig: requestToSave.value.mockConfig,
             preScript: requestToSave.value.preScript,
             postScript: requestToSave.value.postScript,
-            pathVariables: requestToSave.value.pathVariables
+            pathVariables: requestToSave.value.pathVariables,
+            queryParams: requestToSave.value.queryParams
           }
         });
       } else if (data.collectionId) {
@@ -2785,7 +2808,8 @@ const handleSave = async (data: any) => {
             mockConfig: requestToSave.value.mockConfig,
             preScript: requestToSave.value.preScript,
             postScript: requestToSave.value.postScript,
-            pathVariables: requestToSave.value.pathVariables
+            pathVariables: requestToSave.value.pathVariables,
+            queryParams: requestToSave.value.queryParams
           }
         });
       } else {
@@ -2822,7 +2846,8 @@ const handleSave = async (data: any) => {
           preScript: requestToSave.value.preScript,
           postScript: requestToSave.value.postScript,
           pathVariables: requestToSave.value.pathVariables,
-          paramNotes: requestToSave.value.paramNotes
+          paramNotes: requestToSave.value.paramNotes,
+          queryParams: requestToSave.value.queryParams
         }
       });
 
@@ -2841,7 +2866,8 @@ const handleSave = async (data: any) => {
           preScript: requestToSave.value.preScript,
           postScript: requestToSave.value.postScript,
           pathVariables: requestToSave.value.pathVariables,
-          paramNotes: requestToSave.value.paramNotes
+          paramNotes: requestToSave.value.paramNotes,
+          queryParams: requestToSave.value.queryParams
         });
 
         selectedRequest.value = normalizedUpdatedRequest;
@@ -2901,7 +2927,8 @@ const handleSaveAs = async (data: any) => {
           headers: originalRequest.headers,
           body: originalRequest.body,
           auth: originalRequest.auth,
-          inheritAuth: originalRequest.inheritAuth
+          inheritAuth: originalRequest.inheritAuth,
+          queryParams: originalRequest.queryParams
         }
       });
     } else if (data.collectionId) {
@@ -2915,7 +2942,8 @@ const handleSaveAs = async (data: any) => {
           headers: originalRequest.headers,
           body: originalRequest.body,
           auth: originalRequest.auth,
-          inheritAuth: originalRequest.inheritAuth
+          inheritAuth: originalRequest.inheritAuth,
+          queryParams: originalRequest.queryParams
         }
       });
     } else {
@@ -2971,6 +2999,7 @@ const openCreateRequest = (folderId?: string | null, collectionId?: string) => {
     rawBody: '',
     rawContentType: 'text/plain',
     formDataParams: [],
+    queryParams: [],
     order: 0,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3625,7 +3654,8 @@ const handleDuplicateRequest = async (request: any) => {
                     preScript: originalRequest.preScript,
                     postScript: originalRequest.postScript,
                     pathVariables: originalRequest.pathVariables,
-                    paramNotes: originalRequest.paramNotes
+                    paramNotes: originalRequest.paramNotes,
+                    queryParams: originalRequest.queryParams
                 }
             });
         } else if (targetCollectionId) {
@@ -3642,7 +3672,8 @@ const handleDuplicateRequest = async (request: any) => {
                     preScript: originalRequest.preScript,
                     postScript: originalRequest.postScript,
                     pathVariables: originalRequest.pathVariables,
-                    paramNotes: originalRequest.paramNotes
+                    paramNotes: originalRequest.paramNotes,
+                    queryParams: originalRequest.queryParams
                 }
             });
         } else {
