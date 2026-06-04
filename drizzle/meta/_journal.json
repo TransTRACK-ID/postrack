@@ -148,6 +148,13 @@
       "when": 1780374270742,
       "tag": "0021_secret_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1780547380958,
+      "tag": "0022_sparkling_menace",
+      "breakpoints": true
     }
   ]
 }
