@@ -23,7 +23,7 @@ export default defineNuxtConfig({
       meta: [
         {
           'http-equiv': 'Content-Security-Policy',
-          content: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:3000;"
+          content: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://localhost:3000;"
         }
       ],
       link: [
@@ -31,7 +31,7 @@ export default defineNuxtConfig({
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
           rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap'
+          href: 'https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap'
         }
       ]
     }
@@ -58,8 +58,9 @@ export default defineNuxtConfig({
     ]
   },
   runtimeConfig: {
-    adminEmail: process.env.ADMIN_EMAIL || '',
-    adminPassword: process.env.ADMIN_PASSWORD || '',
+    // Note: In desktop mode, these are injected by the Electron main process at runtime
+    adminEmail: process.env.ADMIN_EMAIL || 'admin@local',
+    adminPassword: process.env.ADMIN_PASSWORD || 'admin',
     jwtSecret: process.env.JWT_SECRET || '',
     nodeEnv: process.env.NODE_ENV || 'development',
     

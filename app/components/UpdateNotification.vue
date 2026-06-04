@@ -139,7 +139,7 @@ onMounted(() => {
 });
 
 function downloadUpdate() {
-  window.electronAPI?.checkForUpdates();
+  window.electronAPI?.downloadUpdate();
   updateState.value = 'downloading';
 }
 

@@ -1,8 +1,10 @@
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
+import { migrate as migrateSqlite } from 'drizzle-orm/better-sqlite3/migrator';
 import Database from 'better-sqlite3';
 import { Pool } from 'pg';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
 // Runtime detection for desktop mode
@@ -41,6 +43,21 @@ if (isDesktop) {
   // Import SQLite schema dynamically
   const sqliteSchema = await import('./schema-sqlite');
   sqliteDb = drizzleSqlite(sqlite, { schema: sqliteSchema });
+  
+  // Run migrations for SQLite
+  const migrationsPath = process.env.NITRO_MIGRATIONS_PATH || resolve(process.cwd(), 'drizzle-sqlite');
+  if (existsSync(migrationsPath)) {
+    console.log(`[Database] Running SQLite migrations from: ${migrationsPath}`);
+    try {
+      await migrateSqlite(sqliteDb, { migrationsFolder: migrationsPath });
+      console.log('[Database] SQLite migrations completed successfully');
+    } catch (err) {
+      console.error('[Database] SQLite migration failed:', err);
+      throw err;
+    }
+  } else {
+    console.warn(`[Database] SQLite migrations path not found: ${migrationsPath}`);
+  }
 } else {
   console.log('[Database] Running in WEB mode - using PostgreSQL');
   
@@ -70,6 +87,21 @@ if (isDesktop) {
   // Import PostgreSQL schema dynamically
   const pgSchema = await import('./schema');
   pgDb = drizzlePg(pgPool, { schema: pgSchema });
+  
+  // Run migrations for PostgreSQL
+  const pgMigrationsPath = process.env.NITRO_MIGRATIONS_PATH || resolve(process.cwd(), 'drizzle');
+  if (existsSync(pgMigrationsPath)) {
+    console.log(`[Database] Running PostgreSQL migrations from: ${pgMigrationsPath}`);
+    try {
+      await migratePg(pgDb, { migrationsFolder: pgMigrationsPath });
+      console.log('[Database] PostgreSQL migrations completed successfully');
+    } catch (err) {
+      console.error('[Database] PostgreSQL migration failed:', err);
+      throw err;
+    }
+  } else {
+    console.warn(`[Database] PostgreSQL migrations path not found: ${pgMigrationsPath}`);
+  }
   
   // Monitor pool health
   const enablePoolLogging = process.env.LOG_DB_POOL_STATS === 'true';

@@ -5,6 +5,7 @@ declare global {
     electronAPI: {
       // Auto-updater
       checkForUpdates: () => Promise<void>;
+      downloadUpdate: () => Promise<void>;
       onUpdateAvailable: (callback: (info: any) => void) => void;
       onUpdateDownloading: (callback: () => void) => void;
       onUpdateProgress: (callback: (progress: any) => void) => void;

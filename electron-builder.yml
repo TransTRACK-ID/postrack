@@ -13,7 +13,7 @@ files:
     to: drizzle-sqlite
     filter:
       - '**/*'
-  - from: electron
+  - from: electron-dist
     filter:
       - '**/*'
   - package.json
@@ -47,6 +47,6 @@ linux:
   category: Development
 publish:
   provider: github
-  owner: your-org
+  owner: Zersya
   repo: postrack
   releaseType: release

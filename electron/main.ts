@@ -3,6 +3,8 @@ import { autoUpdater } from 'electron-updater';
 import { join, resolve, basename } from 'path';
 import { spawn } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { randomBytes } from 'crypto';
+import { request } from 'http';
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ReturnType<typeof spawn> | null = null;
@@ -11,6 +13,46 @@ let tray: Tray | null = null;
 // Get paths for production vs development
 const isDev = !app.isPackaged;
 const __dirname = import.meta.dirname;
+
+// Generate or read a per-install secret stored in userData
+function getOrGenerateSecret(filename: string): string {
+  const secretPath = join(app.getPath('userData'), filename);
+  if (existsSync(secretPath)) {
+    return readFileSync(secretPath, 'utf-8').trim();
+  }
+  const secret = randomBytes(32).toString('hex');
+  writeFileSync(secretPath, secret, 'utf-8');
+  console.log(`[Electron] Generated new secret: ${filename}`);
+  return secret;
+}
+
+function waitForServer(port: number, timeout: number = 30000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    
+    const check = () => {
+      const req = request(`http://127.0.0.1:${port}/`, (res) => {
+        if (res.statusCode && res.statusCode < 500) {
+          resolve();
+        } else {
+          retry();
+        }
+      });
+      req.on('error', retry);
+      req.end();
+      
+      function retry() {
+        if (Date.now() - startTime > timeout) {
+          reject(new Error(`Server failed to start on port ${port} within ${timeout}ms`));
+        } else {
+          setTimeout(check, 500);
+        }
+      }
+    };
+    
+    check();
+  });
+}
 
 function getServerPath() {
   if (isDev) {
@@ -26,7 +68,7 @@ function getMigrationsPath() {
   return join(process.resourcesPath, 'drizzle-sqlite');
 }
 
-function startNitroServer() {
+function startNitroServer(jwtSecret: string, desktopAuthToken: string) {
   return new Promise<void>((resolve, reject) => {
     const serverPath = getServerPath();
     
@@ -49,7 +91,8 @@ function startNitroServer() {
         DATABASE_URL: join(app.getPath('userData'), 'postrack.db'),
         ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@local',
         ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'admin',
-        JWT_SECRET: process.env.JWT_SECRET || 'desktop-local-secret',
+        JWT_SECRET: jwtSecret,
+        DESKTOP_AUTH_TOKEN: desktopAuthToken,
         NITRO_MIGRATIONS_PATH: getMigrationsPath(),
       },
       stdio: 'pipe',
@@ -74,21 +117,24 @@ function startNitroServer() {
 
     serverProcess.on('exit', (code) => {
       console.log(`[Electron] Server process exited with code ${code}`);
+      if (code !== 0) {
+        reject(new Error(`Server process exited with code ${code}`));
+      }
     });
-
-    // Fallback timeout
-    setTimeout(() => resolve(), 5000);
+  }).then(() => {
+    // Wait for the server to actually respond to HTTP requests
+    return waitForServer(3000);
   });
 }
 
-function createWindow() {
+function createWindow(desktopAuthToken: string) {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1200,
     minHeight: 800,
     webPreferences: {
-      preload: join(__dirname, 'preload.ts'),
+      preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,
@@ -97,7 +143,9 @@ function createWindow() {
     show: false,
   });
 
-  mainWindow.loadURL('http://localhost:3000');
+  mainWindow.loadURL('http://localhost:3000', {
+    extraHeaders: `X-Desktop-Auth: ${desktopAuthToken}`
+  });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -146,6 +194,7 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   
   autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('updater:available', info);
     dialog.showMessageBox(mainWindow!, {
       type: 'info',
       title: 'Update Available',
@@ -165,6 +214,7 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('updater:downloaded', info);
     dialog.showMessageBox(mainWindow!, {
       type: 'info',
       title: 'Update Ready',
@@ -209,8 +259,12 @@ app.on('open-url', (event, url) => {
 // App lifecycle
 app.whenReady().then(async () => {
   try {
-    await startNitroServer();
-    createWindow();
+    // Generate or read per-install secrets
+    const jwtSecret = getOrGenerateSecret('jwt-secret.txt');
+    const desktopAuthToken = getOrGenerateSecret('desktop-auth-token.txt');
+    
+    await startNitroServer(jwtSecret, desktopAuthToken);
+    createWindow(desktopAuthToken);
     createTray();
     setupAutoUpdater();
   } catch (err) {
@@ -220,7 +274,10 @@ app.whenReady().then(async () => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const token = getOrGenerateSecret('desktop-auth-token.txt');
+      createWindow(token);
+    }
   });
 });
 
@@ -240,6 +297,10 @@ app.on('before-quit', () => {
 // Auto-updater IPC
 ipcMain.handle('updater:check', () => {
   autoUpdater.checkForUpdates();
+});
+
+ipcMain.handle('updater:download', () => {
+  autoUpdater.downloadUpdate();
 });
 
 ipcMain.handle('updater:install', () => {

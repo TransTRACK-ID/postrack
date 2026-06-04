@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Auto-updater
   checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater:download'),
   onUpdateAvailable: (callback: (info: any) => void) => 
     ipcRenderer.on('updater:available', (_, info) => callback(info)),
   onUpdateDownloading: (callback: () => void) =>

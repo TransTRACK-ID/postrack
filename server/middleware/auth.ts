@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { getHeader } from 'h3';
 import { isSuperAdmin } from '../utils/permissions';
 
 export default defineEventHandler((event) => {
@@ -10,28 +11,35 @@ export default defineEventHandler((event) => {
                        (path.startsWith('/api/feedback') && !path.includes('/status'));
     const isProtectedPage = path.startsWith('/admin/sso');
 
-    // Desktop auto-login: if no auth token but in desktop mode, create a local user
+    // Desktop auto-login: only if request comes from the Electron shell (verified by X-Desktop-Auth header)
     if (process.env.ELECTRON_DESKTOP && !getCookie(event, 'auth_token')) {
-        const desktopEmail = config.adminEmail || 'admin@local';
-        const desktopToken = jwt.sign({
-            email: desktopEmail,
-            sub: 'desktop-local-user',
-            authMethod: 'desktop',
-        }, config.jwtSecret, { expiresIn: '30d' });
+        const desktopAuthToken = process.env.DESKTOP_AUTH_TOKEN;
+        const requestAuthToken = getHeader(event, 'X-Desktop-Auth');
         
-        setCookie(event, 'auth_token', desktopToken, {
-            httpOnly: true,
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 30 // 30 days
-        });
-        
-        setCookie(event, 'user_info', Buffer.from(JSON.stringify({
-            email: desktopEmail,
-            name: 'Local Admin'
-        })).toString('base64'), {
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 30
-        });
+        // Only auto-login if the request includes the correct desktop auth token
+        if (desktopAuthToken && requestAuthToken === desktopAuthToken) {
+            const desktopEmail = config.adminEmail || 'admin@local';
+            const jwtSecret = process.env.JWT_SECRET || config.jwtSecret || 'desktop-local-secret';
+            const desktopToken = jwt.sign({
+                email: desktopEmail,
+                sub: 'desktop-local-user',
+                authMethod: 'desktop',
+            }, jwtSecret, { expiresIn: '30d' });
+            
+            setCookie(event, 'auth_token', desktopToken, {
+                httpOnly: true,
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 30 // 30 days
+            });
+            
+            setCookie(event, 'user_info', Buffer.from(JSON.stringify({
+                email: desktopEmail,
+                name: 'Local Admin'
+            })).toString('base64'), {
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 30
+            });
+        }
     }
 
     // Protect admin, shared-workspace, and feedback submit API routes
@@ -47,9 +55,12 @@ export default defineEventHandler((event) => {
             });
         }
 
+        const jwtSecret = process.env.ELECTRON_DESKTOP 
+            ? (process.env.JWT_SECRET || config.jwtSecret) 
+            : config.jwtSecret;
         let decoded;
         try {
-            decoded = jwt.verify(token, config.jwtSecret) as any;
+            decoded = jwt.verify(token, jwtSecret) as any;
         } catch (e) {
             if (isProtectedPage) return sendRedirect(event, '/login');
             throw createError({
