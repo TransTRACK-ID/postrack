@@ -30,7 +30,11 @@ logs
 /mocks
 
 *.db
+*.db-shm
+*.db-wal
 *.db-journal
+
+dist-electron/
 
 settings/*
 
