@@ -102,6 +102,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
   const variableWarnings: string[] = [];
   const scriptLogs: ScriptLogEntry[] = [];
   const scriptErrors: string[] = [];
+  const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
 
   // Variables to hold script-modified request data
   let scriptModifiedUrl: string | undefined;
@@ -337,6 +338,12 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           scriptLogs.push(...preResult.logs);
           scriptErrors.push(...preResult.errors);
 
+          // Capture environment changes from pre-script
+          if (preResult.environmentChanges && preResult.environmentChanges.length > 0) {
+            environmentChanges.push(...preResult.environmentChanges);
+            console.log('[Proxy] Pre-script environment changes:', preResult.environmentChanges);
+          }
+
           if (preResult.success && preResult.modifiedContext) {
             console.log('[Proxy] Pre-script executed successfully');
             scriptModifiedUrl = preResult.modifiedContext.url;
@@ -391,7 +398,10 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           endTime: new Date(errorEndTime).toISOString(),
           durationMs: errorEndTime - startTime
         },
-        variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined
+        variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
+        scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -524,7 +534,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
               },
               variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
               scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-              scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+              scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+              environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
             };
 
             // Log mock request to history
@@ -581,7 +592,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           },
           variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       } catch (error: any) {
         console.error('Error handling mock request:', error);
@@ -600,7 +612,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           },
           variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       }
     }
@@ -708,9 +721,6 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       responseBody = null;
     }
 
-    // Track environment variable changes from post-script
-    let environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
-
     // Execute post-script if available
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
     if (body.environmentId && (body.postScript !== undefined || savedRequest?.postScript || body.savedRequestId)) {
@@ -758,8 +768,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
 
           // Capture environment changes from post-script
           if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
-            environmentChanges = postResult.environmentChanges;
-            console.log('[Proxy] Post-script environment changes:', environmentChanges);
+            environmentChanges.push(...postResult.environmentChanges);
+            console.log('[Proxy] Post-script environment changes:', postResult.environmentChanges);
           }
 
           if (postResult.success) {
@@ -931,7 +941,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -959,7 +970,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -987,7 +999,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -1015,7 +1028,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -1041,7 +1055,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       },
       variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
   }
 });
