@@ -50,6 +50,11 @@ export default defineNuxtConfig({
         dir: '.output-desktop'
       }
     } : {}),
+    esbuild: {
+      options: {
+        target: 'es2022'
+      }
+    },
     storage: {
       // File storage is now deprecated - all data stored in SQLite
       // Keeping minimal config for any future storage needs

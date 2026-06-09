@@ -14,6 +14,7 @@ files:
     filter:
       - '**/*'
   - from: electron-dist
+    to: electron-dist
     filter:
       - '**/*'
   - package.json

@@ -6,7 +6,8 @@
 .nitro
 .cache
 dist
-electron-dist
+# Note: electron-dist is generated during build but needed by electron-builder
+# Do NOT add to .gitignore — electron-builder respects .gitignore and will skip it
 
 # Node dependencies
 node_modules
