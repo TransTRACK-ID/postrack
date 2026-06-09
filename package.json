@@ -29,10 +29,10 @@
     "test:ui": "vitest --ui",
     "build:electron": "tsup electron/main.ts electron/preload.ts --out-dir electron-dist --platform node --format esm --external electron --external electron-updater",
     "electron:dev": "pnpm build:electron && electron electron-dist/main.js",
-    "electron:build": "pnpm build:electron && nuxt build --config nuxt.config.desktop.ts && electron-builder",
-    "electron:build:win": "pnpm build:electron && nuxt build --config nuxt.config.desktop.ts && electron-builder --win",
-    "electron:build:mac": "pnpm build:electron && nuxt build --config nuxt.config.desktop.ts && electron-builder --mac",
-    "electron:build:linux": "pnpm build:electron && nuxt build --config nuxt.config.desktop.ts && electron-builder --linux",
+    "electron:build": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder",
+    "electron:build:win": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder --win",
+    "electron:build:mac": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder --mac",
+    "electron:build:linux": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder --linux",
     "postinstall:electron": "electron-builder install-app-deps"
   },
   "dependencies": {
