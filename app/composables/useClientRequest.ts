@@ -433,6 +433,9 @@ export async function executeClientRequest(
       timeout = DEFAULT_TIMEOUT
     } = options;
 
+    // Track environment variable changes from scripts
+    const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
+
     // Validate URL
     if (!url) {
       return createErrorResponse(startTime, 'Missing required field: url', 'MISSING_URL');
@@ -535,6 +538,11 @@ export async function executeClientRequest(
           scriptLogs.push(...preResult.logs);
           scriptErrors.push(...preResult.errors);
 
+          // Capture environment changes from pre-script
+          if (preResult.environmentChanges && preResult.environmentChanges.length > 0) {
+            environmentChanges.push(...preResult.environmentChanges);
+          }
+
           if (preResult.success && preResult.modifiedContext) {
             if (preResult.modifiedContext.url) {
               resolvedUrl = preResult.modifiedContext.url;
@@ -603,7 +611,8 @@ export async function executeClientRequest(
             durationMs: endTime - startTime
           },
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       }
 
@@ -663,6 +672,11 @@ export async function executeClientRequest(
 
           scriptLogs.push(...postResult.logs);
           scriptErrors.push(...postResult.errors);
+
+          // Capture environment changes from post-script
+          if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
+            environmentChanges.push(...postResult.environmentChanges);
+          }
         }
       } catch (error) {
         console.error('[useClientRequest] Failed to execute post-script:', error);
@@ -683,7 +697,8 @@ export async function executeClientRequest(
         durationMs: endTime - startTime
       },
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
 
     // Log to history
@@ -732,7 +747,8 @@ export async function executeClientRequest(
         durationMs: endTime - startTime
       },
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
   }
 }

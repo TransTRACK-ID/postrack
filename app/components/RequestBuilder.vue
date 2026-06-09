@@ -130,6 +130,11 @@ export interface ProxyErrorResponse {
     endTime: string;
     durationMs: number;
   };
+  environmentChanges?: Array<{
+    key: string;
+    value: string;
+    action: 'set' | 'unset';
+  }>;
 }
 
 // TabType without 'response' - response is now in split panel
