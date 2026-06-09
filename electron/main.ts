@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, Notification, Tray, Menu } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 import { join, resolve, basename } from 'path';
 import { spawn } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';

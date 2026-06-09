@@ -28,11 +28,11 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "build:electron": "tsup electron/main.ts electron/preload.ts --out-dir electron-dist --platform node --format esm --external electron --external electron-updater",
-    "electron:dev": "pnpm build:electron && electron electron-dist/main.js",
-    "electron:build": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder",
-    "electron:build:win": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder --win",
-    "electron:build:mac": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder --mac",
-    "electron:build:linux": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && electron-builder --linux",
+    "electron:dev": "pnpm build:electron && env -u ELECTRON_RUN_AS_NODE electron electron-dist/main.js",
+    "electron:build": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && env -u ELECTRON_RUN_AS_NODE electron-builder",
+    "electron:build:win": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && env -u ELECTRON_RUN_AS_NODE electron-builder --win",
+    "electron:build:mac": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && env -u ELECTRON_RUN_AS_NODE electron-builder --mac",
+    "electron:build:linux": "pnpm build:electron && NUXT_DESKTOP_BUILD=true nuxt build && env -u ELECTRON_RUN_AS_NODE electron-builder --linux",
     "postinstall:electron": "electron-builder install-app-deps"
   },
   "dependencies": {
