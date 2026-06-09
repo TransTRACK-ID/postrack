@@ -317,8 +317,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
 
     if (body.environmentId && (body.preScript !== undefined || body.savedRequestId)) {
       try {
-        const preScriptCode = body.preScript !== undefined
-          ? body.preScript || undefined
+        const preScriptCode = body.preScript
+          ? body.preScript
           : (await loadSavedRequestForScripts())?.preScript || undefined;
 
         if (preScriptCode) {
@@ -725,8 +725,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
     if (body.environmentId && (body.postScript !== undefined || savedRequest?.postScript || body.savedRequestId)) {
       try {
-        const postScriptCode = body.postScript !== undefined
-          ? body.postScript || undefined
+        const postScriptCode = body.postScript
+          ? body.postScript
           : savedRequest?.postScript || (await loadSavedRequestForScripts())?.postScript || undefined;
 
         if (!postScriptCode) {

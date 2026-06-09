@@ -526,8 +526,8 @@ export async function executeClientRequest(
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
     if (environmentId && (options.preScript !== undefined || savedRequestId)) {
       try {
-        const preScriptCode = options.preScript !== undefined
-          ? options.preScript || undefined
+        const preScriptCode = options.preScript
+          ? options.preScript
           : savedRequestId
             ? (await fetchSavedRequest(savedRequestId))?.preScript
             : undefined;
@@ -658,8 +658,8 @@ export async function executeClientRequest(
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
     if (environmentId && (options.postScript !== undefined || savedRequestId)) {
       try {
-        const postScriptCode = options.postScript !== undefined
-          ? options.postScript || undefined
+        const postScriptCode = options.postScript
+          ? options.postScript
           : savedRequestId
             ? (await fetchSavedRequest(savedRequestId))?.postScript
             : undefined;
