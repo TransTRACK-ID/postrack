@@ -286,6 +286,11 @@ const response = ref<ProxyResponse | ProxyErrorResponse | null>(null);
 const variableWarnings = ref<string[]>([]);
 const environmentVariables = ref<Variable[]>([]);
 
+// Request loading timer
+const requestStartTime = ref<number | null>(null);
+const elapsedMs = ref(0);
+let elapsedTimerInterval: ReturnType<typeof setInterval> | null = null;
+
 // ============ SPLIT PANEL STATE ============
 const panelContainerRef = ref<HTMLDivElement | null>(null);
 const isMobile = ref(false);
@@ -422,8 +427,34 @@ const toggleResponseCollapse = () => {
   isResponseCollapsed.value = !isResponseCollapsed.value;
 };
 
-// Check if response has content
-const hasResponse = computed(() => response.value !== null);
+// Check if response has content or is currently loading
+const hasResponse = computed(() => response.value !== null || isLoading.value);
+
+// Track elapsed time while request is loading
+watch(isLoading, (loading) => {
+  if (loading) {
+    requestStartTime.value = Date.now();
+    elapsedMs.value = 0;
+    isResponseCollapsed.value = false; // Auto-expand panel to show loading
+    elapsedTimerInterval = setInterval(() => {
+      if (requestStartTime.value) {
+        elapsedMs.value = Date.now() - requestStartTime.value;
+      }
+    }, 100);
+  } else {
+    if (elapsedTimerInterval) {
+      clearInterval(elapsedTimerInterval);
+      elapsedTimerInterval = null;
+    }
+    requestStartTime.value = null;
+  }
+});
+
+// Format elapsed time for display
+const formatElapsedTime = (ms: number): string => {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+};
 
 // ============ END SPLIT PANEL STATE ============
 
@@ -3266,6 +3297,11 @@ const cancelRequest = () => {
     abortController.value = null;
     isLoading.value = false;
   }
+  if (elapsedTimerInterval) {
+    clearInterval(elapsedTimerInterval);
+    elapsedTimerInterval = null;
+  }
+  requestStartTime.value = null;
 };
 
 onMounted(() => {
@@ -3276,6 +3312,10 @@ onMounted(() => {
 onUnmounted(() => {
   isMounted.value = false;
   window.removeEventListener('keydown', handleKeydown, true);
+  if (elapsedTimerInterval) {
+    clearInterval(elapsedTimerInterval);
+    elapsedTimerInterval = null;
+  }
 });
 
 // Expose current request state for CodeExamples component
@@ -4572,8 +4612,17 @@ defineExpose({
                 </div>
               </transition>
               
+              <!-- Loading state -->
+              <div v-if="isLoading && !response" class="flex items-center gap-2 text-xs text-accent-blue">
+                <svg class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+                <span class="font-medium">Sending request...</span>
+                <span class="text-text-muted font-mono">{{ formatElapsedTime(elapsedMs) }}</span>
+              </div>
+
               <!-- Placeholder when no response -->
-              <div v-if="!hasResponse" class="flex items-center gap-2 text-xs text-text-muted">
+              <div v-else-if="!hasResponse" class="flex items-center gap-2 text-xs text-text-muted">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-50">
                   <circle cx="12" cy="12" r="10"></circle>
                   <polygon points="10 8 16 12 10 16 10 8"></polygon>
@@ -4624,6 +4673,29 @@ defineExpose({
                 </button>
               </div>
             </transition>
+          </div>
+
+          <!-- Loading State Content -->
+          <div
+            v-if="!isResponseCollapsed && isLoading && !response"
+            class="flex-1 flex flex-col items-center justify-center overflow-hidden"
+          >
+            <div class="flex flex-col items-center gap-4">
+              <div class="relative">
+                <div class="w-12 h-12 rounded-full border-2 border-border-default"></div>
+                <div class="absolute inset-0 w-12 h-12 rounded-full border-2 border-accent-blue border-t-transparent animate-spin"></div>
+              </div>
+              <div class="text-center">
+                <p class="text-sm font-medium text-text-primary">Sending Request</p>
+                <p class="text-xs text-text-muted mt-1">{{ form.method }} {{ form.url }}</p>
+              </div>
+              <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary rounded-full">
+                <svg class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+                <span class="text-xs text-text-muted font-mono">{{ formatElapsedTime(elapsedMs) }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- Expanded Response Content -->
@@ -5135,6 +5207,21 @@ defineExpose({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div
+            v-else-if="isLoading && !response"
+            class="py-6 px-3 text-center"
+          >
+            <div class="flex flex-col items-center gap-3">
+              <div class="relative">
+                <div class="w-10 h-10 rounded-full border-2 border-border-default"></div>
+                <div class="absolute inset-0 w-10 h-10 rounded-full border-2 border-accent-blue border-t-transparent animate-spin"></div>
+              </div>
+              <p class="text-xs text-text-muted">Sending request...</p>
+              <p class="text-[11px] text-text-muted font-mono">{{ formatElapsedTime(elapsedMs) }}</p>
             </div>
           </div>
 
