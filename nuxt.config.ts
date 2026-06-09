@@ -45,7 +45,7 @@ export default defineNuxtConfig({
   },
   nitro: {
     ...(isDesktopBuild ? {
-      preset: 'node',
+      preset: 'node-server',
       output: {
         dir: '.output-desktop'
       }

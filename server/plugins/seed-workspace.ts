@@ -1,6 +1,7 @@
-import { db } from '../db';
-import { workspaces, projects } from '../db/schema';
+import { db, schema } from '../db';
 import { eq } from 'drizzle-orm';
+
+const { workspaces, projects } = schema;
 
 const PERSONAL_WORKSPACE_ID = 'personal';
 const PERSONAL_WORKSPACE_NAME = 'Personal';

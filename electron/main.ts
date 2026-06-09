@@ -87,7 +87,7 @@ function startNitroServer(jwtSecret: string, desktopAuthToken: string) {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
         ELECTRON_DESKTOP: 'true',
-        NODE_ENV: isDev ? 'development' : 'production',
+        NODE_ENV: 'production',
         PORT: '3000',
         DATABASE_URL: join(app.getPath('userData'), 'postrack.db'),
         ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@local',
