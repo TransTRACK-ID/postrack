@@ -247,13 +247,23 @@ async function executeScript(params: {
       displayErrors: true
     });
 
-    // Run the script
-    script.runInContext(vmContext, {
+    // Run the script (async IIFE returns a Promise; await it so await/yield inside user code completes)
+    const executionResult = script.runInContext(vmContext, {
       timeout: SCRIPT_TIMEOUT,
       displayErrors: true
     });
 
-    // Apply environment changes immediately
+    // Wait for the async IIFE to finish, with a separate timeout for async operations
+    if (executionResult && typeof executionResult === 'object' && typeof executionResult.then === 'function') {
+      await Promise.race([
+        executionResult,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Script execution timed out')), SCRIPT_TIMEOUT)
+        )
+      ]);
+    }
+
+    // Apply environment changes immediately after script completes
     if (environmentChanges.length > 0) {
       await applyEnvironmentChanges(environmentId, environmentChanges);
     }

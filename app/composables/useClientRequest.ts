@@ -70,6 +70,10 @@ interface ClientRequestOptions {
   pathVariables?: Array<{ key: string; value: string }>;
   timeout?: number;
   signal?: AbortSignal;
+  /** Unsaved pre-request script from the editor. Takes precedence over the saved request script. */
+  preScript?: string;
+  /** Unsaved post-response script from the editor. Takes precedence over the saved request script. */
+  postScript?: string;
 }
 
 const DEFAULT_TIMEOUT = 30000;
@@ -433,6 +437,9 @@ export async function executeClientRequest(
       timeout = DEFAULT_TIMEOUT
     } = options;
 
+    // Track environment variable changes from scripts
+    const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
+
     // Validate URL
     if (!url) {
       return createErrorResponse(startTime, 'Missing required field: url', 'MISSING_URL');
@@ -516,13 +523,18 @@ export async function executeClientRequest(
     }
 
     // Load and execute pre-script if available
-    if (savedRequestId && environmentId) {
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
+    if (environmentId && (options.preScript !== undefined || savedRequestId)) {
       try {
-        const savedRequest = await fetchSavedRequest(savedRequestId);
+        const preScriptCode = options.preScript
+          ? options.preScript
+          : savedRequestId
+            ? (await fetchSavedRequest(savedRequestId))?.preScript
+            : undefined;
 
-        if (savedRequest?.preScript) {
+        if (preScriptCode) {
           const preResult = await executePreScript(
-            savedRequest.preScript,
+            preScriptCode,
             {
               url: resolvedUrl,
               method,
@@ -534,6 +546,11 @@ export async function executeClientRequest(
 
           scriptLogs.push(...preResult.logs);
           scriptErrors.push(...preResult.errors);
+
+          // Capture environment changes from pre-script
+          if (preResult.environmentChanges && preResult.environmentChanges.length > 0) {
+            environmentChanges.push(...preResult.environmentChanges);
+          }
 
           if (preResult.success && preResult.modifiedContext) {
             if (preResult.modifiedContext.url) {
@@ -603,7 +620,8 @@ export async function executeClientRequest(
             durationMs: endTime - startTime
           },
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       }
 
@@ -637,13 +655,18 @@ export async function executeClientRequest(
     }
 
     // Execute post-script if available
-    if (savedRequestId && environmentId) {
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
+    if (environmentId && (options.postScript !== undefined || savedRequestId)) {
       try {
-        const savedRequest = await fetchSavedRequest(savedRequestId);
+        const postScriptCode = options.postScript
+          ? options.postScript
+          : savedRequestId
+            ? (await fetchSavedRequest(savedRequestId))?.postScript
+            : undefined;
 
-        if (savedRequest?.postScript) {
+        if (postScriptCode) {
           const postResult = await executePostScript(
-            savedRequest.postScript,
+            postScriptCode,
             {
               url: resolvedUrl,
               method,
@@ -663,6 +686,11 @@ export async function executeClientRequest(
 
           scriptLogs.push(...postResult.logs);
           scriptErrors.push(...postResult.errors);
+
+          // Capture environment changes from post-script
+          if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
+            environmentChanges.push(...postResult.environmentChanges);
+          }
         }
       } catch (error) {
         console.error('[useClientRequest] Failed to execute post-script:', error);
@@ -683,7 +711,8 @@ export async function executeClientRequest(
         durationMs: endTime - startTime
       },
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
 
     // Log to history
@@ -732,7 +761,8 @@ export async function executeClientRequest(
         durationMs: endTime - startTime
       },
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
   }
 }

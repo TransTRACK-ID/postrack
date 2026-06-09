@@ -44,6 +44,10 @@ interface ProxyRequestBody {
   environmentId?: string;
   savedRequestId?: string;
   pathVariables?: PathVariable[];
+  /** Optional unsaved pre-request script (takes precedence over saved request script). */
+  preScript?: string;
+  /** Optional unsaved post-response script (takes precedence over saved request script). */
+  postScript?: string;
 }
 
 interface ProxyResponse {
@@ -98,6 +102,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
   const variableWarnings: string[] = [];
   const scriptLogs: ScriptLogEntry[] = [];
   const scriptErrors: string[] = [];
+  const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
 
   // Variables to hold script-modified request data
   let scriptModifiedUrl: string | undefined;
@@ -289,31 +294,38 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
     }
 
     // Load saved request and execute pre-script if available
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
     let savedRequest: { id: string; preScript: string | null; postScript: string | null } | undefined;
 
-    if (body.savedRequestId && body.environmentId) {
+    const loadSavedRequestForScripts = async () => {
+      if (savedRequest) return savedRequest;
+      if (!body.savedRequestId) return undefined;
+      console.log('[Proxy] Loading saved request for scripts:', body.savedRequestId);
+      const result = await db
+        .select({
+          id: savedRequests.id,
+          preScript: savedRequests.preScript,
+          postScript: savedRequests.postScript
+        })
+        .from(savedRequests)
+        .where(eq(savedRequests.id, body.savedRequestId))
+        .limit(1);
+      savedRequest = result[0];
+      console.log('[Proxy] Saved request loaded:', savedRequest ? 'FOUND' : 'NOT FOUND');
+      return savedRequest;
+    };
+
+    if (body.environmentId && (body.preScript !== undefined || body.savedRequestId)) {
       try {
-        console.log('[Proxy] Loading saved request for scripts:', body.savedRequestId);
+        const preScriptCode = body.preScript
+          ? body.preScript
+          : (await loadSavedRequestForScripts())?.preScript || undefined;
 
-        const result = await db
-          .select({
-            id: savedRequests.id,
-            preScript: savedRequests.preScript,
-            postScript: savedRequests.postScript
-          })
-          .from(savedRequests)
-          .where(eq(savedRequests.id, body.savedRequestId))
-          .limit(1);
-
-        savedRequest = result[0];
-        console.log('[Proxy] Saved request loaded:', savedRequest ? 'FOUND' : 'NOT FOUND');
-
-        // Execute pre-script if exists
-        if (savedRequest?.preScript) {
+        if (preScriptCode) {
           console.log('[Proxy] Executing pre-script');
 
           const preResult = await executePreScript({
-            code: savedRequest.preScript,
+            code: preScriptCode,
             context: {
               url: resolvedUrl,
               method: method,
@@ -325,6 +337,12 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
 
           scriptLogs.push(...preResult.logs);
           scriptErrors.push(...preResult.errors);
+
+          // Capture environment changes from pre-script
+          if (preResult.environmentChanges && preResult.environmentChanges.length > 0) {
+            environmentChanges.push(...preResult.environmentChanges);
+            console.log('[Proxy] Pre-script environment changes:', preResult.environmentChanges);
+          }
 
           if (preResult.success && preResult.modifiedContext) {
             console.log('[Proxy] Pre-script executed successfully');
@@ -380,7 +398,10 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           endTime: new Date(errorEndTime).toISOString(),
           durationMs: errorEndTime - startTime
         },
-        variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined
+        variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
+        scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -513,7 +534,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
               },
               variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
               scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-              scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+              scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+              environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
             };
 
             // Log mock request to history
@@ -570,7 +592,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           },
           variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       } catch (error: any) {
         console.error('Error handling mock request:', error);
@@ -589,7 +612,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           },
           variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+          scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       }
     }
@@ -697,56 +721,62 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       responseBody = null;
     }
 
-    // Track environment variable changes from post-script
-    let environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
-
     // Execute post-script if available
-    if (savedRequest?.postScript && body.environmentId) {
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
+    if (body.environmentId && (body.postScript !== undefined || savedRequest?.postScript || body.savedRequestId)) {
       try {
-        console.log('[Proxy] Executing post-script');
+        const postScriptCode = body.postScript
+          ? body.postScript
+          : savedRequest?.postScript || (await loadSavedRequestForScripts())?.postScript || undefined;
 
-        // Calculate response size in bytes
-        let responseSize = 0;
-        if (responseBody) {
-          if (typeof responseBody === 'string') {
-            responseSize = Buffer.byteLength(responseBody, 'utf8');
-          } else if (typeof responseBody === 'object') {
-            responseSize = Buffer.byteLength(JSON.stringify(responseBody), 'utf8');
-          }
-        }
-
-        const postResult = await executePostScript({
-          code: savedRequest.postScript,
-          context: {
-            url: resolvedUrl,
-            method: method,
-            headers: { ...resolvedHeaders },
-            body: resolvedBody
-          },
-          response: {
-            status: response.status,
-            statusText: response.statusText,
-            headers: responseHeaders,
-            body: responseBody
-          },
-          environmentId: body.environmentId,
-          responseTimeMs: endTime - startTime,
-          responseSize: responseSize
-        });
-
-        scriptLogs.push(...postResult.logs);
-        scriptErrors.push(...postResult.errors);
-
-        // Capture environment changes from post-script
-        if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
-          environmentChanges = postResult.environmentChanges;
-          console.log('[Proxy] Post-script environment changes:', environmentChanges);
-        }
-
-        if (postResult.success) {
-          console.log('[Proxy] Post-script executed successfully');
+        if (!postScriptCode) {
+          console.log('[Proxy] No post-script to execute');
         } else {
-          console.error('[Proxy] Post-script execution failed:', postResult.errors);
+          console.log('[Proxy] Executing post-script');
+
+          // Calculate response size in bytes
+          let responseSize = 0;
+          if (responseBody) {
+            if (typeof responseBody === 'string') {
+              responseSize = Buffer.byteLength(responseBody, 'utf8');
+            } else if (typeof responseBody === 'object') {
+              responseSize = Buffer.byteLength(JSON.stringify(responseBody), 'utf8');
+            }
+          }
+
+          const postResult = await executePostScript({
+            code: postScriptCode,
+            context: {
+              url: resolvedUrl,
+              method: method,
+              headers: { ...resolvedHeaders },
+              body: resolvedBody
+            },
+            response: {
+              status: response.status,
+              statusText: response.statusText,
+              headers: responseHeaders,
+              body: responseBody
+            },
+            environmentId: body.environmentId,
+            responseTimeMs: endTime - startTime,
+            responseSize: responseSize
+          });
+
+          scriptLogs.push(...postResult.logs);
+          scriptErrors.push(...postResult.errors);
+
+          // Capture environment changes from post-script
+          if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
+            environmentChanges.push(...postResult.environmentChanges);
+            console.log('[Proxy] Post-script environment changes:', postResult.environmentChanges);
+          }
+
+          if (postResult.success) {
+            console.log('[Proxy] Post-script executed successfully');
+          } else {
+            console.error('[Proxy] Post-script execution failed:', postResult.errors);
+          }
         }
       } catch (error) {
         console.error('[Proxy] Failed to execute post-script:', error);
@@ -911,7 +941,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -939,7 +970,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -967,7 +999,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -995,7 +1028,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         },
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+        scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
 
@@ -1021,7 +1055,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       },
       variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
-      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined
+      scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
   }
 });
