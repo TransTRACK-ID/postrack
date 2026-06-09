@@ -1,10 +1,11 @@
 import type { Config } from 'drizzle-kit';
+import { resolve } from 'path';
 
 export default {
   schema: './server/db/schema-sqlite/index.ts',
   out: './drizzle-sqlite',
   dialect: 'sqlite',
   dbCredentials: {
-    url: process.env.DATABASE_URL || './postrack.db'
+    url: resolve(process.cwd(), 'postrack.db')
   }
 } satisfies Config;
