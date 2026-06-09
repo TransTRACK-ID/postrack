@@ -2102,58 +2102,6 @@ const fetchEnvironmentVariables = async () => {
   }
 };
 
-/**
- * Apply environment variable changes from script execution.
- * Creates, updates, or deletes variables based on the changes array.
- */
-const applyEnvironmentChanges = async (
-  changes: Array<{ key: string; value: string; action: 'set' | 'unset' }>
-) => {
-  if (!props.environmentId || !changes || changes.length === 0) return;
-
-  for (const change of changes) {
-    try {
-      const existingVar = environmentVariables.value.find(v => v.key === change.key);
-
-      if (change.action === 'set') {
-        if (existingVar) {
-          // Update existing variable
-          await $fetch(`/api/admin/variables/${existingVar.id}`, {
-            method: 'PUT',
-            body: {
-              key: change.key,
-              value: change.value,
-              isSecret: existingVar.isSecret
-            }
-          });
-          console.log(`[RequestBuilder] Updated environment variable: ${change.key}`);
-        } else {
-          // Create new variable
-          await $fetch(`/api/admin/environments/${props.environmentId}/variables`, {
-            method: 'POST',
-            body: {
-              key: change.key,
-              value: change.value,
-              isSecret: false
-            }
-          });
-          console.log(`[RequestBuilder] Created environment variable: ${change.key}`);
-        }
-      } else if (change.action === 'unset') {
-        if (existingVar) {
-          // Delete existing variable
-          await $fetch(`/api/admin/variables/${existingVar.id}`, {
-            method: 'DELETE'
-          });
-          console.log(`[RequestBuilder] Deleted environment variable: ${change.key}`);
-        }
-      }
-    } catch (error: any) {
-      console.error(`[RequestBuilder] Failed to apply environment change for ${change.key}:`, error);
-    }
-  }
-};
-
 const getResponseStatusColorClass = (status: number) => {
   if (status >= 200 && status < 300) return 'bg-accent-green/15 text-accent-green';
   if (status >= 400 && status < 500) return 'bg-accent-orange/15 text-accent-orange';
@@ -3244,11 +3192,12 @@ const sendRequest = async () => {
       scriptLogs.value = result.scriptLogs;
     }
     
-    // If post-script modified environment variables, apply the changes and refresh them
-    // This ensures subsequent requests (including those with inherited auth) use the updated values
+    // If post-script modified environment variables, refresh them immediately.
+    // The server already persisted the changes during script execution; we just need
+    // to sync the frontend's local state so subsequent requests (including those with
+    // inherited auth) use the updated values.
     if (result.environmentChanges && result.environmentChanges.length > 0) {
       console.log('[RequestBuilder] Post-script modified environment variables:', result.environmentChanges);
-      await applyEnvironmentChanges(result.environmentChanges);
       await fetchEnvironmentVariables();
       // Notify parent views (e.g. environment settings panel) so they can refresh without a page reload
       if (props.environmentId) {
