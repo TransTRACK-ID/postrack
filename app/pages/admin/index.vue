@@ -1210,6 +1210,27 @@ const deleteVariableFromSettings = async (variableId: string) => {
   }
 };
 
+const handleEnvironmentVariablesChanged = async (environmentId: string) => {
+  if (!environmentId) return;
+
+  await refreshEnvironmentSettings();
+  await refreshEnvironments();
+
+  // Ensure useFetch environments are updated immediately so EnvironmentSwitcher and activeEnvironment reflect changes
+  const projectId = currentRequestProjectId.value || currentProjectId.value;
+  if (projectId) {
+    try {
+      const data = await $fetch<Environment[]>(`/api/admin/projects/${projectId}/environments`);
+      environments.value = data;
+    } catch (e) {
+      console.error('Failed to refresh environments after script changes:', e);
+    }
+  }
+
+  // Notify any open RequestBuilder tabs to re-fetch their local environment variables
+  environmentRefreshTrigger.value++;
+};
+
 const findCollectionInWorkspaces = (collectionId: string): any => {
   if (!workspaces.value) return null;
   for (const workspace of workspaces.value) {
@@ -4347,6 +4368,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
                 @save-as-request="handleSaveAsRequest"
                 @unsaved-changes="updateTabUnsavedStatus"
                 @state-change="handleBuilderStateChange"
+                @environment-variables-changed="handleEnvironmentVariablesChanged"
                 @open-collection-settings="handleOpenCollectionSettings"
                 @update:variable="updateVariableFromSettings"
               />

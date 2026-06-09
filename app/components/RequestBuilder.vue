@@ -205,6 +205,8 @@ const emit = defineEmits<{
   openCollectionSettings: [collectionId: string];
   // Variable inline editing
   'update:variable': [variable: Variable, key: string, value: string, isSecret: boolean];
+  // Environment variable changes applied by post/pre scripts
+  environmentVariablesChanged: [environmentId: string];
 }>();
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
@@ -3181,7 +3183,9 @@ const sendRequest = async () => {
       workspaceId: props.workspaceId,
       environmentId: props.environmentId,
       savedRequestId: props.request.id || undefined,
-      signal: abortController.value?.signal
+      signal: abortController.value?.signal,
+      preScript: preScript.value,
+      postScript: postScript.value
     });
 
     // If the browser blocked the request due to CORS, automatically retry via server proxy
@@ -3219,7 +3223,9 @@ const sendRequest = async () => {
             body: proxyRequestBody,
             workspaceId: props.workspaceId,
             environmentId: props.environmentId,
-            savedRequestId: props.request.id || undefined
+            savedRequestId: props.request.id || undefined,
+            preScript: preScript.value,
+            postScript: postScript.value
           },
           signal: abortController.value?.signal
         });
@@ -3244,6 +3250,10 @@ const sendRequest = async () => {
       console.log('[RequestBuilder] Post-script modified environment variables:', result.environmentChanges);
       await applyEnvironmentChanges(result.environmentChanges);
       await fetchEnvironmentVariables();
+      // Notify parent views (e.g. environment settings panel) so they can refresh without a page reload
+      if (props.environmentId) {
+        emit('environmentVariablesChanged', props.environmentId);
+      }
       // Also refresh collection auth if inheriting, as it may use the updated variables
       if (inheritFromParent.value && props.collectionId) {
         await fetchCollectionAuth(props.collectionId);

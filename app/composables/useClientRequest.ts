@@ -70,6 +70,10 @@ interface ClientRequestOptions {
   pathVariables?: Array<{ key: string; value: string }>;
   timeout?: number;
   signal?: AbortSignal;
+  /** Unsaved pre-request script from the editor. Takes precedence over the saved request script. */
+  preScript?: string;
+  /** Unsaved post-response script from the editor. Takes precedence over the saved request script. */
+  postScript?: string;
 }
 
 const DEFAULT_TIMEOUT = 30000;
@@ -519,13 +523,18 @@ export async function executeClientRequest(
     }
 
     // Load and execute pre-script if available
-    if (savedRequestId && environmentId) {
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
+    if (environmentId && (options.preScript !== undefined || savedRequestId)) {
       try {
-        const savedRequest = await fetchSavedRequest(savedRequestId);
+        const preScriptCode = options.preScript !== undefined
+          ? options.preScript || undefined
+          : savedRequestId
+            ? (await fetchSavedRequest(savedRequestId))?.preScript
+            : undefined;
 
-        if (savedRequest?.preScript) {
+        if (preScriptCode) {
           const preResult = await executePreScript(
-            savedRequest.preScript,
+            preScriptCode,
             {
               url: resolvedUrl,
               method,
@@ -646,13 +655,18 @@ export async function executeClientRequest(
     }
 
     // Execute post-script if available
-    if (savedRequestId && environmentId) {
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
+    if (environmentId && (options.postScript !== undefined || savedRequestId)) {
       try {
-        const savedRequest = await fetchSavedRequest(savedRequestId);
+        const postScriptCode = options.postScript !== undefined
+          ? options.postScript || undefined
+          : savedRequestId
+            ? (await fetchSavedRequest(savedRequestId))?.postScript
+            : undefined;
 
-        if (savedRequest?.postScript) {
+        if (postScriptCode) {
           const postResult = await executePostScript(
-            savedRequest.postScript,
+            postScriptCode,
             {
               url: resolvedUrl,
               method,

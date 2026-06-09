@@ -44,6 +44,10 @@ interface ProxyRequestBody {
   environmentId?: string;
   savedRequestId?: string;
   pathVariables?: PathVariable[];
+  /** Optional unsaved pre-request script (takes precedence over saved request script). */
+  preScript?: string;
+  /** Optional unsaved post-response script (takes precedence over saved request script). */
+  postScript?: string;
 }
 
 interface ProxyResponse {
@@ -289,31 +293,38 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
     }
 
     // Load saved request and execute pre-script if available
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
     let savedRequest: { id: string; preScript: string | null; postScript: string | null } | undefined;
 
-    if (body.savedRequestId && body.environmentId) {
+    const loadSavedRequestForScripts = async () => {
+      if (savedRequest) return savedRequest;
+      if (!body.savedRequestId) return undefined;
+      console.log('[Proxy] Loading saved request for scripts:', body.savedRequestId);
+      const result = await db
+        .select({
+          id: savedRequests.id,
+          preScript: savedRequests.preScript,
+          postScript: savedRequests.postScript
+        })
+        .from(savedRequests)
+        .where(eq(savedRequests.id, body.savedRequestId))
+        .limit(1);
+      savedRequest = result[0];
+      console.log('[Proxy] Saved request loaded:', savedRequest ? 'FOUND' : 'NOT FOUND');
+      return savedRequest;
+    };
+
+    if (body.environmentId && (body.preScript !== undefined || body.savedRequestId)) {
       try {
-        console.log('[Proxy] Loading saved request for scripts:', body.savedRequestId);
+        const preScriptCode = body.preScript !== undefined
+          ? body.preScript || undefined
+          : (await loadSavedRequestForScripts())?.preScript || undefined;
 
-        const result = await db
-          .select({
-            id: savedRequests.id,
-            preScript: savedRequests.preScript,
-            postScript: savedRequests.postScript
-          })
-          .from(savedRequests)
-          .where(eq(savedRequests.id, body.savedRequestId))
-          .limit(1);
-
-        savedRequest = result[0];
-        console.log('[Proxy] Saved request loaded:', savedRequest ? 'FOUND' : 'NOT FOUND');
-
-        // Execute pre-script if exists
-        if (savedRequest?.preScript) {
+        if (preScriptCode) {
           console.log('[Proxy] Executing pre-script');
 
           const preResult = await executePreScript({
-            code: savedRequest.preScript,
+            code: preScriptCode,
             context: {
               url: resolvedUrl,
               method: method,
@@ -701,52 +712,61 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
     let environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
 
     // Execute post-script if available
-    if (savedRequest?.postScript && body.environmentId) {
+    // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
+    if (body.environmentId && (body.postScript !== undefined || savedRequest?.postScript || body.savedRequestId)) {
       try {
-        console.log('[Proxy] Executing post-script');
+        const postScriptCode = body.postScript !== undefined
+          ? body.postScript || undefined
+          : savedRequest?.postScript || (await loadSavedRequestForScripts())?.postScript || undefined;
 
-        // Calculate response size in bytes
-        let responseSize = 0;
-        if (responseBody) {
-          if (typeof responseBody === 'string') {
-            responseSize = Buffer.byteLength(responseBody, 'utf8');
-          } else if (typeof responseBody === 'object') {
-            responseSize = Buffer.byteLength(JSON.stringify(responseBody), 'utf8');
-          }
-        }
-
-        const postResult = await executePostScript({
-          code: savedRequest.postScript,
-          context: {
-            url: resolvedUrl,
-            method: method,
-            headers: { ...resolvedHeaders },
-            body: resolvedBody
-          },
-          response: {
-            status: response.status,
-            statusText: response.statusText,
-            headers: responseHeaders,
-            body: responseBody
-          },
-          environmentId: body.environmentId,
-          responseTimeMs: endTime - startTime,
-          responseSize: responseSize
-        });
-
-        scriptLogs.push(...postResult.logs);
-        scriptErrors.push(...postResult.errors);
-
-        // Capture environment changes from post-script
-        if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
-          environmentChanges = postResult.environmentChanges;
-          console.log('[Proxy] Post-script environment changes:', environmentChanges);
-        }
-
-        if (postResult.success) {
-          console.log('[Proxy] Post-script executed successfully');
+        if (!postScriptCode) {
+          console.log('[Proxy] No post-script to execute');
         } else {
-          console.error('[Proxy] Post-script execution failed:', postResult.errors);
+          console.log('[Proxy] Executing post-script');
+
+          // Calculate response size in bytes
+          let responseSize = 0;
+          if (responseBody) {
+            if (typeof responseBody === 'string') {
+              responseSize = Buffer.byteLength(responseBody, 'utf8');
+            } else if (typeof responseBody === 'object') {
+              responseSize = Buffer.byteLength(JSON.stringify(responseBody), 'utf8');
+            }
+          }
+
+          const postResult = await executePostScript({
+            code: postScriptCode,
+            context: {
+              url: resolvedUrl,
+              method: method,
+              headers: { ...resolvedHeaders },
+              body: resolvedBody
+            },
+            response: {
+              status: response.status,
+              statusText: response.statusText,
+              headers: responseHeaders,
+              body: responseBody
+            },
+            environmentId: body.environmentId,
+            responseTimeMs: endTime - startTime,
+            responseSize: responseSize
+          });
+
+          scriptLogs.push(...postResult.logs);
+          scriptErrors.push(...postResult.errors);
+
+          // Capture environment changes from post-script
+          if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
+            environmentChanges = postResult.environmentChanges;
+            console.log('[Proxy] Post-script environment changes:', environmentChanges);
+          }
+
+          if (postResult.success) {
+            console.log('[Proxy] Post-script executed successfully');
+          } else {
+            console.error('[Proxy] Post-script execution failed:', postResult.errors);
+          }
         }
       } catch (error) {
         console.error('[Proxy] Failed to execute post-script:', error);
