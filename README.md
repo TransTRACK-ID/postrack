@@ -1,4 +1,4 @@
-# Postrack (v0.8.12)
+# Postrack (v0.9.5)
 
 A full-stack API workspace for building, testing, mocking, documenting, and sharing APIs.
 
@@ -18,12 +18,24 @@ Postrack provides a comprehensive web admin panel to manage requests and environ
 - Public API documentation from imported specs
 - Collection documentation pages with markdown blocks, images, tables, and endpoint references
 - Public markdown documentation pages
+- JSONC support in request bodies (comments and trailing commas allowed)
+
+### Authentication & Authorization
+- Email/password authentication
+- Optional SSO providers (Keycloak, Google, GitHub, Azure AD)
+- JWT-based session management
+- Secure token-based workspace sharing
+- Collection-level authentication inheritance (API Key, Bearer, Basic, OAuth2)
+- OAuth2 token exchange and storage helpers
 
 ### Collaboration & Sharing
 - Workspace sharing with shareable links (view/edit permissions)
+- Folder-scoped sharing — limit shared access to a specific folder
 - Workspace member management and access control
 - Shared workspace access via unique tokens
+- Shared workspace UI with resizable/toggleable sidebars and environment switcher
 - Request history tracking and comparison
+- Request tab session persistence across reloads
 
 ### Analytics & Monitoring
 - Usage analytics dashboard (super admin)
@@ -42,33 +54,32 @@ Postrack provides a comprehensive web admin panel to manage requests and environ
 - Environment and variable management
 - Settings sync across sessions
 
-### Authentication
-- Email/password authentication
-- Optional SSO providers (Keycloak, Google, GitHub, Azure AD)
-- JWT-based session management
-- Secure token-based workspace sharing
-
 ### UI/UX Features
 - Resizable sidebar with hide/show toggle
 - Keyboard shortcuts support
 - Toast notifications
 - Version notifications on updates
+- Variable tooltip hover previews with secret masking
+- Response panel loading state with elapsed timer
 - Responsive design
 
 ## Tech Stack
 
-- **Frontend**: Nuxt 3, Vue 3, Tailwind CSS
-- **Backend**: Nuxt Nitro server routes + middleware
-- **Database**: PostgreSQL + Drizzle ORM + Drizzle migrations
+- **Frontend**: Nuxt 3.20.2, Vue 3 (latest), Tailwind CSS via `@nuxtjs/tailwindcss` 6.14.0
+- **Backend**: Nuxt Nitro server routes + middleware + plugins
+- **Database**: PostgreSQL + Drizzle ORM 0.38.3 + Drizzle Kit 0.30.1 + Drizzle migrations
 - **Storage**: Redis (optional, recommended for production) or filesystem
 - **Authentication**: JWT + SSO providers (Keycloak, Google, GitHub, Azure AD)
 - **Monitoring**: Datadog APM and RUM integration
+- **Testing**: Vitest 3.0.0 with jsdom and `@vue/test-utils`
 - **Utilities**:
-  - `marked` + `highlight.js` for docs rendering
-  - `@faker-js/faker` for mock data generation
-  - `ioredis` for Redis integration
-  - `uuid` for unique identifiers
-  - `dd-trace` for server-side APM
+  - `marked` 17 + `highlight.js` 11 for docs rendering
+  - `@faker-js/faker` 9 for mock data generation
+  - `ioredis` 5 for Redis integration
+  - `uuid` 13 for unique identifiers
+  - `dd-trace` 4 for server-side APM
+  - `@vercel/kv` 1 for Vercel KV integration
+  - `perfect-debounce` 2 for UI debouncing
 
 ## Requirements
 
@@ -98,21 +109,31 @@ Postrack provides a comprehensive web admin panel to manage requests and environ
    - `ADMIN_PASSWORD` - Default admin password (change in production!)
    - `JWT_SECRET` - Secret for JWT tokens (use strong random string in production!)
    - `APP_URL` - Public application URL (for OAuth callbacks)
-   - `REDIS_URL` - Redis connection (optional, recommended for production)
-   - `APP_ENV` - Environment (local, development, production)
+   - `APP_HOST` - Application host (default: `localhost`)
    - `APP_DOMAIN` - Application domain
-   
+   - `APP_ENV` - Environment (`local`, `development`, `production`)
+   - `NODE_ENV` - Node environment (`development`, `production`)
+   - `REDIS_URL` - Redis connection (optional, recommended for production)
+   - `VERCEL` - Set to `true` when deploying to Vercel (auto-enables Redis storage)
+
+   Optional Docker / deployment configuration:
+   - `IMAGE_NAME` - Docker image name
+   - `COMPOSE_PROJECT_NAME` - Docker Compose project name
+   - `COMPOSE_REPLICAS` - Number of replicas for deployment
+   - `COMPOSE_PUBLIC_PORT` - Public port mapped by the reverse proxy
+
    Optional SSO configuration:
-   - `KEYCLOAK_*` - Keycloak OAuth
-   - `GOOGLE_CLIENT_ID/SECRET` - Google OAuth
-   - `GITHUB_CLIENT_ID/SECRET` - GitHub OAuth
-   - `AZURE_*` - Azure AD OAuth
-   
+   - `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_BASE_URL`
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+   - `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+
    Optional Datadog monitoring:
    - `DATADOG_API_KEY` - Datadog API key for APM
    - `DATADOG_APPLICATION_ID` - Datadog application ID for RUM
    - `DATADOG_CLIENT_TOKEN` - Datadog client token for RUM
-   - `DATADOG_SITE` - Datadog site (default: us5.datadoghq.com)
+   - `DATADOG_SITE` - Datadog site (default: `us5.datadoghq.com`)
+   - `DATADOG_ENV` - Datadog environment tag
 
 5. **Run database migrations**
 
@@ -178,7 +199,7 @@ Change these values before any production use.
 ## Project Structure
 
 ```text
-app/                    # Nuxt app pages/components
+app/                    # Nuxt app pages/components/composables
   pages/                # Application pages
     admin/              # Admin panel pages
       index.vue         # Main admin dashboard
@@ -197,7 +218,7 @@ app/                    # Nuxt app pages/components
     feedback/           # Feedback pages
       public.vue        # Public feedback with voting
       my-submissions.vue # My feedback submissions
-  components/           # Vue components
+  components/           # Vue components (see folder for full list)
     RequestBuilder.vue  # Request builder component
     MockConfiguration.vue # Mock config component
     FeedbackModal.vue   # Feedback collection modal
@@ -211,12 +232,14 @@ app/                    # Nuxt app pages/components
     ApiDocumentationViewer.vue # API documentation viewer
     CollectionDocBlocksEditor.vue # Collection documentation editor
     VersionNotification.vue # Version update notifications
-server/                 # API routes, middleware, services
-  api/                  # API endpoints
+    VariableTooltip.vue # Variable hover preview tooltip
+  composables/          # Vue composables (keyboard shortcuts, toasts, tracking, etc.)
+  utils/                # Client utilities (auth helpers, JSONC helpers)
+assets/                 # Static assets and global styles
+server/                 # API routes, middleware, plugins, services
+  api/                  # API endpoints (see folder for exhaustive list)
     admin/              # Admin API routes
       super/            # Super admin endpoints
-        usage/          # Usage analytics endpoints
-        feedback/       # Feedback management endpoints
       collections/      # Collection management
       folders/          # Folder management
       requests/         # Request management
@@ -225,7 +248,6 @@ server/                 # API routes, middleware, services
       shares/           # Workspace sharing
       sso/              # SSO provider management
     auth/               # Authentication endpoints
-      sso/              # SSO OAuth endpoints
     proxy/              # HTTP proxy execution
     definitions/        # API definition import/export
     history/            # Request history management
@@ -233,37 +255,38 @@ server/                 # API routes, middleware, services
     analytics/          # Error analytics endpoints
     public/             # Public API endpoints
     shared-workspace/   # Shared workspace access
+    oauth/              # OAuth token exchange helpers
     scripts/            # Script execution
     utils/              # Utility endpoints
   middleware/           # Server middleware
     auth.ts             # JWT authentication middleware
+    error-logger.ts     # Error logging middleware
+  plugins/              # Nitro plugins (migrations, Datadog tracing, seeding, error handling)
   db/                   # Database layer
     schema/             # Drizzle schema definitions
-      workspace.ts      # Workspace schema
-      workspaceShare.ts # Workspace sharing schema
-      workspaceMember.ts # Workspace members schema
-      feedback.ts       # Feedback system schema
-      usageAnalytics.ts # Usage tracking schema
-      errorReport.ts    # Error reporting schema
-      mocks.ts          # Mock configuration schema
-      environment.ts    # Environment schema
-      collection.ts     # Collection schema
-      collectionDocBlock.ts # Collection documentation schema
-      savedRequest.ts   # Saved requests schema
-      requestExample.ts # Request examples schema
-      requestHistory.ts # Request history schema
-      settings.ts       # Settings schema
     seed.ts             # Database seed script
   services/             # Server services
     usageTracking.ts    # Usage tracking service
     usageAggregation.ts # Usage aggregation service
     script-runner.ts    # Script execution service
     migration.ts        # Migration service
-  utils/                # Utility functions
+  utils/                # Server utilities
     magic-variables.ts  # Postman-style magic variables
+    variable-substitution.ts # Env variable substitution
+    openapi-parser.ts   # OpenAPI parsing
+    postman-parser.ts   # Postman collection parsing
+    curl-parser.ts      # cURL parsing
+    cache.ts            # Server-side caching helpers
+    datadog-*.ts        # Datadog metrics/logging helpers
+    error-tracking.ts   # Error tracking helpers
+    permissions.ts      # Permission checks
+    userMapping.ts      # SSO user mapping helpers
+    yaml-parser.ts      # YAML parsing helpers
+    schema-generator.ts # OpenAPI export generation
 drizzle/                # SQL migrations
 docs/                   # Markdown docs served by slug
-scripts/                # Utility scripts (version bump, etc.)
+scripts/                # Utility scripts (version bump, Datadog test)
+tests/                  # Unit and integration tests
 ```
 
 ## Public Routes
@@ -302,26 +325,29 @@ scripts/                # Utility scripts (version bump, etc.)
 ### Workspace & Collection Management
 - Create and manage multiple workspaces
 - Projects within workspaces for better organization
-- Collections with color coding and descriptions
+- Collections with color coding, descriptions, and collection-level auth config
 - Nested folders with drag-and-drop reordering
 - Requests with multiple examples and versions
-- Collection-level authentication configuration
+- Collection-level authentication inheritance (API Key, Bearer, Basic, OAuth2)
 
 ### Request Builder
 - Full request builder with URL, method, headers, body
 - Support for JSON, form-data, URL-encoded, raw, and binary body types
-- Pre-request and post-request scripts
+- JSONC support in JSON bodies (comments and trailing commas)
+- Pre-request and post-request scripts with environment variable propagation
 - Path variables with descriptions
-- Query parameters with notes
+- Query parameters with notes and enabled/disabled state preservation
 - Multiple request examples per request
 - Mock configuration per request
 - Code examples generation
 - Response comparison between different executions
+- Response panel loading state with elapsed timer
+- Variable tooltip hover previews
 
 ### Environment Management
 - Multiple environments per workspace
 - Environment variables with secret support
-- Variable inline editing with autocomplete
+- Variable inline editing with autocomplete and sync
 - Environment activation and switching
 - Environment duplication
 
@@ -346,10 +372,12 @@ scripts/                # Utility scripts (version bump, etc.)
 
 ### Collaboration
 - Workspace sharing with unique tokens
+- Folder-scoped shares limit access to a single folder
 - View and edit permissions for shared workspaces
 - Workspace expiration dates for share links
 - Workspace member management
 - Request history tracking and comparison
+- Persisted request tab sessions across reloads
 
 ### Feedback System
 - Configurable feedback forms (super admin)
@@ -381,6 +409,7 @@ scripts/                # Utility scripts (version bump, etc.)
 - Super admin configuration
 - Version tracking and notifications
 - Settings sync across sessions
+- Request tab session persistence
 
 ## Deployment Notes
 
@@ -404,15 +433,18 @@ scripts/                # Utility scripts (version bump, etc.)
 - Configure Datadog for monitoring (optional)
 
 ### Environment Variables Checklist
-- ✅ `DATABASE_URL` - PostgreSQL connection
-- ✅ `JWT_SECRET` - Strong random string
-- ✅ `ADMIN_EMAIL` & `ADMIN_PASSWORD` - Non-default credentials
-- ✅ `APP_URL` - Public application URL
-- ✅ `APP_DOMAIN` - Application domain
-- ✅ `REDIS_URL` - Redis connection (recommended)
-- ✅ `APP_ENV` - Set to `production`
+- `DATABASE_URL` - PostgreSQL connection
+- `JWT_SECRET` - Strong random string
+- `ADMIN_EMAIL` & `ADMIN_PASSWORD` - Non-default credentials
+- `APP_URL` - Public application URL
+- `APP_HOST` - Application host
+- `APP_DOMAIN` - Application domain
+- `APP_ENV` - Set to `production`
+- `NODE_ENV` - Set to `production`
+- `REDIS_URL` - Redis connection (recommended)
 - Optional: SSO provider credentials
 - Optional: Datadog monitoring credentials
+- Optional: `COMPOSE_REPLICAS`, `COMPOSE_PUBLIC_PORT`, `IMAGE_NAME`, `COMPOSE_PROJECT_NAME`
 
 ## Testing Localhost APIs
 
@@ -420,10 +452,10 @@ Testing your local backend (e.g., `http://127.0.0.1:4000`) from the deployed app
 
 | Mode | Use When | Backend CORS Required? |
 |------|----------|----------------------|
-| **Direct** (default) | Your backend has CORS enabled | ✅ Yes |
-| **Proxy** (purple) | Your backend lacks CORS headers | ❌ No |
+| **Direct** (default) | Your backend has CORS enabled | Yes |
+| **Proxy** (purple) | Your backend lacks CORS headers | No |
 
-📖 **[Full Guide: Testing Localhost APIs](docs/testing-localhost-apis.md)**
+**[Full Guide: Testing Localhost APIs](docs/testing-localhost-apis.md)**
 
 ### Quick CORS Setup
 
@@ -445,7 +477,7 @@ Testing your local backend (e.g., `http://127.0.0.1:4000`) from the deployed app
 ### Data Security
 - All API routes under `/api/admin` require authentication
 - Shared workspace access is controlled via token validation
-- Environment variables are encrypted at rest (configure encryption in production)
+- Environment variables should be encrypted at rest in production
 - Request history and usage analytics are user/workspace scoped
 
 ### Network Security
@@ -470,21 +502,69 @@ Testing your local backend (e.g., `http://127.0.0.1:4000`) from the deployed app
 - `GET /api/auth/sso/:provider/login` - Initiate SSO login
 - `GET /api/auth/sso/:provider/callback` - SSO callback handler
 
+### OAuth Helpers
+- `GET /api/oauth/callback` - OAuth callback receiver
+- `POST /api/oauth/token` - Exchange code for token
+- `POST /api/oauth/store-tokens` - Store retrieved tokens
+
 ### Admin Operations
 - `GET /api/admin/tree` - Get full workspace tree structure
 - `GET /api/admin/tree-light` - Get lightweight workspace tree
 - `GET /api/admin/workspaces` - List all workspaces
 - `POST /api/admin/workspaces` - Create new workspace
+- `GET /api/admin/workspaces/:id` - Get workspace details
+- `PUT /api/admin/workspaces/:id` - Update workspace
+- `DELETE /api/admin/workspaces/:id` - Delete workspace
+- `GET /api/admin/workspaces/:id/shares` - List workspace shares
+- `POST /api/admin/workspaces/:id/shares` - Create workspace share
 - `GET /api/admin/requests/:id` - Get request details
 - `PUT /api/admin/requests/:id` - Update request
-- `POST /api/admin/folders/:id/requests` - Create request in folder
-- `GET /api/admin/collections` - List collections
+- `DELETE /api/admin/requests/:id` - Delete request
+- `POST /api/admin/requests/:id/move` - Move request to another folder/collection
+- `POST /api/admin/requests/reorder` - Reorder requests
+- `GET /api/admin/requests/:id/examples` - List request examples
+- `POST /api/admin/requests/:id/examples` - Create request example
+- `PUT /api/admin/requests/:id/examples/:exampleId` - Update request example
+- `DELETE /api/admin/requests/:id/examples/:exampleId` - Delete request example
 - `POST /api/admin/collections` - Create collection
+- `GET /api/admin/collections` - List collections
+- `PUT /api/admin/collections/:id` - Update collection
+- `DELETE /api/admin/collections/:id` - Delete collection
+- `GET /api/admin/collections/:id/auth` - Get collection auth config
+- `POST /api/admin/collections/:id/auth` - Update collection auth config
+- `POST /api/admin/collections/:id/folders` - Create folder in collection
+- `POST /api/admin/collections/:id/requests` - Create request in collection
+- `GET /api/admin/collections/:id/doc-blocks` - List collection doc blocks
+- `POST /api/admin/collections/:id/doc-blocks` - Create doc block
+- `POST /api/admin/collections/:id/doc-blocks/reorder` - Reorder doc blocks
+- `GET /api/admin/folders/:id` - Get folder details
+- `PUT /api/admin/folders/:id` - Update folder
+- `DELETE /api/admin/folders/:id` - Delete folder
+- `POST /api/admin/folders/:id/requests` - Create request in folder
+- `POST /api/admin/folders/reorder` - Reorder folders
 - `GET /api/admin/environments/:id` - Get environment details
+- `PUT /api/admin/environments/:id` - Update environment
+- `DELETE /api/admin/environments/:id` - Delete environment
+- `POST /api/admin/environments/:id/duplicate` - Duplicate environment
 - `PUT /api/admin/environments/:id/activate` - Activate environment
+- `GET /api/admin/environments/:id/variables` - List environment variables
+- `POST /api/admin/environments/:id/variables` - Create environment variable
+- `GET /api/admin/variables/:id` - Get variable details
+- `PUT /api/admin/variables/:id` - Update variable
+- `DELETE /api/admin/variables/:id` - Delete variable
 - `GET /api/admin/mocks` - List mock configurations
 - `POST /api/admin/mocks` - Create mock configuration
+- `PUT /api/admin/mocks` - Update mock configuration
+- `DELETE /api/admin/mocks` - Delete mock configuration
 - `GET /api/admin/export` - Export workspace to OpenAPI
+- `GET /api/admin/magic-variables` - List magic variables
+- `POST /api/admin/resource` - Create/update mock resource directly
+- `GET /api/admin/migrate` - List migration status
+- `POST /api/admin/migrate` - Run migrations
+- `POST /api/admin/migrate/rollback` - Rollback migration
+- `GET /api/admin/settings` - Get settings (supports `?key=requestTabsSession`)
+- `POST /api/admin/settings` - Update settings
+- `DELETE /api/admin/shares/:token` - Revoke workspace share
 
 ### Proxy & Execution
 - `POST /api/proxy/request` - Execute HTTP request through proxy
@@ -494,13 +574,17 @@ Testing your local backend (e.g., `http://127.0.0.1:4000`) from the deployed app
 ### Definitions & Import
 - `POST /api/definitions/import` - Import OpenAPI definition
 - `POST /api/definitions/import/postman` - Import Postman collection
+- `GET /api/definitions` - List API definitions
 - `GET /api/definitions/:id` - Get API definition
+- `PUT /api/definitions/:id` - Update API definition
+- `DELETE /api/definitions/:id` - Delete API definition
 - `POST /api/definitions/:id/generate-mocks` - Generate mocks from definition
 
 ### History & Analytics
 - `GET /api/history` - List request history
 - `GET /api/history/:id` - Get history entry details
 - `DELETE /api/history/:id` - Delete history entry
+- `DELETE /api/history` - Clear all history
 - `POST /api/history/log` - Log request execution
 - `GET /api/analytics/errors` - Get error analytics
 
@@ -519,16 +603,25 @@ Testing your local backend (e.g., `http://127.0.0.1:4000`) from the deployed app
 - `GET /api/admin/super/usage/users` - User usage statistics
 - `GET /api/admin/super/usage/workspaces` - Workspace usage statistics
 - `GET /api/admin/super/usage/trends` - Usage trends
+- `GET /api/admin/super/usage/events` - Usage events
+- `GET /api/admin/super/projects` - List all projects
 - `GET /api/admin/super/feedback/config` - Get feedback configuration
 - `POST /api/admin/super/feedback/config` - Update feedback configuration
 - `GET /api/admin/super/feedback/submissions` - List feedback submissions
-- `GET /api/admin/super/projects` - List all projects (super admin)
+- `PUT /api/admin/super/feedback/submissions/:id` - Update submission status
+- `GET /api/admin/super/feedback/submissions/:id/history` - Get submission history
+- `GET /api/admin/super/workspaces/:id/members` - List workspace members
+- `POST /api/admin/super/workspaces/:id/members` - Add workspace member
 
 ### Shared Workspace
 - `GET /api/shared-workspace/:token` - Get shared workspace details
 - `GET /api/shared-workspace/:token/environments/:id/variables` - Get environment variables
 - `POST /api/shared-workspace/:token/requests` - Create request (edit permission)
 - `PUT /api/shared-workspace/:token/requests/:id` - Update request (edit permission)
+
+### Usage Tracking
+- `POST /api/admin/usage/track` - Track a single usage event
+- `POST /api/admin/usage/track-batch` - Track multiple usage events
 
 ## Database Schema
 
@@ -537,7 +630,7 @@ The application uses PostgreSQL with Drizzle ORM. Key tables include:
 ### Core Tables
 - `workspaces` - User workspaces
 - `projects` - Projects within workspaces
-- `collections` - API collections
+- `collections` - API collections (includes `auth_config` for collection-level auth)
 - `folders` - Folder organization within collections
 - `saved_requests` - Saved API requests
 - `request_examples` - Multiple examples per request
@@ -548,7 +641,7 @@ The application uses PostgreSQL with Drizzle ORM. Key tables include:
 - `api_definitions` - Imported OpenAPI/Postman definitions
 
 ### Collaboration Tables
-- `workspace_shares` - Shareable workspace links
+- `workspace_shares` - Shareable workspace links (supports folder-scoped shares via `folder_id`)
 - `workspace_members` - Workspace member management
 - `workspace_access` - Access control records
 
@@ -565,7 +658,7 @@ The application uses PostgreSQL with Drizzle ORM. Key tables include:
 - `feedback_submissions` - User feedback submissions
 
 ### Settings Tables
-- `settings` - Application settings with sync support
+- `settings` - Application settings with sync support and request tab sessions
 - `sso_providers` - SSO provider configurations
 
 ## Contributing
@@ -595,6 +688,6 @@ For issues and feature requests, please use the GitHub issue tracker.
 
 ---
 
-**Version**: 0.8.12  
+**Version**: 0.9.5  
 **Last Updated**: 2026  
 **Maintained by**: Postrack Team
