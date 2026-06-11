@@ -124,6 +124,7 @@ interface Props {
   isCollapsed?: boolean;
   isResizing?: boolean;
   startResize?: (e: MouseEvent) => void;
+  isSuperAdmin?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -139,7 +140,8 @@ const props = withDefaults(defineProps<Props>(), {
   isDuplicatingRequest: false,
   width: 280,
   isCollapsed: false,
-  isResizing: false
+  isResizing: false,
+  isSuperAdmin: false
 });
 
 const emit = defineEmits<{
@@ -219,9 +221,10 @@ const canEdit = computed(() => {
   return ws.isOwner;
 });
 
-// Destructive operations (delete workspace / collection) are restricted to owners only.
+// Destructive operations (delete workspace / collection) are restricted to owners and super admins.
 // Edit-role members can create and modify content but cannot delete containers.
 const canDelete = computed(() => {
+  if (props.isSuperAdmin) return true;
   const ws = currentWorkspace.value;
   if (!ws) return false;
   const perm = ws.permission;

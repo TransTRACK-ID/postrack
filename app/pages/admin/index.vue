@@ -148,6 +148,25 @@ const { data: definitions, refresh: refreshDefinitions } = await useFetch<any[]>
 const { data: authData } = await useFetch('/api/auth/check');
 const currentUserEmail = computed(() => authData.value?.user?.email || null);
 
+const isSuperAdmin = ref(false);
+const checkSuperAdmin = async () => {
+  if (!currentUserEmail.value) {
+    isSuperAdmin.value = false;
+    return;
+  }
+  try {
+    const data = await $fetch<{ isSuperAdmin: boolean }>('/api/admin/super/check');
+    isSuperAdmin.value = data.isSuperAdmin;
+  } catch {
+    isSuperAdmin.value = false;
+  }
+};
+
+watch(currentUserEmail, (email) => {
+  if (email) checkSuperAdmin();
+  else isSuperAdmin.value = false;
+}, { immediate: true });
+
 const selectedWorkspaceId = ref<string | null>(null);
 const selectedProjectId = ref<string | null>(null);
 
@@ -274,15 +293,14 @@ const workspaceIdForCollectionId = (collectionId: string | null | undefined): st
   return null;
 };
 
-/** Matches WorkspaceSwitcher: only owner or super admin may rename/delete a workspace */
-const SUPER_ADMIN_WORKSPACE_EMAIL = 'admin@mock.com';
+/** Only workspace owner (including invited owners) or super admin may rename/delete containers */
 const canRenameWorkspaceById = (workspaceId: string | null | undefined): boolean => {
   if (!workspaceId || !workspaces.value) return false;
+  if (isSuperAdmin.value) return true;
   const ws = workspaces.value.find((w: any) => w.id === workspaceId);
   if (!ws) return false;
   if (ws.isOwner) return true;
   if (ws.permission === 'owner') return true;
-  if (currentUserEmail.value === SUPER_ADMIN_WORKSPACE_EMAIL) return true;
   return false;
 };
 const canDeleteWorkspaceById = canRenameWorkspaceById;
@@ -3947,6 +3965,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         :width="sidebarWidth"
         :is-collapsed="isSidebarCollapsed"
         :is-resizing="isSidebarResizing"
+        :is-super-admin="isSuperAdmin"
         :start-resize="startResize"
         @select-mock="handleSelectMock"
         @select-request="handleSelectRequest"

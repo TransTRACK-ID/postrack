@@ -291,6 +291,7 @@ defineExpose({
         :workspaces="workspaces"
         :selected-workspace-id="selectedWorkspaceId"
         :current-user-email="currentUserEmail"
+        :is-super-admin="isSuperAdmin"
         @select="emit('selectWorkspace', $event)"
         @create="emit('createWorkspace')"
         @rename="emit('renameWorkspace', $event)"
