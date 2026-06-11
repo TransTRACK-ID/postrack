@@ -281,6 +281,7 @@ const canRenameWorkspaceById = (workspaceId: string | null | undefined): boolean
   const ws = workspaces.value.find((w: any) => w.id === workspaceId);
   if (!ws) return false;
   if (ws.isOwner) return true;
+  if (ws.permission === 'owner') return true;
   if (currentUserEmail.value === SUPER_ADMIN_WORKSPACE_EMAIL) return true;
   return false;
 };
@@ -3495,9 +3496,15 @@ const confirmDeleteProject = (project: any) => {
 };
 
 const deleteProject = async () => {
-    if (!projectToDelete.value) return;
+    if (!projectToDelete.value) {
+        alert('No project selected for deletion.');
+        return;
+    }
     const wsId = workspaceIdForProjectId(projectToDelete.value.id);
-    if (wsId && !canDeleteWorkspaceById(wsId)) return;
+    if (wsId && !canDeleteWorkspaceById(wsId)) {
+        alert('Only the workspace owner can delete this project.');
+        return;
+    }
     try {
         await $fetch(`/api/admin/projects/${projectToDelete.value.id}`, { method: 'DELETE' });
         showDeleteProjectConfirm.value = false;
@@ -4865,8 +4872,8 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         <strong class="text-accent-red">Warning:</strong> This will permanently delete this project, all collections, folders, and requests within it.
       </p>
       <template #footer>
-        <button class="btn btn-secondary" @click="showDeleteProjectConfirm = false">Cancel</button>
-        <button class="btn btn-danger" @click="deleteProject">Delete Project</button>
+        <button type="button" class="btn btn-secondary" @click="showDeleteProjectConfirm = false">Cancel</button>
+        <button type="button" class="btn btn-danger" @click="deleteProject">Delete Project</button>
       </template>
     </Modal>
 
