@@ -16,12 +16,14 @@ interface Props {
   workspaces: Workspace[];
   selectedWorkspaceId: string | null;
   currentUserEmail: string | null;
+  isSuperAdmin?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   workspaces: () => [],
   selectedWorkspaceId: null,
-  currentUserEmail: null
+  currentUserEmail: null,
+  isSuperAdmin: false
 });
 
 const emit = defineEmits<{
@@ -34,11 +36,6 @@ const emit = defineEmits<{
 
 const isOpen = ref(false);
 const dropdownRef = ref<HTMLDivElement | null>(null);
-
-/**
- * Super admin email that can delete any workspace
- */
-const SUPER_ADMIN_EMAIL = 'admin@mock.com';
 
 const selectedWorkspace = computed(() => {
   return props.workspaces.find(w => w.id === props.selectedWorkspaceId) || null;
@@ -55,15 +52,16 @@ const workspaceRoleBadge = (workspace: Workspace) =>
 
 /**
  * Check if user can delete a workspace
- * Only workspace owner or super admin can delete
+ * Only workspace owner (including invited owners) or super admin can delete
  */
-const canDeleteWorkspace = (workspace: Workspace): boolean => {
-  // Check if user is owner
+const canManageWorkspace = (workspace: Workspace): boolean => {
+  if (props.isSuperAdmin) return true;
   if (workspace.isOwner) return true;
-  // Check if user is super admin
-  if (props.currentUserEmail === SUPER_ADMIN_EMAIL) return true;
+  if (workspace.permission === 'owner') return true;
   return false;
 };
+
+const canDeleteWorkspace = canManageWorkspace;
 
 const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
@@ -240,7 +238,7 @@ onUnmounted(() => {
               class="flex items-center gap-1 px-3 py-1.5 bg-bg-tertiary/50 border-t border-border-default/50"
             >
               <button
-                v-if="workspace.isOwner || currentUserEmail === SUPER_ADMIN_EMAIL"
+                v-if="canManageWorkspace(workspace)"
                 @click.stop="emit('rename', workspace); isOpen = false"
                 class="flex items-center gap-1 px-2 py-1 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
                 title="Rename"

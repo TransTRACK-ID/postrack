@@ -1,12 +1,7 @@
 import { db } from '../../../db';
 import { workspaces, projects, workspaceShares, workspaceAccess } from '../../../db/schema';
 import { eq, inArray } from 'drizzle-orm';
-import { isWorkspaceOwner } from '../../../utils/permissions';
-
-/**
- * Super admin email that can delete any workspace
- */
-const SUPER_ADMIN_EMAIL = 'admin@mock.com';
+import { isWorkspaceOwnerViaMember, isSuperAdmin } from '../../../utils/permissions';
 
 /**
  * Protected workspace IDs that cannot be deleted
@@ -71,11 +66,11 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Check permissions: must be owner OR super admin
-    const isOwner = await isWorkspaceOwner(user.id, workspaceId);
-    const isSuperAdmin = user.email === SUPER_ADMIN_EMAIL;
+    // Check permissions: must be owner (including invited owners) OR super admin
+    const isOwner = await isWorkspaceOwnerViaMember(user.id, workspaceId);
+    const userIsSuperAdmin = isSuperAdmin(user.email);
 
-    if (!isOwner && !isSuperAdmin) {
+    if (!isOwner && !userIsSuperAdmin) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Only the workspace creator or super admin can delete this workspace'
@@ -83,7 +78,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Log the deletion attempt for audit trail
-    console.log(`[Workspace Delete] User ${user.email} (${user.id}) is deleting workspace "${workspaceData.name}" (${workspaceId}). Owner: ${isOwner}, SuperAdmin: ${isSuperAdmin}`);
+    console.log(`[Workspace Delete] User ${user.email} (${user.id}) is deleting workspace "${workspaceData.name}" (${workspaceId}). Owner: ${isOwner}, SuperAdmin: ${userIsSuperAdmin}`);
 
     // Count projects that will be deleted (for informational purposes)
     const projectsToDelete = await db

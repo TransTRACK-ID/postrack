@@ -1,7 +1,7 @@
 import { db } from '../../../db';
 import { collections, folders, projects } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
-import { isWorkspaceOwner, isSuperAdmin } from '../../../utils/permissions';
+import { isWorkspaceOwnerViaMember, isSuperAdmin } from '../../../utils/permissions';
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user;
@@ -51,8 +51,8 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Only the workspace owner or super admin may delete a collection
-    const ownerCheck = await isWorkspaceOwner(user.id, project.workspaceId);
+    // Only the workspace owner (including invited owners) or super admin may delete a collection
+    const ownerCheck = await isWorkspaceOwnerViaMember(user.id, project.workspaceId);
     if (!ownerCheck && !isSuperAdmin(user.email)) {
       throw createError({
         statusCode: 403,

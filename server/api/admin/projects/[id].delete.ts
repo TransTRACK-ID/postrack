@@ -1,7 +1,7 @@
 import { db } from '../../../db';
 import { projects, collections } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
-import { isWorkspaceOwner, isSuperAdmin } from '../../../utils/permissions';
+import { isWorkspaceOwnerViaMember, isSuperAdmin } from '../../../utils/permissions';
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id');
@@ -36,8 +36,8 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Only the workspace owner or super admin may delete a project
-    const ownerCheck = await isWorkspaceOwner(user.id, existing.workspaceId);
+    // Only the workspace owner (including invited owners) or super admin may delete a project
+    const ownerCheck = await isWorkspaceOwnerViaMember(user.id, existing.workspaceId);
     if (!ownerCheck && !isSuperAdmin(user.email)) {
       throw createError({
         statusCode: 403,
