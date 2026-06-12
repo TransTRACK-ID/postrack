@@ -405,7 +405,8 @@ function processOption(tokens: string[], index: number, state: ParseState): { ne
     
     case '-L':
     case '--location':
-      // Follow redirects - no value needed
+    case '--globoff':
+      // Follow redirects / disable glob parsing - no value needed
       return { newIndex: index + 1, skipToken: true };
     
     case '-v':
@@ -748,14 +749,32 @@ function validateMethod(method: string): HttpMethod {
 }
 
 /**
- * Check if a string appears to be a valid URL
+ * Check if a string appears to be a valid URL or URL template.
+ * Supports Postman/Bruno-style environment variables (e.g. {{url}}/api/v1/orders).
  */
 function isValidUrl(str: string): boolean {
   const stripped = stripQuotes(str);
-  return stripped.startsWith('http://') || 
-         stripped.startsWith('https://') || 
-         stripped.startsWith('ftp://') ||
-         stripped.startsWith('www.');
+
+  if (
+    stripped.startsWith('http://') ||
+    stripped.startsWith('https://') ||
+    stripped.startsWith('ftp://') ||
+    stripped.startsWith('www.')
+  ) {
+    return true;
+  }
+
+  // Postman/Bruno environment variables: {{variable}} or {{variable}}/path
+  if (/^\{\{\s*[^}]+\s*\}\}/.test(stripped)) {
+    return true;
+  }
+
+  // Relative paths (common in curl exports)
+  if (stripped.startsWith('/')) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -791,24 +810,28 @@ function buildUrlWithQueryParams(url: string, queryParams: Array<{ key: string; 
  * Generate request name from URL and method
  */
 function generateRequestName(url: string, method: string): string {
+  const readableNameFromPath = (path: string): string | null => {
+    const pathParts = path.split('/').filter(p => p);
+    if (pathParts.length === 0) return null;
+
+    const lastSegment = pathParts[pathParts.length - 1];
+    return lastSegment
+      .replace(/[-_]/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, c => c.toUpperCase());
+  };
+
   try {
     const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/').filter(p => p);
-    
-    if (pathParts.length > 0) {
-      // Use the last meaningful path segment
-      const lastSegment = pathParts[pathParts.length - 1];
-      // Convert kebab-case or snake_case to Title Case
-      const readableName = lastSegment
-        .replace(/[-_]/g, ' ')
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .replace(/\b\w/g, c => c.toUpperCase());
-      return `${method} ${readableName}`;
-    }
+    const name = readableNameFromPath(urlObj.pathname);
+    if (name) return `${method} ${name}`;
   } catch {
-    // URL parsing failed, use simple method
+    // Handle variable-prefixed URLs like {{url}}/api/v1/orders/start
+    const pathOnly = url.replace(/^\{\{\s*[^}]+\s*\}\}/, '').split('?')[0];
+    const name = readableNameFromPath(pathOnly);
+    if (name) return `${method} ${name}`;
   }
-  
+
   return `${method} Request`;
 }
 
