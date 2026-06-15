@@ -147,7 +147,7 @@ const checkAuthAndRedirect = async () => {
         <!-- Header -->
         <div class="text-center mb-7">
           <h1 class="text-2xl font-semibold text-text-primary mb-2">Welcome Back</h1>
-          <p class="text-sm text-text-secondary m-0">Sign in to access Mock Services</p>
+          <p class="text-sm text-text-secondary m-0">Sign in to access Postrack</p>
         </div>
 
         <!-- Error Message -->
@@ -256,7 +256,7 @@ const checkAuthAndRedirect = async () => {
 
       <!-- Footer -->
       <p class="mt-6 text-[13px] text-text-muted">
-        Mock Services Admin Panel
+        Postrack Admin Panel
       </p>
     </div>
 

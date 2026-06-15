@@ -42,7 +42,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Mock Services',
+  title: 'Postrack',
   showActions: true,
   environments: () => [],
   activeEnvironmentId: null,

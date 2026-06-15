@@ -3921,7 +3921,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
     <!-- Header -->
     <AppHeader 
       ref="appHeaderRef"
-      title="Mock Services"
+      title="Postrack"
       :environments="safeEnvironments"
       :active-environment-id="activeEnvironment?.id || null"
       :current-project-id="currentProjectId || null"
@@ -4016,7 +4016,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
               <line x1="9" y1="21" x2="9" y2="9"/>
             </svg>
           </div>
-          <h2 class="text-2xl font-semibold text-text-primary mb-3">Welcome to Mock Services</h2>
+          <h2 class="text-2xl font-semibold text-text-primary mb-3">Welcome to Postrack</h2>
           <p class="text-text-secondary mb-3 max-w-[380px]">Get started by creating your first workspace. We'll automatically create a default project for you.</p>
           <div class="flex flex-col items-center gap-4">
             <button class="btn btn-primary text-base px-6 py-2.5" @click="openCreateWorkspace">
