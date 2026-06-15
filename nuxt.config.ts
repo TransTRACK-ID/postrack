@@ -17,7 +17,7 @@ export default defineNuxtConfig({
   modules: ["@nuxtjs/tailwindcss"],
 
   css: [
-    '@speed-highlight/core/themes/atom-dark.css',
+    '@speed-highlight/core/dist/themes/atom-dark.css',
     '~/assets/css/main.css',
   ],
 

@@ -26,7 +26,7 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "electron:compile": "tsc -p electron/tsconfig.json",
-    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://localhost:3000 && pnpm electron:compile && electron .\"",
+    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://localhost:3000 && pnpm electron:compile && cross-env ELECTRON_DEV=true electron .\"",
     "electron:start": "pnpm electron:compile && electron .",
     "electron:build:app": "cross-env BUILD_TARGET=electron pnpm build && pnpm electron:compile",
     "electron:dist": "pnpm electron:build:app && electron-builder --mac --arm64",
