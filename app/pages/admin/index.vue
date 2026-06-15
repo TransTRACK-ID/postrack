@@ -3620,6 +3620,64 @@ const deleteFolder = async () => {
     }
 };
 
+const countFolderContents = (folder: any): { requests: number; subfolders: number } => {
+    let requests = folder.requests?.length || 0;
+    let subfolders = folder.children?.length || 0;
+
+    for (const child of folder.children || []) {
+        const childCounts = countFolderContents(child);
+        requests += childCounts.requests;
+        subfolders += childCounts.subfolders;
+    }
+
+    return { requests, subfolders };
+};
+
+const folderDuplicateStats = computed(() => {
+    if (!folderToDuplicate.value) {
+        return { requests: 0, subfolders: 0 };
+    }
+    return countFolderContents(folderToDuplicate.value);
+});
+
+// Folder duplication state
+const showDuplicateFolderConfirm = ref(false);
+const folderToDuplicate = ref<any>(null);
+const isDuplicatingFolder = ref(false);
+
+const confirmDuplicateFolder = (folder: any) => {
+    const hit = findCollectionByFolderId(folder.id);
+    const wsId = hit ? workspaceIdForCollectionId(hit.collectionId) : null;
+    if (wsId && !canEditWorkspaceById(wsId)) return;
+
+    const folderWithContents = findFolderInWorkspaces(folder.id) || folder;
+    folderToDuplicate.value = folderWithContents;
+    showDuplicateFolderConfirm.value = true;
+};
+
+const duplicateFolder = async () => {
+    if (!folderToDuplicate.value || isDuplicatingFolder.value) return;
+    const hit = findCollectionByFolderId(folderToDuplicate.value.id);
+    const wsId = hit ? workspaceIdForCollectionId(hit.collectionId) : null;
+    if (wsId && !canEditWorkspaceById(wsId)) return;
+
+    isDuplicatingFolder.value = true;
+
+    try {
+        await $fetch(`/api/admin/folders/${folderToDuplicate.value.id}/duplicate`, {
+            method: 'POST'
+        });
+
+        showDuplicateFolderConfirm.value = false;
+        folderToDuplicate.value = null;
+        await refreshWorkspaces();
+    } catch (e: any) {
+        alert('Error duplicating folder: ' + (e.data?.message || e.message));
+    } finally {
+        isDuplicatingFolder.value = false;
+    }
+};
+
 // Request deletion state
 const showDeleteRequestConfirm = ref(false);
 const requestToDelete = ref<any>(null);
@@ -3989,6 +4047,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         @delete-collection="confirmDeleteCollection"
         @delete-group="confirmDeleteGroup"
         @delete-folder="confirmDeleteFolder"
+        @duplicate-folder="confirmDuplicateFolder"
         @rename-folder="openRenameFolder"
         @delete-request="confirmDeleteRequest"
         @duplicate-request="handleDuplicateRequest"
@@ -4938,6 +4997,32 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       <template #footer>
         <button class="btn btn-secondary" @click="showDeleteFolderConfirm = false">Cancel</button>
         <button class="btn btn-danger" @click="deleteFolder">Delete Folder</button>
+      </template>
+    </Modal>
+
+    <!-- Duplicate Folder Confirmation Modal -->
+    <Modal :show="showDuplicateFolderConfirm" title="Duplicate Folder" @close="showDuplicateFolderConfirm = false">
+      <p class="text-text-secondary leading-relaxed">
+        Are you sure you want to duplicate this folder and all its contents?
+        <br />
+        <code class="inline-block mt-2 py-1.5 px-2.5 bg-bg-tertiary rounded text-accent-orange font-mono">{{ folderToDuplicate?.name }}</code>
+        <br /><br />
+        This will create a copy named <strong>{{ folderToDuplicate?.name }} (Copy)</strong> in the same location, including
+        <strong>{{ folderDuplicateStats.subfolders }}</strong> subfolder{{ folderDuplicateStats.subfolders === 1 ? '' : 's' }} and
+        <strong>{{ folderDuplicateStats.requests }}</strong> request{{ folderDuplicateStats.requests === 1 ? '' : 's' }}.
+      </p>
+      <template #footer>
+        <button class="btn btn-secondary" :disabled="isDuplicatingFolder" @click="showDuplicateFolderConfirm = false">Cancel</button>
+        <button class="btn btn-primary" :disabled="isDuplicatingFolder" @click="duplicateFolder">
+          <span v-if="isDuplicatingFolder" class="flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Duplicating...
+          </span>
+          <span v-else>Duplicate Folder</span>
+        </button>
       </template>
     </Modal>
 
