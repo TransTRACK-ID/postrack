@@ -3,7 +3,7 @@
    ============================================ */
 
 /* Speed-Highlight CSS for syntax highlighting */
-@import '@speed-highlight/core/themes/atom-dark.css';
+@import '@speed-highlight/core/dist/themes/atom-dark.css';
 
 /* Tailwind Directives */
 @tailwind base;
