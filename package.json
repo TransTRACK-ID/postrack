@@ -3,6 +3,7 @@
   "version": "0.9.11",
   "private": true,
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
@@ -23,7 +24,15 @@
     "version:major:push": "node scripts/bump-version.js major --push",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://localhost:3000 && pnpm electron:compile && electron .\"",
+    "electron:start": "pnpm electron:compile && electron .",
+    "electron:build:app": "cross-env BUILD_TARGET=electron pnpm build && pnpm electron:compile",
+    "electron:dist": "pnpm electron:build:app && electron-builder --mac --arm64",
+    "electron:dist:dir": "pnpm electron:build:app && electron-builder --mac --arm64 --dir",
+    "test:electron": "vitest run tests/electron",
+    "test:e2e:electron": "playwright test tests/e2e/electron"
   },
   "dependencies": {
     "@datadog/browser-logs": "^5.35.1",
@@ -47,10 +56,16 @@
     "vue": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@vue/test-utils": "^2.4.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "drizzle-kit": "^0.30.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "jsdom": "^26.0.0",
     "tsx": "^4.19.2",
     "vitest": "^3.0.0",
-    "jsdom": "^26.0.0",
-    "@vue/test-utils": "^2.4.0"
+    "wait-on": "^8.0.3"
   }
 }

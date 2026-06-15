@@ -2,6 +2,7 @@ import type { SsoConfig, SsoProvider, KeycloakProvider, AzureProvider, GenericOI
 import { DEFAULT_OAUTH_ENDPOINTS, getAzureEndpoints, getKeycloakEndpoints } from '../../../../../app/types/sso';
 import { db, schema } from '../../../../db';
 import { eq, and, isNull } from 'drizzle-orm';
+import { shouldUseSecureCookie } from '../../../../utils/cookieSecurity';
 
 export default defineEventHandler(async (event) => {
   const providerType = getRouterParam(event, 'provider');
@@ -131,9 +132,11 @@ export default defineEventHandler(async (event) => {
     redirectUrl: redirectUrl || '/admin'
   };
 
+  const appUrl = runtimeConfig.public?.appUrl || 'http://localhost:3000';
+
   setCookie(event, 'sso_oauth_state', JSON.stringify(sessionData), {
     httpOnly: true,
-    secure: runtimeConfig.nodeEnv === 'production',
+    secure: shouldUseSecureCookie(appUrl),
     sameSite: 'lax',
     maxAge: 60 * 10 // 10 minutes
   });

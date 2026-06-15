@@ -44,6 +44,7 @@ export default defineNuxtConfig({
     ]
   },
   runtimeConfig: {
+    buildTarget: process.env.BUILD_TARGET || 'web',
     adminEmail: process.env.ADMIN_EMAIL || 'admin@mock.com',
     adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
     jwtSecret: process.env.JWT_SECRET || 'super-secret-jwt-key-change-me',
@@ -56,6 +57,7 @@ export default defineNuxtConfig({
     
     // Client-side (PUBLIC) - Datadog RUM configuration
     public: {
+      buildTarget: process.env.BUILD_TARGET || 'web',
       appUrl: process.env.APP_URL || 'http://localhost:3000',
       appVersion,
       ossRepositoryUrl: process.env.OSS_REPOSITORY_URL || 'https://github.com/TransTRACK-ID/postrack',

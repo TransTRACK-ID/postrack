@@ -3,6 +3,7 @@ import type { SsoConfig, SsoProvider, KeycloakProvider, AzureProvider, GenericOI
 import { DEFAULT_OAUTH_ENDPOINTS, getAzureEndpoints, getKeycloakEndpoints } from '../../../../../app/types/sso';
 import { db, schema } from '../../../../db';
 import { eq, and, isNull } from 'drizzle-orm';
+import { shouldUseSecureCookie } from '../../../../utils/cookieSecurity';
 
 interface TokenResponse {
   access_token: string;
@@ -241,10 +242,13 @@ export default defineEventHandler(async (event) => {
     expiresIn: AUTH_SESSION_MAX_AGE_SECONDS
   });
 
+  const appUrl = runtimeConfig.public?.appUrl || 'http://localhost:3000';
+  const useSecureCookie = shouldUseSecureCookie(appUrl);
+
   // Set cookies
   setCookie(event, 'auth_token', token, {
     httpOnly: true,
-    secure: runtimeConfig.nodeEnv === 'production',
+    secure: useSecureCookie,
     sameSite: 'lax',
     maxAge: AUTH_SESSION_MAX_AGE_SECONDS
   });
@@ -252,7 +256,7 @@ export default defineEventHandler(async (event) => {
   const userInfoCookie = Buffer.from(JSON.stringify(normalizedUserInfo)).toString('base64');
   setCookie(event, 'user_info', userInfoCookie, {
     httpOnly: false,
-    secure: runtimeConfig.nodeEnv === 'production',
+    secure: useSecureCookie,
     sameSite: 'lax',
     maxAge: AUTH_SESSION_MAX_AGE_SECONDS
   });

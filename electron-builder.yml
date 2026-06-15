@@ -1,0 +1,30 @@
+appId: id.transtrack.postrack
+productName: Postrack
+directories:
+  output: release
+files:
+  - dist-electron/**/*
+  - package.json
+extraResources:
+  - from: .output
+    to: .output
+    filter: ["**/*"]
+  - from: drizzle
+    to: drizzle
+    filter: ["**/*"]
+  - from: node_modules
+    to: node_modules
+    filter:
+      - "pg/**"
+      - "drizzle-orm/**"
+      - "jsonwebtoken/**"
+      - "@types/**"
+mac:
+  target:
+    - dmg
+    - zip
+  arch:
+    - arm64
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
