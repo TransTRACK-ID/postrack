@@ -167,6 +167,7 @@ const emit = defineEmits<{
   deleteCollection: [collectionId: string];
   deleteGroup: [collectionId: string, groupName: string, mocks: Mock[]];
   deleteFolder: [folderId: string];
+  duplicateFolder: [folder: any];
   renameFolder: [folder: any];
   deleteRequest: [requestId: string];
   duplicateRequest: [request: HttpRequest];
@@ -1028,6 +1029,9 @@ const handleContextAction = (action: string) => {
         emit('importCurl', data.id);
       } else if (action === 'rename-folder') {
         emit('renameFolder', data);
+      } else if (action === 'duplicate-folder') {
+        emit('duplicateFolder', data);
+        closeContextMenu();
       } else if (action === 'delete-folder') {
         emit('deleteFolder', data);
       } else if (action === 'share-folder') {
@@ -2095,6 +2099,22 @@ defineExpose({
               Copy Prompt for Agent FE
             </button>
             <div v-if="canEdit" class="border-t border-border-default my-1"></div>
+            <button
+              v-if="canEdit"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+              @click.stop="handleContextAction('duplicate-folder')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <rect x="6" y="4" width="12" height="8" rx="2"/>
+                <path d="M9 8v.01"/>
+                <path d="M15 8v.01"/>
+                <path d="M12 2v2"/>
+                <path d="M8 12v8"/>
+                <path d="M16 12v8"/>
+                <rect x="4" y="12" width="16" height="8" rx="2"/>
+              </svg>
+              Duplicate Folder
+            </button>
             <button
               v-if="canEdit"
               class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
