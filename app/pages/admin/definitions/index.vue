@@ -227,7 +227,7 @@ const formatDate = (date: string) => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden bg-bg-primary">
+  <div class="flex flex-col h-full min-h-0 overflow-hidden bg-bg-primary">
     <AppHeader title="API Definitions" />
 
     <div class="flex flex-1 overflow-hidden">

@@ -518,14 +518,14 @@ watch(() => viewMode.value, (mode) => {
 </script>
 
 <template>
-  <div v-if="pending" class="min-h-screen flex items-center justify-center bg-bg-secondary">
+  <div v-if="pending" class="min-h-full flex items-center justify-center bg-bg-secondary">
     <div class="text-center">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-orange mx-auto mb-4"></div>
       <p class="text-text-secondary">Loading documentation...</p>
     </div>
   </div>
 
-  <div v-else-if="error" class="min-h-screen flex items-center justify-center bg-bg-secondary">
+  <div v-else-if="error" class="min-h-full flex items-center justify-center bg-bg-secondary">
     <div class="text-center max-w-md">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-accent-red opacity-50 mx-auto mb-4">
         <circle cx="12" cy="12" r="10"></circle>
@@ -538,8 +538,8 @@ watch(() => viewMode.value, (mode) => {
     </div>
   </div>
 
-  <div v-else-if="data" class="min-h-screen bg-bg-secondary">
-    <div class="flex flex-col h-screen">
+  <div v-else-if="data" class="min-h-full bg-bg-secondary">
+    <div class="flex flex-col h-full min-h-0">
       <header class="flex items-center justify-between py-3 px-5 border-b border-border-default bg-bg-header">
         <div class="flex items-center gap-3">
           <div class="flex items-center justify-center w-8 h-8 rounded-md bg-accent-orange/10 text-accent-orange">

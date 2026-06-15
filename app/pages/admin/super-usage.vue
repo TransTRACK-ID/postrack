@@ -390,7 +390,7 @@ const clearEventFilters = () => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-bg-secondary">
+  <div class="h-full min-h-0 flex flex-col bg-bg-secondary">
     <!-- Header -->
     <header class="h-12 bg-bg-header border-b border-border-default flex items-center justify-between px-4 flex-shrink-0">
       <div class="flex items-center gap-4">
