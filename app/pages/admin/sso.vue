@@ -229,7 +229,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden">
+  <div class="flex flex-col h-full min-h-0 overflow-hidden">
     <AppHeader title="SSO Configuration" :show-actions="false" />
 
     <main class="flex-1 overflow-hidden bg-bg-primary">

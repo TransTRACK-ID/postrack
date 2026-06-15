@@ -48,8 +48,11 @@ const handleFeedbackSubmit = async (data: { responses: Record<string, unknown>; 
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg-primary">
-    <slot />
+  <div class="flex h-screen h-dvh flex-col overflow-hidden bg-bg-primary">
+    <OpenSourceBanner />
+    <main class="min-h-0 flex-1 overflow-auto">
+      <slot />
+    </main>
     <VersionNotification />
     <ToastNotification />
 

@@ -58,6 +58,7 @@ export default defineNuxtConfig({
     public: {
       appUrl: process.env.APP_URL || 'http://localhost:3000',
       appVersion,
+      ossRepositoryUrl: process.env.OSS_REPOSITORY_URL || 'https://github.com/TransTRACK-ID/postrack',
       
       // Datadog RUM Configuration
       datadogApplicationId: process.env.DATADOG_APPLICATION_ID,

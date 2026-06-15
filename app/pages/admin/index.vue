@@ -3975,7 +3975,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
 </script>
 
 <template>
-  <div class="flex flex-col h-screen h-dvh overflow-hidden">
+  <div class="flex flex-col h-full min-h-0 overflow-hidden">
     <!-- Header -->
     <AppHeader 
       ref="appHeaderRef"

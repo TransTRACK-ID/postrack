@@ -456,7 +456,7 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden bg-bg-primary">
+  <div class="flex flex-col h-full min-h-0 overflow-hidden bg-bg-primary">
     <!-- Header -->
     <header class="flex items-center justify-between h-12 px-4 border-b border-border-default bg-bg-sidebar flex-shrink-0">
       <div class="flex items-center gap-3">
