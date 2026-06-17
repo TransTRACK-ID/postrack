@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick } from 'vue';
 import { SSO_PROVIDER_METADATA, type SsoProviderType } from '../types/sso';
 
 interface SsoProviderInfo {
@@ -57,6 +58,9 @@ const loginWithSso = (providerType: string, providerId?: string) => {
 const login = async () => {
   isLoading.value = true;
   errorMessage.value = '';
+  
+  // Allow DOM to update before starting async operations
+  await nextTick();
 
   try {
     await $fetch('/api/auth/login', {
@@ -69,9 +73,9 @@ const login = async () => {
     const redirectUrl = urlParams.get('redirect');
     
     if (redirectUrl) {
-      await navigateTo(decodeURIComponent(redirectUrl), { external: true });
+      await navigateTo(decodeURIComponent(redirectUrl));
     } else {
-      await navigateTo('/admin', { external: true });
+      await navigateTo('/admin');
     }
   } catch (e: any) {
     console.error('Login error:', e);
@@ -118,9 +122,9 @@ const checkAuthAndRedirect = async () => {
       // User is already logged in, redirect to intended destination or admin
       if (redirectUrl) {
         console.log('[Login] User already logged in, redirecting to:', decodeURIComponent(redirectUrl));
-        await navigateTo(decodeURIComponent(redirectUrl), { external: true });
+        await navigateTo(decodeURIComponent(redirectUrl));
       } else {
-        await navigateTo('/admin', { external: true });
+        await navigateTo('/admin');
       }
     }
   } catch (e) {
