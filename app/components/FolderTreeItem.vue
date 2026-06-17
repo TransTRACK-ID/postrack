@@ -32,8 +32,9 @@ interface FolderTreeItemProps {
   expandedFolderIds: Set<string>;
   draggingFolderId: string | null;
   draggingRequestId: string | null;
+  draggingProjectId?: string | null;
   dropTarget: {
-    type: 'folder' | 'request' | 'between';
+    type: 'folder' | 'request' | 'collection' | 'between' | 'project';
     id: string;
     position: 'before' | 'after' | 'inside';
   } | null;
@@ -87,8 +88,26 @@ const handleDragEnd = () => {
 const DRAG_THROTTLE_MS = 250;
 let lastDragOverTime = 0;
 
+const resolveVerticalDropPosition = (
+  event: DragEvent,
+  target: HTMLElement,
+  includeInside = false
+): 'before' | 'after' | 'inside' => {
+  const rect = target.getBoundingClientRect();
+  const relativeY = event.clientY - rect.top;
+  const height = rect.height || 1;
+
+  if (includeInside) {
+    if (relativeY < height * 0.25) return 'before';
+    if (relativeY > height * 0.75) return 'after';
+    return 'inside';
+  }
+
+  return relativeY < height / 2 ? 'before' : 'after';
+};
+
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
-  if (!canEdit.value) return;
+  if (!canEdit.value || props.draggingProjectId) return;
   event.preventDefault();
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
@@ -102,6 +121,56 @@ const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string
   lastDragOverTime = now;
 
   emit('dragOver', event, type, id, position);
+};
+
+const handleFolderItemDragOver = (event: DragEvent) => {
+  if (!canEdit.value || props.draggingProjectId) return;
+
+  const target = event.currentTarget as HTMLElement;
+
+  if (props.draggingRequestId) {
+    handleDragOver(event, 'folder', props.folder.id, 'inside');
+    return;
+  }
+
+  if (!props.draggingFolderId || props.draggingFolderId === props.folder.id) return;
+
+  const position = resolveVerticalDropPosition(event, target, true);
+  handleDragOver(event, 'folder', props.folder.id, position);
+};
+
+const handleFolderItemDrop = (event: DragEvent) => {
+  if (!canEdit.value || props.draggingProjectId) return;
+
+  const position =
+    props.dropTarget?.type === 'folder' &&
+    props.dropTarget.id === props.folder.id &&
+    (props.dropTarget.position === 'before' || props.dropTarget.position === 'after' || props.dropTarget.position === 'inside')
+      ? props.dropTarget.position
+      : 'inside';
+
+  handleDrop(event, 'folder', props.folder.id, position);
+};
+
+const handleRequestItemDragOver = (event: DragEvent, requestId: string) => {
+  if (!canEdit.value || props.draggingProjectId) return;
+
+  const target = event.currentTarget as HTMLElement;
+  const position = resolveVerticalDropPosition(event, target);
+  handleDragOver(event, 'request', requestId, position);
+};
+
+const handleRequestItemDrop = (event: DragEvent, requestId: string) => {
+  if (!canEdit.value || props.draggingProjectId) return;
+
+  const position =
+    props.dropTarget?.type === 'request' &&
+    props.dropTarget.id === requestId &&
+    (props.dropTarget.position === 'before' || props.dropTarget.position === 'after')
+      ? props.dropTarget.position
+      : 'before';
+
+  handleDrop(event, 'request', requestId, position);
 };
 
 const handleDragLeave = () => {
@@ -128,6 +197,9 @@ const isValidDropTarget = (): boolean => {
 const isFolderDropBefore = computed(() =>
   props.dropTarget?.type === 'folder' && props.dropTarget?.id === props.folder.id && props.dropTarget?.position === 'before'
 );
+const isFolderDropAfter = computed(() =>
+  props.dropTarget?.type === 'folder' && props.dropTarget?.id === props.folder.id && props.dropTarget?.position === 'after'
+);
 const isFolderDropInside = computed(() =>
   props.dropTarget?.type === 'folder' && props.dropTarget?.id === props.folder.id && props.dropTarget?.position === 'inside'
 );
@@ -147,7 +219,7 @@ const isBeforeRequestsDrop = computed(() =>
     <!-- Drop indicator line - before folder -->
     <div
       v-if="isFolderDropBefore"
-      class="absolute left-0 right-0 h-0.5 bg-accent-blue -top-0.5 z-10 pointer-events-none"
+      class="absolute left-0 right-0 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
     ></div>
 
     <!-- Folder Header -->
@@ -155,6 +227,7 @@ const isBeforeRequestsDrop = computed(() =>
       :class="[
         'flex items-center gap-1.5 py-1.5 px-3 text-text-primary text-xs font-medium cursor-pointer transition-colors duration-fast group relative',
         isFolderDropInside ? 'bg-accent-blue/10 border border-dashed border-accent-blue rounded' : '',
+        (isFolderDropBefore || isFolderDropAfter) ? 'bg-accent-blue/5' : '',
         !isValidDropTarget() && (draggingFolderId || draggingRequestId) ? 'opacity-40' : ''
       ]"
       :draggable="canDrag"
@@ -162,15 +235,10 @@ const isBeforeRequestsDrop = computed(() =>
       @dragend="handleDragEnd"
       @click="emit('toggleFolder', folder.id)"
       @contextmenu.prevent="emit('contextMenu', $event, 'folder', folder)"
-      @dragover="handleDragOver($event, 'folder', folder.id, 'inside')"
+      @dragover="handleFolderItemDragOver($event)"
       @dragleave="handleDragLeave"
-      @drop="handleDrop($event, 'folder', folder.id, 'inside')"
+      @drop="handleFolderItemDrop($event)"
     >
-      <!-- Drop indicator - left side when hovering for reorder -->
-      <div
-        v-if="isFolderDropBefore"
-        class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-accent-blue z-20"
-      ></div>
 
       <!-- Chevron -->
       <svg
@@ -181,7 +249,7 @@ const isBeforeRequestsDrop = computed(() =>
       </svg>
 
       <!-- Folder Icon -->
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="text-accent-yellow flex-shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
       </svg>
 
@@ -206,6 +274,12 @@ const isBeforeRequestsDrop = computed(() =>
       </button>
     </div>
 
+    <!-- Drop indicator line - after folder -->
+    <div
+      v-if="isFolderDropAfter"
+      class="absolute left-0 right-0 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+    ></div>
+
     <!-- Folder Content (Nested Folders & Requests) -->
     <Transition name="expand">
       <div v-show="isExpanded(folder.id)" class="pl-3 relative">
@@ -222,6 +296,7 @@ const isBeforeRequestsDrop = computed(() =>
             :expanded-folder-ids="expandedFolderIds"
             :dragging-folder-id="draggingFolderId"
             :dragging-request-id="draggingRequestId"
+            :dragging-project-id="draggingProjectId"
             :drop-target="dropTarget"
             :permission="permission"
             @toggle-folder="emit('toggleFolder', $event)"
@@ -250,42 +325,38 @@ const isBeforeRequestsDrop = computed(() =>
 
         <!-- Requests -->
         <div v-if="folder.requests.length > 0" class="mt-1 relative">
-          <template v-for="(request, index) in folder.requests" :key="request.id">
-            <!-- Drop indicator before request -->
-            <div
-              v-if="dropTarget?.type === 'request' && dropTarget?.id === request.id && dropTarget?.position === 'before'"
-              class="absolute left-0 right-0 h-0.5 bg-accent-blue -mt-0.5 z-10 pointer-events-none"
-              :style="{ top: (index * 36) + 'px' }"
-            ></div>
-
-            <div
-              v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
-              :class="[
-                'flex items-center gap-2 py-2 px-3 mx-1.5 rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
-                dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10' : ''
-              ]"
-              :draggable="true"
-              @dragstart="handleDragStart($event, 'request', request.id)"
-              @dragend="handleDragEnd"
-              @click="emit('selectRequest', { ...request, folderId: props.folder.id })"
-              @mouseenter="emit('hoverRequest', request.id)"
-              @contextmenu.prevent="emit('contextMenu', $event, 'request', request)"
-              @dragover="handleDragOver($event, 'request', request.id, index === 0 ? 'before' : 'after')"
-              @dragleave="handleDragLeave"
-              @drop="handleDrop($event, 'request', request.id, index === 0 ? 'before' : 'after')"
-            >
-              <MethodBadge :method="request.method" size="xs" />
-              <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="request.name">
-                {{ request.name }}
-              </span>
+          <template v-for="request in folder.requests" :key="request.id">
+            <div class="relative mx-1.5">
+              <div
+                v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
+                :class="[
+                  'flex items-center gap-2 py-2 px-3 rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
+                  dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10' : ''
+                ]"
+                :draggable="true"
+                @dragstart="handleDragStart($event, 'request', request.id)"
+                @dragend="handleDragEnd"
+                @click="emit('selectRequest', { ...request, folderId: props.folder.id })"
+                @mouseenter="emit('hoverRequest', request.id)"
+                @contextmenu.prevent="emit('contextMenu', $event, 'request', request)"
+                @dragover="handleRequestItemDragOver($event, request.id)"
+                @dragleave="handleDragLeave"
+                @drop="handleRequestItemDrop($event, request.id)"
+              >
+                <div
+                  v-if="dropTarget?.type === 'request' && dropTarget?.id === request.id && dropTarget?.position === 'before'"
+                  class="absolute left-0 right-0 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+                ></div>
+                <MethodBadge :method="request.method" size="xs" />
+                <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="request.name">
+                  {{ request.name }}
+                </span>
+                <div
+                  v-if="dropTarget?.type === 'request' && dropTarget?.id === request.id && dropTarget?.position === 'after'"
+                  class="absolute left-0 right-0 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+                ></div>
+              </div>
             </div>
-
-            <!-- Drop indicator after request -->
-            <div
-              v-if="dropTarget?.type === 'request' && dropTarget?.id === request.id && dropTarget?.position === 'after'"
-              class="absolute left-0 right-0 h-0.5 bg-accent-blue -mt-0.5 z-10 pointer-events-none"
-              :style="{ top: ((index + 1) * 36) + 'px' }"
-            ></div>
           </template>
         </div>
 

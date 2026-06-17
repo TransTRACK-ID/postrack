@@ -45,6 +45,7 @@ interface ProjectWithCollections {
   workspaceId: string;
   name: string;
   baseUrl: string | null;
+  order: number;
   collections: CollectionWithFolders[];
   collectionCount: number;
 }
@@ -71,6 +72,14 @@ function parseJsonField<T>(value: unknown): T | null {
     }
   }
   return value as T;
+}
+
+function sortProjectsByOrder<T extends { order: number; createdAt: Date }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const orderDiff = a.order - b.order;
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
 }
 
 function buildFolderTree(
@@ -192,7 +201,9 @@ export default defineEventHandler(async (event) => {
     const permissionMap = await getWorkspacePermissionsBatch(user.id, workspaceIds);
 
     const workspacesWithProjects: WorkspaceWithProjects[] = allWorkspaces.map((workspace) => {
-      const workspaceProjects = allProjects.filter(p => p.workspaceId === workspace.id);
+      const workspaceProjects = sortProjectsByOrder(
+        allProjects.filter(p => p.workspaceId === workspace.id)
+      );
       const isOwner = workspace.ownerId === user.id || workspace.ownerId === null || workspace.ownerId === 'unknown' || workspace.ownerId === '';
       const permission = isOwner ? 'owner' : (permissionMap.get(workspace.id) || null);
 
@@ -207,6 +218,7 @@ export default defineEventHandler(async (event) => {
             workspaceId: project.workspaceId,
             name: project.name,
             baseUrl: project.baseUrl,
+            order: project.order,
             collections: projectCollections.map(collection => {
               const collectionFolders = allFolders.filter(f => f.collectionId === collection.id);
               const folderTree = buildFolderTree(collectionFolders, allRequests);

@@ -1,6 +1,6 @@
 import { db } from '../../../../db';
 import { workspaces, projects } from '../../../../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, asc } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id');
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
       .select()
       .from(projects)
       .where(eq(projects.workspaceId, workspaceId))
-      .orderBy(desc(projects.createdAt));
+      .orderBy(asc(projects.order), desc(projects.createdAt));
 
     return workspaceProjects;
   } catch (error: any) {
