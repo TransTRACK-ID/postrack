@@ -825,7 +825,9 @@ const handleFolderDrop = async (sourceFolderId: string, targetFolderId: string, 
   const targetFolder = findFolderById(currentWorkspace.value, targetFolderId);
   
   if (!sourceFolder || !targetFolder) return;
+  if (sourceFolder.collectionId !== targetFolder.collectionId) return;
 
+  const collectionId = targetFolder.collectionId;
   let newParentId: string | null = null;
   let newOrder: number = 0;
 
@@ -834,14 +836,14 @@ const handleFolderDrop = async (sourceFolderId: string, targetFolderId: string, 
     newOrder = targetFolder.children.length;
   } else {
     newParentId = targetFolder.parentFolderId;
-    const siblings = getSiblingFolders(targetFolder.parentFolderId);
+    const siblings = getSiblingFolders(targetFolder.parentFolderId, collectionId);
     const targetIndex = siblings.findIndex(f => f.id === targetFolderId);
     newOrder = position === 'before' ? targetIndex : targetIndex + 1;
   }
 
-  const folderUpdates = calculateFolderOrderUpdates(sourceFolderId, newParentId, newOrder, targetFolder.collectionId);
+  const folderUpdates = calculateFolderOrderUpdates(sourceFolderId, newParentId, newOrder, collectionId);
   
-  emit('reorderFolders', targetFolder.collectionId, folderUpdates);
+  emit('reorderFolders', collectionId, folderUpdates);
 };
 
 const handleRequestToFolderDrop = async (requestId: string, targetFolderId: string) => {
@@ -1006,32 +1008,33 @@ const findRequestLocation = (requestId: string, workspace: WorkspaceWithProjects
   return null;
 };
 
-const getSiblingFolders = (parentId: string | null): FolderWithRequestsAndChildren[] => {
+const getSiblingFolders = (parentId: string | null, collectionId: string): FolderWithRequestsAndChildren[] => {
   if (!currentWorkspace.value) return [];
-  
-  const getFoldersAtLevel = (folders: FolderWithRequestsAndChildren[]): FolderWithRequestsAndChildren[] => {
-    return folders.filter(f => f.parentFolderId === parentId);
-  };
-  
+
   for (const project of currentWorkspace.value.projects) {
     for (const collection of project.collections) {
+      if (collection.id !== collectionId) continue;
+
       if (parentId === null) {
-        return collection.folders.filter(f => f.parentFolderId === null);
+        return collection.folders
+          .filter(f => f.parentFolderId === null)
+          .sort((a, b) => a.order - b.order);
       }
-      const allFolders: FolderWithRequestsAndChildren[] = [];
+
+      const siblings: FolderWithRequestsAndChildren[] = [];
       const collectFolders = (folders: FolderWithRequestsAndChildren[]) => {
         for (const folder of folders) {
           if (folder.parentFolderId === parentId) {
-            allFolders.push(folder);
+            siblings.push(folder);
           }
           collectFolders(folder.children);
         }
       };
       collectFolders(collection.folders);
-      if (allFolders.length > 0) return allFolders;
+      return siblings.sort((a, b) => a.order - b.order);
     }
   }
-  
+
   return [];
 };
 
@@ -1043,7 +1046,7 @@ const calculateFolderOrderUpdates = (
 ): { id: string; parentFolderId: string | null; order: number }[] => {
   const updates: { id: string; parentFolderId: string | null; order: number }[] = [];
   
-  const siblings = getSiblingFolders(newParentId).filter(f => f.id !== sourceFolderId);
+  const siblings = getSiblingFolders(newParentId, collectionId).filter(f => f.id !== sourceFolderId);
   
   siblings.forEach((folder, idx) => {
     if (idx >= newOrder) {
