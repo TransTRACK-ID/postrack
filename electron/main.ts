@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog } from 'electron'
-import { getDevServerUrl, isDevMode, validateDesktopEnv } from './env.js'
+import { getDevServerUrl, isDevMode, loadProjectEnv, validateDesktopEnv } from './env.js'
 import { startNitroServer } from './nitro-server.js'
 import { registerShutdownHandlers } from './shutdown.js'
 
@@ -60,6 +60,7 @@ async function createWindow(baseUrl: string): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  loadProjectEnv()
   registerShutdownHandlers()
 
   try {

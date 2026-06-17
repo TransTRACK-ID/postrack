@@ -89,6 +89,11 @@ function findMigrationsPath(): string | null {
   
   // Try multiple possible locations
   const possiblePaths = [
+    process.env.DRIZZLE_MIGRATIONS_PATH,
+    // Electron packaged app stores drizzle in extraResources
+    ...(typeof (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath === 'string'
+      ? [resolve((process as NodeJS.Process & { resourcesPath: string }).resourcesPath, 'drizzle')]
+      : []),
     resolve(process.cwd(), 'drizzle'),
     resolve(process.cwd(), '.output', 'server', 'drizzle'),
     resolve(process.cwd(), '.output', 'drizzle'),
@@ -100,6 +105,7 @@ function findMigrationsPath(): string | null {
   
   console.log('[Database] Searching for migrations in:');
   for (const path of possiblePaths) {
+    if (!path) continue;
     const exists = existsSync(path);
     console.log(`  - ${path}: ${exists ? 'FOUND' : 'not found'}`);
     if (exists) {
