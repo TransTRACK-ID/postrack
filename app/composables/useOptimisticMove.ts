@@ -58,6 +58,7 @@ interface ProjectWithCollections {
   workspaceId: string;
   name: string;
   baseUrl: string | null;
+  order: number;
   createdAt?: Date;
   updatedAt?: Date;
   collections: CollectionWithFolders[];
@@ -395,6 +396,45 @@ export function reorderFoldersOptimistically(
       insertAtOrder(collection.folders, folder, update.order);
     }
   }
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Project Optimistic Updates
+// ---------------------------------------------------------------------------
+
+export interface MoveProjectUpdate {
+  id: string;
+  order: number;
+}
+
+/**
+ * Reorder projects within a workspace optimistically.
+ */
+export function reorderProjectsOptimistically(
+  workspaces: WorkspaceWithProjects[],
+  workspaceId: string,
+  updates: MoveProjectUpdate[]
+): boolean {
+  const workspace = workspaces.find(w => w.id === workspaceId);
+  if (!workspace) return false;
+
+  const updateMap = new Map(updates.map(update => [update.id, update.order]));
+  for (const project of workspace.projects) {
+    const nextOrder = updateMap.get(project.id);
+    if (nextOrder !== undefined) {
+      project.order = nextOrder;
+    }
+  }
+
+  workspace.projects.sort((a, b) => {
+    const orderDiff = a.order - b.order;
+    if (orderDiff !== 0) return orderDiff;
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return aTime - bTime;
+  });
 
   return true;
 }

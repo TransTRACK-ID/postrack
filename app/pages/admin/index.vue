@@ -23,7 +23,8 @@ import { useToast } from '~/composables/useToast';
 import { useSidebarResize } from '~/composables/useSidebarResize';
 import {
   reorderRequestsOptimistically,
-  reorderFoldersOptimistically
+  reorderFoldersOptimistically,
+  reorderProjectsOptimistically
 } from '~/composables/useOptimisticMove';
 
 const emit = defineEmits<{
@@ -3870,6 +3871,29 @@ const renameItem = async () => {
     }
 };
 
+const handleReorderProjects = async (
+  workspaceId: string,
+  updates: { id: string; order: number }[]
+) => {
+    if (!canEditWorkspaceById(workspaceId)) return;
+
+    if (workspaces.value) {
+        reorderProjectsOptimistically(workspaces.value, workspaceId, updates);
+    }
+
+    try {
+        await $fetch('/api/admin/projects/reorder', {
+            method: 'POST',
+            body: { workspaceId, updates }
+        });
+        showToast('Projects reordered', 'success', { duration: 2000 });
+        refreshWorkspaces();
+    } catch (e: any) {
+        showToast('Error reordering projects: ' + (e.data?.message || e.message), 'error', { duration: 4000 });
+        refresh();
+    }
+};
+
 const handleReorderFolders = async (collectionId: string, updates: { id: string; parentFolderId: string | null; order: number }[]) => {
     const wsId = workspaceIdForCollectionId(collectionId);
     if (wsId && !canEditWorkspaceById(wsId)) return;
@@ -4058,6 +4082,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         @reimport-definition="handleReimportDefinition"
         @reorder-folders="handleReorderFolders"
         @reorder-requests="handleReorderRequests"
+        @reorder-projects="handleReorderProjects"
         @select-workspace="handleWorkspaceSelect($event)"
         @import-complete="definitionsRefreshTrigger++"
         @active-view-change="sidebarActiveView = $event"
