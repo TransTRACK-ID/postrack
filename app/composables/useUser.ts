@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { datadogRum } from '@datadog/browser-rum'
 
 export interface User {
@@ -9,12 +9,28 @@ export interface User {
   authMethod?: string
 }
 
-const user = ref<User | null>(null)
-const isAuthenticated = computed(() => !!user.value)
+export interface AuthState {
+  user: User | null
+  authMethod: string
+  tokenExpiry: number | null
+  isTokenExpiringSoon: boolean
+}
 
 export function useUser() {
+  const authState = useState<AuthState>('auth', () => ({
+    user: null,
+    authMethod: 'credentials',
+    tokenExpiry: null,
+    isTokenExpiringSoon: false
+  }))
+
+  const isCheckingAuth = useState<boolean>('auth-checking', () => true)
+
+  const user = computed(() => authState.value.user)
+  const isAuthenticated = computed(() => !!authState.value.user)
+
   const setUser = (userData: User | null) => {
-    user.value = userData
+    authState.value.user = userData
     
     // Set Datadog user context
     if (userData) {
@@ -33,27 +49,52 @@ export function useUser() {
   }
 
   const clearUser = () => {
-    user.value = null
+    authState.value.user = null
+    authState.value.authMethod = 'credentials'
+    authState.value.tokenExpiry = null
+    authState.value.isTokenExpiringSoon = false
     datadogRum.clearUser()
   }
 
   const fetchUser = async (): Promise<User | null> => {
+    isCheckingAuth.value = true
     try {
-      const response = await $fetch<{ status: string; user?: User }>('/api/auth/check')
+      const response = await $fetch<{
+        status: string
+        user?: User
+        authMethod?: string
+        tokenExpiry?: number | null
+        isTokenExpiringSoon?: boolean
+      }>('/api/auth/check')
+      
       if (response.status === 'logged_in' && response.user) {
+        authState.value.user = response.user
+        authState.value.authMethod = response.authMethod || 'credentials'
+        authState.value.tokenExpiry = response.tokenExpiry ?? null
+        authState.value.isTokenExpiringSoon = response.isTokenExpiringSoon || false
+        
+        // Datadog side-effects via setUser
         setUser(response.user)
         return response.user
       }
+      
+      // Not logged in — clear shared state
+      authState.value.user = null
       return null
-    } catch (error) {
+    } catch (error: any) {
       console.error('[useUser] Failed to fetch user:', error)
+      authState.value.user = null
       return null
+    } finally {
+      isCheckingAuth.value = false
     }
   }
 
   return {
-    user: computed(() => user.value),
+    user,
     isAuthenticated,
+    authState,
+    isCheckingAuth,
     setUser,
     clearUser,
     fetchUser,
