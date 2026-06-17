@@ -651,6 +651,7 @@ const handleDragEnd = () => {
 };
 
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
+  if (draggingProjectId.value) return;
   event.preventDefault();
 
   // Throttle dragover to 250ms to reduce reactive updates and re-renders
@@ -675,7 +676,7 @@ const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string
       return;
     }
 
-    dragState.setDropTarget({ type, id, position: position === 'inside' ? 'inside' : 'before' });
+    dragState.setDropTarget({ type, id, position });
   } else {
     dragState.setDropTarget({ type, id, position });
   }
@@ -1685,18 +1686,18 @@ defineExpose({
         </div>
 
         <!-- Projects (filtered by search when workspaceSearchQuery is set) -->
-        <div v-for="project in filteredProjects" :key="project.id" class="relative">
+        <div v-for="project in filteredProjects" :key="project.id" class="relative py-px">
           <!-- Drop indicator - before project -->
           <div
             v-if="dropTarget?.type === 'project' && dropTarget?.id === project.id && dropTarget?.position === 'before'"
-            class="absolute left-2 right-2 h-0.5 bg-accent-blue -top-0.5 z-10 pointer-events-none"
+            class="absolute left-2 right-2 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
           ></div>
 
           <!-- Project Header -->
           <div
             :class="[
-              'flex items-center gap-2 py-2 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group',
-              dropTarget?.type === 'project' && dropTarget?.id === project.id && dropTarget?.position === 'inside' ? 'bg-accent-blue/10 border border-dashed border-accent-blue rounded' : ''
+              'flex items-center gap-2 py-2 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group relative',
+              dropTarget?.type === 'project' && dropTarget?.id === project.id && (dropTarget?.position === 'before' || dropTarget?.position === 'after') ? 'bg-accent-blue/5' : ''
             ]"
             :draggable="canDragProjects"
             @dragstart="handleProjectDragStart($event, project.id)"
@@ -1747,7 +1748,7 @@ defineExpose({
           <!-- Drop indicator - after project -->
           <div
             v-if="dropTarget?.type === 'project' && dropTarget?.id === project.id && dropTarget?.position === 'after'"
-            class="absolute left-2 right-2 h-0.5 bg-accent-blue -bottom-0.5 z-10 pointer-events-none"
+            class="absolute left-2 right-2 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
           ></div>
 
           <!-- Project Content (Collections) -->
@@ -1820,6 +1821,7 @@ defineExpose({
                         :expanded-folder-ids="expandedFolders"
                         :dragging-folder-id="draggingFolderId"
                         :dragging-request-id="draggingRequestId"
+                        :dragging-project-id="draggingProjectId"
                         :drop-target="dropTarget"
                         :permission="currentWorkspace?.permission || (currentWorkspace?.isOwner ? 'owner' : 'view')"
                         @toggle-folder="toggleFolder"
@@ -1836,7 +1838,7 @@ defineExpose({
                       <!-- Render Request -->
                       <div
                         v-else
-                         v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
+                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
                         :class="[
                           'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
                           dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10' : ''
@@ -1851,10 +1853,18 @@ defineExpose({
                         @mouseenter="emit('hoverRequest', item.data.id)"
                         @contextmenu.prevent="handleContextMenu($event, 'request', item.data)"
                       >
+                        <div
+                          v-if="dropTarget?.type === 'request' && dropTarget?.id === item.data.id && dropTarget?.position === 'before'"
+                          class="absolute left-2 right-2 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+                        ></div>
                         <MethodBadge :method="item.data.method" size="xs" />
                         <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="item.data.name">
                           {{ item.data.name }}
                         </span>
+                        <div
+                          v-if="dropTarget?.type === 'request' && dropTarget?.id === item.data.id && dropTarget?.position === 'after'"
+                          class="absolute left-2 right-2 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+                        ></div>
                       </div>
                     </template>
 
