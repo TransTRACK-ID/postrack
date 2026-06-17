@@ -10,7 +10,7 @@
 import { shallowRef, readonly as vueReadonly } from 'vue';
 
 export interface DropTarget {
-  type: 'folder' | 'request' | 'collection' | 'between';
+  type: 'folder' | 'request' | 'collection' | 'between' | 'project';
   id: string;
   position: 'before' | 'after' | 'inside';
 }
@@ -20,6 +20,7 @@ export interface DropTarget {
 // ---------------------------------------------------------------------------
 const _draggingFolderId = shallowRef<string | null>(null);
 const _draggingRequestId = shallowRef<string | null>(null);
+const _draggingProjectId = shallowRef<string | null>(null);
 const _dropTarget = shallowRef<DropTarget | null>(null);
 
 // Plain variables for transient timing (no reactive overhead)
@@ -35,11 +36,13 @@ export function useDragState() {
     // Read-only reactive state
     draggingFolderId: vueReadonly(_draggingFolderId),
     draggingRequestId: vueReadonly(_draggingRequestId),
+    draggingProjectId: vueReadonly(_draggingProjectId),
     dropTarget: vueReadonly(_dropTarget),
 
     // Direct refs for internal mutation (needed by AppSidebar handlers)
     __draggingFolderId: _draggingFolderId,
     __draggingRequestId: _draggingRequestId,
+    __draggingProjectId: _draggingProjectId,
     __dropTarget: _dropTarget,
 
     // Actions
@@ -52,13 +55,19 @@ export function useDragState() {
 }
 
 /** Set what is being dragged */
-function setDragging(type: 'folder' | 'request', id: string | null) {
+function setDragging(type: 'folder' | 'request' | 'project', id: string | null) {
   if (type === 'folder') {
     _draggingFolderId.value = id;
     _draggingRequestId.value = null;
-  } else {
+    _draggingProjectId.value = null;
+  } else if (type === 'request') {
     _draggingRequestId.value = id;
     _draggingFolderId.value = null;
+    _draggingProjectId.value = null;
+  } else {
+    _draggingProjectId.value = id;
+    _draggingFolderId.value = null;
+    _draggingRequestId.value = null;
   }
   _lastDragOverTime = 0;
 }
@@ -67,6 +76,7 @@ function setDragging(type: 'folder' | 'request', id: string | null) {
 function clearDragging() {
   _draggingFolderId.value = null;
   _draggingRequestId.value = null;
+  _draggingProjectId.value = null;
   _dropTarget.value = null;
   _lastDragOverTime = 0;
 }

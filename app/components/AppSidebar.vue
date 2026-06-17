@@ -82,6 +82,7 @@ interface ProjectWithCollections {
   workspaceId: string;
   name: string;
   baseUrl: string | null;
+  order: number;
   createdAt: Date;
   updatedAt: Date;
   collections: CollectionWithFolders[];
@@ -176,8 +177,9 @@ const emit = defineEmits<{
   viewDefinitionDocs: [definition: any];
   generateDefinitionMocks: [definition: any];
   reimportDefinition: [definition: any];
-  reorderFolders: [folders: Array<{ id: string; order: number }>];
-  reorderRequests: [requests: Array<{ id: string; order: number }>];
+  reorderFolders: [collectionId: string, updates: Array<{ id: string; parentFolderId: string | null; order: number }>];
+  reorderRequests: [folderId: string | null, updates: Array<{ id: string; folderId?: string | null; collectionId?: string | null; order: number }>, collectionId?: string | null];
+  reorderProjects: [workspaceId: string, updates: Array<{ id: string; order: number }>];
   selectWorkspace: [workspaceId: string];
   importComplete: [];
   activeViewChange: [view: 'hierarchy' | 'mocks' | 'history' | 'definitions'];
@@ -199,6 +201,7 @@ const expandedFolders = useExpandedState('mock-service-expanded-folders');
 // Drag state is managed via useDragState composable (shallowRef for performance)
 const draggingFolderId = dragState.__draggingFolderId;
 const draggingRequestId = dragState.__draggingRequestId;
+const draggingProjectId = dragState.__draggingProjectId;
 const dropTarget = dragState.__dropTarget;
 
 const workspaceSearchQuery = ref('');
@@ -221,6 +224,8 @@ const canEdit = computed(() => {
   if (perm) return perm === 'owner' || perm === 'edit';
   return ws.isOwner;
 });
+
+const canDragProjects = computed(() => canEdit.value && !workspaceSearchQuery.value.trim());
 
 // Destructive operations (delete workspace / collection) are restricted to owners and super admins.
 // Edit-role members can create and modify content but cannot delete containers.
@@ -288,7 +293,11 @@ const filterCollectionBySearch = (
 };
 
 const filteredProjects = computed((): ProjectWithCollections[] => {
-  const projects = currentWorkspace.value?.projects ?? [];
+  const projects = [...(currentWorkspace.value?.projects ?? [])].sort((a, b) => {
+    const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
   const q = workspaceSearchQuery.value.trim().toLowerCase();
   if (!q) return projects;
   return projects
@@ -546,11 +555,103 @@ const handleDragStart = (type: 'folder' | 'request', id: string) => {
   dragState.setDragging(type, id);
 };
 
+const handleProjectDragStart = (event: DragEvent, projectId: string) => {
+  if (!canDragProjects.value) {
+    event.preventDefault();
+    return;
+  }
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/json', JSON.stringify({ type: 'project', id: projectId }));
+  }
+  dragState.setDragging('project', projectId);
+};
+
+const handleProjectDragOver = (event: DragEvent, projectId: string) => {
+  if (!canDragProjects.value || !draggingProjectId.value) return;
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+  if (draggingProjectId.value === projectId) {
+    dragState.setDropTarget(null);
+    return;
+  }
+  if (!dragState.shouldProcessDragOver(250)) return;
+
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const position: 'before' | 'after' = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+  dragState.setDropTarget({ type: 'project', id: projectId, position });
+};
+
+const handleProjectDrop = async (event: DragEvent, targetProjectId: string) => {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const sourceProjectId = draggingProjectId.value;
+  const workspace = currentWorkspace.value;
+
+  if (!sourceProjectId || !workspace) {
+    handleDragEnd();
+    return;
+  }
+
+  const position =
+    dropTarget.value?.type === 'project' &&
+    dropTarget.value.id === targetProjectId &&
+    (dropTarget.value.position === 'before' || dropTarget.value.position === 'after')
+      ? dropTarget.value.position
+      : 'before';
+
+  const updates = calculateProjectOrderUpdates(sourceProjectId, targetProjectId, position, workspace.projects);
+  if (updates.length > 0) {
+    emit('reorderProjects', workspace.id, updates);
+  }
+
+  handleDragEnd();
+};
+
+const calculateProjectOrderUpdates = (
+  sourceProjectId: string,
+  targetProjectId: string,
+  position: 'before' | 'after',
+  projects: ProjectWithCollections[]
+): { id: string; order: number }[] => {
+  const sorted = [...projects].sort((a, b) => {
+    const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+
+  const fromIndex = sorted.findIndex(project => project.id === sourceProjectId);
+  let toIndex = sorted.findIndex(project => project.id === targetProjectId);
+
+  if (fromIndex === -1 || toIndex === -1) return [];
+
+  if (position === 'after') {
+    toIndex += 1;
+  }
+  if (fromIndex < toIndex) {
+    toIndex -= 1;
+  }
+
+  const reordered = [...sorted];
+  const [moved] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, moved);
+
+  return reordered.map((project, index) => ({
+    id: project.id,
+    order: index
+  }));
+};
+
 const handleDragEnd = () => {
   dragState.clearDragging();
 };
 
 const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string, position: 'before' | 'after' | 'inside') => {
+  if (draggingProjectId.value) return;
   event.preventDefault();
 
   // Throttle dragover to 250ms to reduce reactive updates and re-renders
@@ -575,10 +676,32 @@ const handleDragOver = (event: DragEvent, type: 'folder' | 'request', id: string
       return;
     }
 
-    dragState.setDropTarget({ type, id, position: position === 'inside' ? 'inside' : 'before' });
+    dragState.setDropTarget({ type, id, position });
   } else {
     dragState.setDropTarget({ type, id, position });
   }
+};
+
+const handleRequestItemDragOver = (event: DragEvent, requestId: string) => {
+  if (!canEdit.value || draggingProjectId.value) return;
+  event.preventDefault();
+  if (!dragState.shouldProcessDragOver(250)) return;
+
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const position: 'before' | 'after' = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+  dragState.setDropTarget({ type: 'request', id: requestId, position });
+};
+
+const handleRequestItemDrop = async (event: DragEvent, requestId: string) => {
+  const position =
+    dropTarget.value?.type === 'request' &&
+    dropTarget.value.id === requestId &&
+    (dropTarget.value.position === 'before' || dropTarget.value.position === 'after')
+      ? dropTarget.value.position
+      : 'before';
+
+  await handleDrop(event, 'request', requestId, position);
 };
 
 const handleDragLeave = () => {
@@ -702,7 +825,9 @@ const handleFolderDrop = async (sourceFolderId: string, targetFolderId: string, 
   const targetFolder = findFolderById(currentWorkspace.value, targetFolderId);
   
   if (!sourceFolder || !targetFolder) return;
+  if (sourceFolder.collectionId !== targetFolder.collectionId) return;
 
+  const collectionId = targetFolder.collectionId;
   let newParentId: string | null = null;
   let newOrder: number = 0;
 
@@ -711,14 +836,14 @@ const handleFolderDrop = async (sourceFolderId: string, targetFolderId: string, 
     newOrder = targetFolder.children.length;
   } else {
     newParentId = targetFolder.parentFolderId;
-    const siblings = getSiblingFolders(targetFolder.parentFolderId);
+    const siblings = getSiblingFolders(targetFolder.parentFolderId, collectionId);
     const targetIndex = siblings.findIndex(f => f.id === targetFolderId);
     newOrder = position === 'before' ? targetIndex : targetIndex + 1;
   }
 
-  const folderUpdates = calculateFolderOrderUpdates(sourceFolderId, newParentId, newOrder, targetFolder.collectionId);
+  const folderUpdates = calculateFolderOrderUpdates(sourceFolderId, newParentId, newOrder, collectionId);
   
-  emit('reorderFolders', targetFolder.collectionId, folderUpdates);
+  emit('reorderFolders', collectionId, folderUpdates);
 };
 
 const handleRequestToFolderDrop = async (requestId: string, targetFolderId: string) => {
@@ -883,32 +1008,33 @@ const findRequestLocation = (requestId: string, workspace: WorkspaceWithProjects
   return null;
 };
 
-const getSiblingFolders = (parentId: string | null): FolderWithRequestsAndChildren[] => {
+const getSiblingFolders = (parentId: string | null, collectionId: string): FolderWithRequestsAndChildren[] => {
   if (!currentWorkspace.value) return [];
-  
-  const getFoldersAtLevel = (folders: FolderWithRequestsAndChildren[]): FolderWithRequestsAndChildren[] => {
-    return folders.filter(f => f.parentFolderId === parentId);
-  };
-  
+
   for (const project of currentWorkspace.value.projects) {
     for (const collection of project.collections) {
+      if (collection.id !== collectionId) continue;
+
       if (parentId === null) {
-        return collection.folders.filter(f => f.parentFolderId === null);
+        return collection.folders
+          .filter(f => f.parentFolderId === null)
+          .sort((a, b) => a.order - b.order);
       }
-      const allFolders: FolderWithRequestsAndChildren[] = [];
+
+      const siblings: FolderWithRequestsAndChildren[] = [];
       const collectFolders = (folders: FolderWithRequestsAndChildren[]) => {
         for (const folder of folders) {
           if (folder.parentFolderId === parentId) {
-            allFolders.push(folder);
+            siblings.push(folder);
           }
           collectFolders(folder.children);
         }
       };
       collectFolders(collection.folders);
-      if (allFolders.length > 0) return allFolders;
+      return siblings.sort((a, b) => a.order - b.order);
     }
   }
-  
+
   return [];
 };
 
@@ -920,7 +1046,7 @@ const calculateFolderOrderUpdates = (
 ): { id: string; parentFolderId: string | null; order: number }[] => {
   const updates: { id: string; parentFolderId: string | null; order: number }[] = [];
   
-  const siblings = getSiblingFolders(newParentId).filter(f => f.id !== sourceFolderId);
+  const siblings = getSiblingFolders(newParentId, collectionId).filter(f => f.id !== sourceFolderId);
   
   siblings.forEach((folder, idx) => {
     if (idx >= newOrder) {
@@ -1563,10 +1689,25 @@ defineExpose({
         </div>
 
         <!-- Projects (filtered by search when workspaceSearchQuery is set) -->
-        <div v-for="project in filteredProjects" :key="project.id">
+        <div v-for="project in filteredProjects" :key="project.id" class="relative py-px">
+          <!-- Drop indicator - before project -->
+          <div
+            v-if="dropTarget?.type === 'project' && dropTarget?.id === project.id && dropTarget?.position === 'before'"
+            class="absolute left-2 right-2 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+          ></div>
+
           <!-- Project Header -->
           <div
-            class="flex items-center gap-2 py-2 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group"
+            :class="[
+              'flex items-center gap-2 py-2 px-3 text-text-primary text-[13px] font-semibold cursor-pointer transition-colors duration-fast hover:bg-bg-hover group relative',
+              dropTarget?.type === 'project' && dropTarget?.id === project.id && (dropTarget?.position === 'before' || dropTarget?.position === 'after') ? 'bg-accent-blue/5' : ''
+            ]"
+            :draggable="canDragProjects"
+            @dragstart="handleProjectDragStart($event, project.id)"
+            @dragend="handleDragEnd"
+            @dragover="handleProjectDragOver($event, project.id)"
+            @dragleave="handleDragLeave"
+            @drop="handleProjectDrop($event, project.id)"
             @click="toggleProject(project.id)"
             @contextmenu.prevent="handleContextMenu($event, 'project', project)"
           >
@@ -1606,6 +1747,12 @@ defineExpose({
               </svg>
             </button>
           </div>
+
+          <!-- Drop indicator - after project -->
+          <div
+            v-if="dropTarget?.type === 'project' && dropTarget?.id === project.id && dropTarget?.position === 'after'"
+            class="absolute left-2 right-2 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+          ></div>
 
           <!-- Project Content (Collections) -->
           <Transition name="expand">
@@ -1677,6 +1824,7 @@ defineExpose({
                         :expanded-folder-ids="expandedFolders"
                         :dragging-folder-id="draggingFolderId"
                         :dragging-request-id="draggingRequestId"
+                        :dragging-project-id="draggingProjectId"
                         :drop-target="dropTarget"
                         :permission="currentWorkspace?.permission || (currentWorkspace?.isOwner ? 'owner' : 'view')"
                         @toggle-folder="toggleFolder"
@@ -1693,25 +1841,33 @@ defineExpose({
                       <!-- Render Request -->
                       <div
                         v-else
-                         v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
+                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
                         :class="[
-                          'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover',
+                          'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
                           dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10' : ''
                         ]"
                         :draggable="canEdit"
                         @dragstart="handleDragStart('request', item.data.id)"
                         @dragend="handleDragEnd"
-                        @dragover="handleDragOver($event, 'request', item.data.id, 'before')"
+                        @dragover="handleRequestItemDragOver($event, item.data.id)"
                         @dragleave="handleDragLeave"
-                        @drop="handleDrop($event, 'request', item.data.id, 'before')"
+                        @drop="handleRequestItemDrop($event, item.data.id)"
                         @click="emit('selectRequest', item.data)"
                         @mouseenter="emit('hoverRequest', item.data.id)"
                         @contextmenu.prevent="handleContextMenu($event, 'request', item.data)"
                       >
+                        <div
+                          v-if="dropTarget?.type === 'request' && dropTarget?.id === item.data.id && dropTarget?.position === 'before'"
+                          class="absolute left-2 right-2 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+                        ></div>
                         <MethodBadge :method="item.data.method" size="xs" />
                         <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="item.data.name">
                           {{ item.data.name }}
                         </span>
+                        <div
+                          v-if="dropTarget?.type === 'request' && dropTarget?.id === item.data.id && dropTarget?.position === 'after'"
+                          class="absolute left-2 right-2 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
+                        ></div>
                       </div>
                     </template>
 

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, timestamp, index } from 'drizzle-orm/pg-core';
 import { workspaces } from './workspace';
 
 export const projects = pgTable('projects', {
@@ -7,6 +7,7 @@ export const projects = pgTable('projects', {
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  order: integer('order').notNull().default(0),
   baseUrl: text('base_url'),
   createdAt: timestamp('created_at')
     .notNull()
@@ -15,7 +16,8 @@ export const projects = pgTable('projects', {
     .notNull()
     .defaultNow()
 }, (table) => ({
-  workspaceIdx: index('idx_projects_workspace').on(table.workspaceId)
+  workspaceIdx: index('idx_projects_workspace').on(table.workspaceId),
+  orderIdx: index('idx_projects_order').on(table.order)
 }));
 
 export type Project = typeof projects.$inferSelect;
