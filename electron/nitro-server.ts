@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import http from 'node:http'
 import { getNitroEntryPath, getDrizzlePath } from './paths.js'
 import { reservePort } from './port.js'
 import { logger } from './logger.js'
@@ -6,21 +7,39 @@ import { logger } from './logger.js'
 const HEALTH_POLL_MS = 250
 const HEALTH_TIMEOUT_MS = 120_000
 
+function checkHealth(baseUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const req = http.get(`${baseUrl}/`, (res) => {
+        logger.info(`[Nitro] Health check status: ${res.statusCode}`)
+        resolve(res.statusCode === 200)
+      })
+      req.on('error', (err) => {
+        logger.info(`[Nitro] Health check error: ${err.message}`)
+        resolve(false)
+      })
+      req.setTimeout(5000, () => {
+        logger.info('[Nitro] Health check timeout')
+        req.destroy()
+        resolve(false)
+      })
+    } catch (e) {
+      logger.info(`[Nitro] Health check exception: ${e}`)
+      resolve(false)
+    }
+  })
+}
+
 async function waitForHealthy(baseUrl: string): Promise<void> {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS
 
   logger.info(`[Nitro] Waiting for server at ${baseUrl}...`)
 
   while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${baseUrl}/`)
-      if (res.ok) {
-        logger.info('[Nitro] Server is healthy')
-        return
-      }
-      logger.warn(`[Nitro] Health check returned ${res.status}`)
-    } catch (e) {
-      // Server still starting
+    const isHealthy = await checkHealth(baseUrl)
+    if (isHealthy) {
+      logger.info('[Nitro] Server is healthy')
+      return
     }
     await new Promise((r) => setTimeout(r, HEALTH_POLL_MS))
   }

@@ -6,9 +6,11 @@ import { getDevServerUrl, isDevMode, loadProjectEnv, validateDesktopEnv } from '
 import { startNitroServer } from './nitro-server.js'
 import { registerShutdownHandlers } from './shutdown.js'
 import { initAutoUpdater } from './updater.js'
-import { logger, getLogFilePath } from './logger.js'
+import { logger, getLogFilePath, getFallbackLogFilePath } from './logger.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+app.setName('Postrack')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -196,9 +198,17 @@ app.on('window-all-closed', () => {
   }
 })
 
+app.on('window-all-closed', () => {
+  logger.info('[Main] All windows closed')
+  if (process.platform !== 'darwin') {
+    app.quit()
+  }
+})
+
 app.whenReady().then(async () => {
   logger.info('[Main] ==================== App starting ====================')
-  logger.info('[Main] Log file:', getLogFilePath())
+  logger.info('[Main] Log file (primary):', getLogFilePath())
+  logger.info('[Main] Log file (fallback):', getFallbackLogFilePath())
   logger.info('[Main] Platform:', process.platform)
   logger.info('[Main] isPackaged:', app.isPackaged)
   logger.info('[Main] Resources path:', process.resourcesPath)
