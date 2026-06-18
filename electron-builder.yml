@@ -22,14 +22,15 @@ extraResources:
       - "pg/**"
       - "drizzle-orm/**"
       - "jsonwebtoken/**"
-      - "@types/**"
 mac:
   target:
     - dmg
     - zip
-  arch:
-    - arm64
-    - x64
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
+  # Unsigned internal distribution. electron-builder auto-discovers any
+  # signing identity on the machine; setting this to null disables signing
+  # so builds can be shared without an Apple Developer certificate.
+  # Set CSC_LINK / CSC_KEY_PASSWORD (and an afterSign notarize hook) to sign.
+  identity: null
