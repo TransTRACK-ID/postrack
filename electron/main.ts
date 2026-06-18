@@ -133,13 +133,8 @@ async function createWindow(baseUrl: string): Promise<void> {
   })
 
   // Log loading failures
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+  mainWindow.webContents.on('did-fail-load', (_event: Electron.Event, errorCode: number, errorDescription: string) => {
     console.error('[Main] Page failed to load:', errorCode, errorDescription)
-  })
-
-  // Log renderer crashes
-  mainWindow.webContents.on('crashed', (_event, killed) => {
-    console.error('[Main] Renderer crashed. Killed:', killed)
   })
 
   mainWindow.on('closed', () => {
