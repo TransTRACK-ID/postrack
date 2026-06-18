@@ -87,13 +87,16 @@ export default defineEventHandler(async (event) => {
       });
     }
 
+    const maxOrder = existingProjects.reduce((max, p) => Math.max(max, p.order), -1);
+
     // Create the project
     const newProject = (await db
       .insert(projects)
       .values({
         workspaceId,
         name: trimmedName,
-        baseUrl
+        baseUrl,
+        order: maxOrder + 1
       })
       .returning())[0];
 

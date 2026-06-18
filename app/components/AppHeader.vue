@@ -4,6 +4,7 @@ import WorkspaceSwitcher from './WorkspaceSwitcher.vue';
 import { computed, onMounted, onUnmounted, ref, inject } from 'vue';
 import { useFeedback } from '../composables/useFeedback';
 import { usePermissionBadge } from '../composables/usePermissionBadge';
+import { useUser } from '../composables/useUser';
 
 interface Workspace {
   id: string;
@@ -87,29 +88,12 @@ const resetEnvironmentSwitcherSaving = () => {
   }
 };
 
-interface UserInfo {
-  sub: string;
-  email: string;
-  name: string;
-  username: string;
-  givenName: string;
-  familyName: string;
-  picture: string;
-}
-
-interface AuthState {
-  status: string;
-  user: UserInfo | null;
-  authMethod: string;
-  tokenExpiry: number | null;
-}
-
-const authState = ref<AuthState | null>(null);
-const isCheckingAuth = ref(true);
 const showUserMenu = ref(false);
 const showMobileActions = ref(false);
 const isLoggingOut = ref(false);
 const environmentSwitcherRef = ref<any>(null);
+
+const { authState, isCheckingAuth, fetchUser, clearUser } = useUser();
 
 const route = useRoute();
 const isEnvironmentsPage = computed(() => route.path === '/admin/environments');
@@ -147,23 +131,11 @@ const checkSuperAdmin = async () => {
 const { shouldShowFeedback } = useFeedback();
 const openFeedbackModal = inject<() => void>('openFeedbackModal');
 
-const checkAuth = async () => {
-  try {
-    const data = await $fetch<AuthState>('/api/auth/check');
-    authState.value = data;
-  } catch (e: any) {
-    if (e.statusCode === 401) {
-      authState.value = null;
-    }
-  } finally {
-    isCheckingAuth.value = false;
-  }
-};
-
 const logout = async () => {
   isLoggingOut.value = true;
   try {
     await $fetch('/api/auth/logout', { method: 'POST' });
+    clearUser();
     await navigateTo('/login');
   } catch (e) {
     console.error('Logout error:', e);
@@ -193,7 +165,7 @@ const getTimeUntilExpiry = (): string => {
 let authCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
-  await checkAuth();
+  await fetchUser();
   // checkSuperAdmin is handled by the watch on authState.value?.user?.email below;
   // calling it here too would fire a duplicate request on every authenticated mount.
 
@@ -201,7 +173,7 @@ onMounted(async () => {
     if (authState.value?.tokenExpiry) {
       const remaining = authState.value.tokenExpiry * 1000 - Date.now();
       if (remaining < 5 * 60 * 1000 && remaining > 0) {
-        checkAuth();
+        fetchUser();
       }
     }
   }, 60000);

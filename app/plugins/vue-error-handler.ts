@@ -32,9 +32,25 @@ export default defineNuxtPlugin((nuxtApp) => {
   // Handle Vue warnings (development mode issues)
   const originalWarn = console.warn
   console.warn = (...args) => {
-    datadogRum.addError(new Error(args.join(' ')), {
+    // Safely stringify each arg — Vue passes Symbol values (e.g. Symbol(teleport))
+    // which throw on implicit toString in Array.join()
+    const safeStringify = (arg: unknown): string => {
+      try {
+        if (typeof arg === 'symbol') return arg.toString()
+        if (typeof arg === 'object' && arg !== null) {
+          // Don't JSON-stringify Error objects or Vue internals; just use String()
+          return String(arg)
+        }
+        return String(arg)
+      } catch {
+        return '[unstringifiable]'
+      }
+    }
+    const message = args.map(safeStringify).join(' ')
+    
+    datadogRum.addError(new Error(message), {
       type: 'vue_warning',
-      args: args,
+      args: args.map(a => typeof a === 'symbol' ? a.toString() : a),
     })
     originalWarn.apply(console, args)
   }

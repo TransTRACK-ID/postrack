@@ -86,6 +86,7 @@ interface ProjectWithCollections {
   workspaceId: string;
   name: string;
   baseUrl: string | null;
+  order: number;
   createdAt: Date;
   updatedAt: Date;
   collections: CollectionWithFolders[];
@@ -116,6 +117,14 @@ function parseJsonField<T>(value: unknown): T | null {
     }
   }
   return value as T;
+}
+
+function sortProjectsByOrder<T extends { order: number; createdAt: Date }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const orderDiff = a.order - b.order;
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
 }
 
 function buildFolderTree(
@@ -270,7 +279,9 @@ export default defineEventHandler(async (event) => {
     const permissionMap = await getWorkspacePermissionsBatch(user.id, workspaceIds);
 
     const workspacesWithProjects: WorkspaceWithProjects[] = allWorkspaces.map((workspace) => {
-      const workspaceProjects = allProjects.filter(p => p.workspaceId === workspace.id);
+      const workspaceProjects = sortProjectsByOrder(
+        allProjects.filter(p => p.workspaceId === workspace.id)
+      );
       // For legacy workspaces (ownerId is null, 'unknown', or empty), treat current user as owner
       const isOwner = workspace.ownerId === user.id || workspace.ownerId === null || workspace.ownerId === 'unknown' || workspace.ownerId === '';
       const permission = isOwner ? 'owner' : (permissionMap.get(workspace.id) || null);
