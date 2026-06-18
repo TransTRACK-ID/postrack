@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { stopNitroServer } from './nitro-server.js'
 
 let shuttingDown = false
 
@@ -9,7 +10,6 @@ export function isShuttingDown(): boolean {
 export function registerShutdownHandlers(): void {
   app.on('before-quit', () => {
     shuttingDown = true
-    // Nitro + pg pool register SIGTERM/SIGINT handlers when NODE_ENV=production
-    process.emit('SIGTERM')
+    stopNitroServer()
   })
 }
