@@ -32,6 +32,7 @@ async function createWindow(baseUrl: string): Promise<void> {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    icon: path.join(__dirname, '../public/icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

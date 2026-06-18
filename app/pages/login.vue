@@ -139,11 +139,7 @@ const checkAuthAndRedirect = async () => {
     <div class="flex flex-col items-center w-full max-w-[400px] p-6 z-10">
       <!-- Logo -->
       <div class="mb-8">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="24" height="24" rx="6" fill="#FF6C37"/>
-          <path d="M7 8.5C7 7.67 7.67 7 8.5 7H15.5C16.33 7 17 7.67 17 8.5V15.5C17 16.33 16.33 17 15.5 17H8.5C7.67 17 7 16.33 7 15.5V8.5Z" fill="white"/>
-          <path d="M10 10H14M10 12H14M10 14H12" stroke="#FF6C37" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+        <img src="/logo.png" alt="Postrack" class="w-12 h-12 rounded-lg" />
       </div>
 
       <!-- Card -->

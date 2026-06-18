@@ -1,5 +1,6 @@
 appId: id.transtrack.postrack
 productName: Postrack
+icon: build/icons/icon.png
 directories:
   output: release
 publish:
