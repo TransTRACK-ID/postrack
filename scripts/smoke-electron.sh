@@ -18,14 +18,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Waiting for embedded Nitro server..."
-for i in $(seq 1 60); do
-  if curl -sf "http://127.0.0.1:${NUXT_PORT:-0}" >/dev/null 2>&1; then
-    echo "Server responded"
-    exit 0
+echo "Waiting for embedded Nitro server on 127.0.0.1..."
+for _ in $(seq 1 60); do
+  PORT=$(
+    lsof -Pan -p "$APP_PID" -iTCP -sTCP:LISTEN 2>/dev/null \
+      | awk '/127\.0\.0\.1/ { split($9, a, ":"); print a[length(a)]; exit }'
+  )
+
+  if [[ -n "${PORT:-}" ]]; then
+    if curl -sf "http://127.0.0.1:${PORT}/" | grep -qi '<!doctype html'; then
+      echo "Server responded on http://127.0.0.1:${PORT}/"
+      exit 0
+    fi
   fi
+
   sleep 2
 done
 
-echo "Smoke test: app launched (PID $APP_PID). Verify login manually."
+echo "Smoke test: app launched (PID $APP_PID) but health check timed out."
+echo "Verify login manually, then quit the app."
 wait "$APP_PID" || true
+exit 1
