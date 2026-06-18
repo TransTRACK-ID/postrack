@@ -1,6 +1,10 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { autoUpdater } from 'electron-updater'
+// electron-updater ships as CommonJS, so under the ESM main process
+// ("type": "module") we must use the default export then destructure.
+import electronUpdater from 'electron-updater'
 import { isDevMode } from './env.js'
+
+const { autoUpdater } = electronUpdater
 
 /** Re-check interval for available updates (4 hours). */
 const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000

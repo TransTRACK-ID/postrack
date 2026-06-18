@@ -1,15 +1,27 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { app } from 'electron'
 
 export function isDevMode(): boolean {
   return process.env.ELECTRON_DEV === 'true'
 }
 
-/** Load .env from project root for embedded Nitro (production desktop path). */
+/**
+ * Resolve the .env location. In a packaged app it ships in the app's resources
+ * directory (bundled via extraResources); in development it lives at the
+ * project root. process.cwd() is unreliable in a packaged app — it resolves to
+ * the user's home or "/", not the app bundle.
+ */
+function resolveEnvPath(): string {
+  const dir = app.isPackaged ? process.resourcesPath : process.cwd()
+  return path.join(dir, '.env')
+}
+
+/** Load .env for embedded Nitro (production desktop path). */
 export function loadProjectEnv(): void {
   if (isDevMode()) return
 
-  const envPath = path.join(process.cwd(), '.env')
+  const envPath = resolveEnvPath()
   if (!existsSync(envPath)) return
 
   const content = readFileSync(envPath, 'utf-8')
