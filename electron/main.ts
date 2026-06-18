@@ -87,10 +87,59 @@ async function createWindow(baseUrl: string): Promise<void> {
 
   console.log('[Main] Creating BrowserWindow...')
   mainWindow = new BrowserWindow(windowOptions)
+  let hasShown = false
 
+  const showWindow = () => {
+    if (hasShown || !mainWindow) return
+    hasShown = true
+    console.log('[Main] Showing and focusing window')
+    mainWindow.show()
+    if (!mainWindow.isFocused()) {
+      mainWindow.focus()
+    }
+    if (process.platform === 'darwin') {
+      app.dock.show()
+    }
+  }
+
+  // Primary: show when page is visually ready (recommended by Electron)
   mainWindow.once('ready-to-show', () => {
-    console.log('[Main] Window ready-to-show — displaying')
-    mainWindow?.show()
+    console.log('[Main] Window ready-to-show')
+    showWindow()
+  })
+
+  // Fallback 1: show when page finishes loading
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main] Page did-finish-load')
+    showWindow()
+  })
+
+  // Fallback 2: show after DOM is ready
+  mainWindow.webContents.on('dom-ready', () => {
+    console.log('[Main] Page dom-ready')
+    showWindow()
+  })
+
+  // Fallback 3: show after 3 seconds timeout (safety net)
+  const fallbackTimeout = setTimeout(() => {
+    if (!hasShown) {
+      console.log('[Main] Fallback: showing window after 3s timeout')
+      showWindow()
+    }
+  }, 3000)
+
+  mainWindow.on('show', () => {
+    clearTimeout(fallbackTimeout)
+  })
+
+  // Log loading failures
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('[Main] Page failed to load:', errorCode, errorDescription)
+  })
+
+  // Log renderer crashes
+  mainWindow.webContents.on('crashed', (_event, killed) => {
+    console.error('[Main] Renderer crashed. Killed:', killed)
   })
 
   mainWindow.on('closed', () => {
@@ -113,6 +162,34 @@ async function createWindow(baseUrl: string): Promise<void> {
   }
 }
 
+// Register activate handler BEFORE app.whenReady() so it catches early clicks
+app.on('activate', async () => {
+  console.log('[Main] App activated')
+  const windows = BrowserWindow.getAllWindows()
+  if (windows.length === 0) {
+    try {
+      const baseUrl = await resolveAppUrl()
+      await createWindow(baseUrl)
+    } catch (error) {
+      console.error('[Main] Failed to recreate window on activate:', error)
+    }
+  } else if (mainWindow) {
+    console.log('[Main] Showing existing window on activate')
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore()
+    }
+    mainWindow.show()
+    mainWindow.focus()
+  }
+})
+
+app.on('window-all-closed', () => {
+  console.log('[Main] All windows closed')
+  if (process.platform !== 'darwin') {
+    app.quit()
+  }
+})
+
 app.whenReady().then(async () => {
   console.log('[Main] App ready — initializing...')
   loadProjectEnv()
@@ -131,25 +208,6 @@ app.whenReady().then(async () => {
       `The application could not start:\n\n${errorMessage}\n\n` +
         `Check the console logs for more details.`
     )
-    app.quit()
-  }
-
-  app.on('activate', async () => {
-    console.log('[Main] App activated')
-    if (BrowserWindow.getAllWindows().length === 0) {
-      try {
-        const baseUrl = await resolveAppUrl()
-        await createWindow(baseUrl)
-      } catch (error) {
-        console.error('[Main] Failed to recreate window on activate:', error)
-      }
-    }
-  })
-})
-
-app.on('window-all-closed', () => {
-  console.log('[Main] All windows closed')
-  if (process.platform !== 'darwin') {
     app.quit()
   }
 })
