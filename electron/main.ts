@@ -6,6 +6,7 @@ import { getDevServerUrl, isDevMode, loadProjectEnv, validateDesktopEnv } from '
 import { startNitroServer } from './nitro-server.js'
 import { registerShutdownHandlers } from './shutdown.js'
 import { initAutoUpdater } from './updater.js'
+import { logger, getLogFilePath } from './logger.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -19,6 +20,7 @@ let mainWindow: BrowserWindow | null = null
  */
 function resolveWindowIcon(): string | undefined {
   if (process.platform === 'darwin') {
+    logger.info('[Main] macOS detected — skipping window icon (not shown in title bar)')
     return undefined
   }
 
@@ -35,34 +37,35 @@ function resolveWindowIcon(): string | undefined {
       ]
 
   for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      console.log('[Main] Using window icon:', candidate)
+    const exists = existsSync(candidate)
+    logger.info(`[Main] Icon candidate: ${candidate} — ${exists ? 'FOUND' : 'NOT FOUND'}`)
+    if (exists) {
       return candidate
     }
   }
 
-  console.warn('[Main] Window icon not found at any candidate path')
+  logger.warn('[Main] Window icon not found at any candidate path')
   return undefined
 }
 
 async function resolveAppUrl(): Promise<string> {
   if (isDevMode()) {
-    console.log('[Main] Development mode — using dev server')
+    logger.info('[Main] Development mode — using dev server')
     return getDevServerUrl()
   }
 
-  console.log('[Main] Production mode — validating desktop environment')
+  logger.info('[Main] Production mode — validating desktop environment')
   const envCheck = validateDesktopEnv()
   if (!envCheck.ok) {
-    console.error('[Main] Environment validation failed:', envCheck.message)
+    logger.error('[Main] Environment validation failed:', envCheck.message)
     await dialog.showErrorBox('Postrack — Configuration Error', envCheck.message)
     app.quit()
     throw new Error(envCheck.message)
   }
 
-  console.log('[Main] Starting Nitro server...')
+  logger.info('[Main] Starting Nitro server...')
   const baseUrl = await startNitroServer()
-  console.log('[Main] Nitro server ready at', baseUrl)
+  logger.info('[Main] Nitro server ready at', baseUrl)
   return baseUrl
 }
 
@@ -85,91 +88,99 @@ async function createWindow(baseUrl: string): Promise<void> {
     windowOptions.icon = iconPath
   }
 
-  console.log('[Main] Creating BrowserWindow...')
+  logger.info('[Main] Creating BrowserWindow...')
   mainWindow = new BrowserWindow(windowOptions)
-  let hasShown = false
 
   const showWindow = () => {
-    if (hasShown || !mainWindow) return
-    hasShown = true
-    console.log('[Main] Showing and focusing window')
-    mainWindow.show()
-    if (!mainWindow.isFocused()) {
-      mainWindow.focus()
-    }
-    if (process.platform === 'darwin') {
-      app.dock.show()
+    if (!mainWindow) return
+    if (!mainWindow.isVisible()) {
+      logger.info('[Main] Showing window')
+      mainWindow.show()
+      if (!mainWindow.isFocused()) {
+        mainWindow.focus()
+      }
+      if (process.platform === 'darwin') {
+        try {
+          app.dock.show()
+        } catch (e) {
+          logger.error('[Main] Dock show error:', e)
+        }
+      }
     }
   }
 
-  // Primary: show when page is visually ready (recommended by Electron)
+  // Event-based triggers to show window as soon as possible
   mainWindow.once('ready-to-show', () => {
-    console.log('[Main] Window ready-to-show')
+    logger.info('[Main] Event: ready-to-show')
     showWindow()
   })
 
-  // Fallback 1: show when page finishes loading
+  mainWindow.webContents.on('did-start-loading', () => {
+    logger.info('[Main] Event: did-start-loading')
+  })
+
+  mainWindow.webContents.on('did-stop-loading', () => {
+    logger.info('[Main] Event: did-stop-loading')
+  })
+
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('[Main] Page did-finish-load')
+    logger.info('[Main] Event: did-finish-load')
     showWindow()
   })
 
-  // Fallback 2: show after DOM is ready
   mainWindow.webContents.on('dom-ready', () => {
-    console.log('[Main] Page dom-ready')
+    logger.info('[Main] Event: dom-ready')
     showWindow()
   })
 
-  // Fallback 3: show after 3 seconds timeout (safety net)
+  mainWindow.webContents.on('did-fail-load', (_event: Electron.Event, errorCode: number, errorDescription: string) => {
+    logger.error('[Main] Event: did-fail-load', errorCode, errorDescription)
+  })
+
+  mainWindow.on('closed', () => {
+    logger.info('[Main] Event: window closed')
+    mainWindow = null
+  })
+
+  // ABSOLUTE FALLBACK: show window after 2 seconds no matter what.
+  // In production the page may load but events never fire, so this is critical.
   const fallbackTimeout = setTimeout(() => {
-    if (!hasShown) {
-      console.log('[Main] Fallback: showing window after 3s timeout')
-      showWindow()
-    }
-  }, 3000)
+    logger.info('[Main] Fallback: forcing window show after 2s timeout')
+    showWindow()
+  }, 2000)
 
   mainWindow.on('show', () => {
     clearTimeout(fallbackTimeout)
   })
 
-  // Log loading failures
-  mainWindow.webContents.on('did-fail-load', (_event: Electron.Event, errorCode: number, errorDescription: string) => {
-    console.error('[Main] Page failed to load:', errorCode, errorDescription)
-  })
+  logger.info('[Main] Loading URL:', baseUrl)
 
-  mainWindow.on('closed', () => {
-    console.log('[Main] Window closed')
-    mainWindow = null
-  })
-
-  try {
-    console.log('[Main] Loading URL:', baseUrl)
-    await mainWindow.loadURL(baseUrl)
-    console.log('[Main] URL loaded successfully')
-  } catch (err) {
-    console.error('[Main] Failed to load URL:', baseUrl, err)
+  // Do NOT await loadURL — it can hang forever in production if the server
+  // or page is stuck. We show the window via timeout regardless.
+  mainWindow.loadURL(baseUrl).catch((err) => {
+    logger.error('[Main] loadURL failed:', baseUrl, err)
     const message = isDevMode()
       ? `Could not reach the dev server at ${baseUrl}.\n\nStart it with: pnpm dev`
       : `Failed to load Postrack at ${baseUrl}.\n\n${String(err)}`
-
-    await dialog.showErrorBox('Postrack — Load Error', message)
+    dialog.showErrorBox('Postrack — Load Error', message)
     app.quit()
-  }
+  })
+
+  logger.info('[Main] Window creation complete — window will be shown by events or 2s timeout')
 }
 
-// Register activate handler BEFORE app.whenReady() so it catches early clicks
 app.on('activate', async () => {
-  console.log('[Main] App activated')
+  logger.info('[Main] App activated')
   const windows = BrowserWindow.getAllWindows()
   if (windows.length === 0) {
     try {
       const baseUrl = await resolveAppUrl()
       await createWindow(baseUrl)
     } catch (error) {
-      console.error('[Main] Failed to recreate window on activate:', error)
+      logger.error('[Main] Failed to recreate window on activate:', error)
     }
   } else if (mainWindow) {
-    console.log('[Main] Showing existing window on activate')
+    logger.info('[Main] Showing existing window on activate')
     if (mainWindow.isMinimized()) {
       mainWindow.restore()
     }
@@ -179,14 +190,21 @@ app.on('activate', async () => {
 })
 
 app.on('window-all-closed', () => {
-  console.log('[Main] All windows closed')
+  logger.info('[Main] All windows closed')
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
 app.whenReady().then(async () => {
-  console.log('[Main] App ready — initializing...')
+  logger.info('[Main] ==================== App starting ====================')
+  logger.info('[Main] Log file:', getLogFilePath())
+  logger.info('[Main] Platform:', process.platform)
+  logger.info('[Main] isPackaged:', app.isPackaged)
+  logger.info('[Main] Resources path:', process.resourcesPath)
+  logger.info('[Main] App path:', app.getAppPath())
+  logger.info('[Main] __dirname:', __dirname)
+
   loadProjectEnv()
   registerShutdownHandlers()
 
@@ -194,14 +212,14 @@ app.whenReady().then(async () => {
     const baseUrl = await resolveAppUrl()
     await createWindow(baseUrl)
     initAutoUpdater()
-    console.log('[Main] Initialization complete')
+    logger.info('[Main] Initialization complete')
   } catch (error) {
-    console.error('[Main] Initialization failed:', error)
+    logger.error('[Main] Initialization failed:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)
     await dialog.showErrorBox(
       'Postrack — Startup Error',
       `The application could not start:\n\n${errorMessage}\n\n` +
-        `Check the console logs for more details.`
+        `Check the log file for more details:\n${getLogFilePath()}`
     )
     app.quit()
   }

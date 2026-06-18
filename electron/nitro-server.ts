@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url'
 import { getNitroEntryPath, getDrizzlePath } from './paths.js'
 import { reservePort } from './port.js'
+import { logger } from './logger.js'
 
 const HEALTH_POLL_MS = 250
 const HEALTH_TIMEOUT_MS = 120_000
@@ -8,16 +9,17 @@ const HEALTH_TIMEOUT_MS = 120_000
 async function waitForHealthy(baseUrl: string): Promise<void> {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS
 
-  console.log(`[Nitro] Waiting for server at ${baseUrl}...`)
+  logger.info(`[Nitro] Waiting for server at ${baseUrl}...`)
 
   while (Date.now() < deadline) {
     try {
       const res = await fetch(`${baseUrl}/`)
       if (res.ok) {
-        console.log('[Nitro] Server is healthy')
+        logger.info('[Nitro] Server is healthy')
         return
       }
-    } catch {
+      logger.warn(`[Nitro] Health check returned ${res.status}`)
+    } catch (e) {
       // Server still starting
     }
     await new Promise((r) => setTimeout(r, HEALTH_POLL_MS))
@@ -38,12 +40,18 @@ export async function startNitroServer(): Promise<string> {
   process.env.DRIZZLE_MIGRATIONS_PATH = getDrizzlePath()
 
   const entry = getNitroEntryPath()
-  console.log('[Nitro] Entry path:', entry)
+  logger.info('[Nitro] Entry path:', entry)
 
-  console.log('[Nitro] Importing Nitro entry module...')
-  await import(pathToFileURL(entry).href)
-  console.log('[Nitro] Nitro module imported')
+  logger.info('[Nitro] Importing Nitro entry module...')
+  try {
+    await import(pathToFileURL(entry).href)
+    logger.info('[Nitro] Nitro module imported successfully')
+  } catch (e) {
+    logger.error('[Nitro] Failed to import Nitro module:', e)
+    throw e
+  }
 
   await waitForHealthy(baseUrl)
+  logger.info('[Nitro] Server ready at', baseUrl)
   return baseUrl
 }
