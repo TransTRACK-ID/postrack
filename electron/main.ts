@@ -92,6 +92,7 @@ async function createWindow(baseUrl: string): Promise<void> {
 
   logger.info('[Main] Creating BrowserWindow...')
   mainWindow = new BrowserWindow(windowOptions)
+  let hasShown = false
 
   const showWindow = () => {
     if (!mainWindow) return
@@ -147,8 +148,10 @@ async function createWindow(baseUrl: string): Promise<void> {
   // ABSOLUTE FALLBACK: show window after 2 seconds no matter what.
   // In production the page may load but events never fire, so this is critical.
   const fallbackTimeout = setTimeout(() => {
-    logger.info('[Main] Fallback: forcing window show after 2s timeout')
-    showWindow()
+    if (!hasShown) {
+      logger.info('[Main] Fallback: forcing window show after 2s timeout')
+      showWindow()
+    }
   }, 2000)
 
   mainWindow.on('show', () => {
@@ -164,6 +167,7 @@ async function createWindow(baseUrl: string): Promise<void> {
     const message = isDevMode()
       ? `Could not reach the dev server at ${baseUrl}.\n\nStart it with: pnpm dev`
       : `Failed to load Postrack at ${baseUrl}.\n\n${String(err)}`
+
     dialog.showErrorBox('Postrack — Load Error', message)
     app.quit()
   })
@@ -198,13 +202,6 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('window-all-closed', () => {
-  logger.info('[Main] All windows closed')
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
-
 app.whenReady().then(async () => {
   logger.info('[Main] ==================== App starting ====================')
   logger.info('[Main] Log file (primary):', getLogFilePath())
@@ -219,10 +216,34 @@ app.whenReady().then(async () => {
   registerShutdownHandlers()
 
   try {
-    const baseUrl = await resolveAppUrl()
-    await createWindow(baseUrl)
-    initAutoUpdater()
-    logger.info('[Main] Initialization complete')
+    if (isDevMode()) {
+      const baseUrl = await resolveAppUrl()
+      await createWindow(baseUrl)
+      initAutoUpdater()
+      logger.info('[Main] Initialization complete')
+    } else {
+      // Production: show window immediately with a loading page, then load the real URL when server is ready
+      logger.info('[Main] Production mode — creating window with placeholder')
+      await createWindow('about:blank')
+      initAutoUpdater()
+      logger.info('[Main] Window created, starting server in background...')
+
+      // Start server in background and load the real URL when ready
+      startNitroServer().then((baseUrl) => {
+        logger.info('[Main] Server ready, loading URL:', baseUrl)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.loadURL(baseUrl).catch((err) => {
+            logger.error('[Main] loadURL failed:', baseUrl, err)
+            dialog.showErrorBox('Postrack — Load Error', `Failed to load Postrack at ${baseUrl}.\n\n${String(err)}`)
+            app.quit()
+          })
+        }
+      }).catch((err) => {
+        logger.error('[Main] Server failed to start:', err)
+        dialog.showErrorBox('Postrack — Server Error', `The server could not start.\n\n${String(err)}\n\nCheck the log file for more details:\n${getLogFilePath()}`)
+        app.quit()
+      })
+    }
   } catch (error) {
     logger.error('[Main] Initialization failed:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)

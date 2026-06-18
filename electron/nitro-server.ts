@@ -1,8 +1,10 @@
-import { pathToFileURL } from 'node:url'
 import http from 'node:http'
+import { pathToFileURL } from 'node:url'
 import { getNitroEntryPath, getDrizzlePath } from './paths.js'
 import { reservePort } from './port.js'
 import { logger } from './logger.js'
+
+let server: http.Server | null = null
 
 const HEALTH_POLL_MS = 250
 const HEALTH_TIMEOUT_MS = 120_000
@@ -51,26 +53,77 @@ export async function startNitroServer(): Promise<string> {
   const port = await reservePort()
   const baseUrl = `http://127.0.0.1:${port}`
 
+  // Set all possible port/host env variables so the handler knows the port
   process.env.NUXT_HOST = '127.0.0.1'
   process.env.NUXT_PORT = String(port)
+  process.env.NITRO_PORT = String(port)
+  process.env.NITRO_HOST = '127.0.0.1'
+  process.env.PORT = String(port)
+  process.env.HOST = '127.0.0.1'
   process.env.APP_URL = baseUrl
   process.env.NODE_ENV = 'production'
   process.env.BUILD_TARGET = 'electron'
   process.env.DRIZZLE_MIGRATIONS_PATH = getDrizzlePath()
 
   const entry = getNitroEntryPath()
-  logger.info('[Nitro] Entry path:', entry)
+  logger.info('[Nitro] Importing handler from:', entry)
 
-  logger.info('[Nitro] Importing Nitro entry module...')
-  try {
-    await import(pathToFileURL(entry).href)
-    logger.info('[Nitro] Nitro module imported successfully')
-  } catch (e) {
-    logger.error('[Nitro] Failed to import Nitro module:', e)
-    throw e
+  const module = await import(pathToFileURL(entry).href)
+  const handler = module.default
+
+  logger.info('[Nitro] Handler imported, type:', typeof handler)
+
+  if (typeof handler !== 'function') {
+    throw new Error('Nitro handler is not a function. Got: ' + typeof handler)
   }
 
-  await waitForHealthy(baseUrl)
-  logger.info('[Nitro] Server ready at', baseUrl)
-  return baseUrl
+  logger.info('[Nitro] Starting HTTP server on port', port)
+
+  return new Promise((resolve, reject) => {
+    server = http.createServer((req, res) => {
+      Promise.resolve(handler(req, res)).catch((err) => {
+        logger.error('[Nitro] Handler error:', err)
+        if (!res.headersSent) {
+          res.statusCode = 500
+          res.end('Internal Server Error')
+        }
+      })
+    })
+
+    server.on('error', (err) => {
+      logger.error('[Nitro] Server error:', err)
+      reject(err)
+    })
+
+    server.listen(port, '127.0.0.1', () => {
+      logger.info('[Nitro] Server listening on', baseUrl)
+      // Wait a tick for the server to be fully ready, then confirm health
+      setTimeout(async () => {
+        try {
+          await waitForHealthy(baseUrl)
+          resolve(baseUrl)
+        } catch (err) {
+          logger.error('[Nitro] Health check failed after server started:', err)
+          reject(err)
+        }
+      }, 100)
+    })
+  })
+}
+
+// Close server on SIGTERM (emitted by shutdown.ts before-quit handler)
+process.on('SIGTERM', () => {
+  if (server) {
+    logger.info('[Nitro] SIGTERM received, closing server')
+    server.close()
+    server = null
+  }
+})
+
+export function stopNitroServer(): void {
+  if (server) {
+    logger.info('[Nitro] Manually stopping server')
+    server.close()
+    server = null
+  }
 }
