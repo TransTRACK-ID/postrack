@@ -9,20 +9,21 @@ import { logger } from './logger.js'
 let serverProcess: ChildProcess | null = null
 
 const HEALTH_POLL_MS = 250
-const HEALTH_TIMEOUT_MS = 120_000
+const HEALTH_TIMEOUT_MS = 300_000
 
 function checkHealth(baseUrl: string): Promise<boolean> {
   return new Promise((resolve) => {
     try {
       const req = http.get(`${baseUrl}/`, (res) => {
         logger.info(`[Nitro] Health check status: ${res.statusCode}`)
-        resolve(res.statusCode === 200)
+        // Accept any 2xx or 3xx redirect as healthy — the server is running
+        resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 400)
       })
       req.on('error', (err) => {
         logger.info(`[Nitro] Health check error: ${err.message}`)
         resolve(false)
       })
-      req.setTimeout(5000, () => {
+      req.setTimeout(15000, () => {
         logger.info('[Nitro] Health check timeout')
         req.destroy()
         resolve(false)
