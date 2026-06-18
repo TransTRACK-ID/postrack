@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
-  "build": "./electron-builder.yml",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
