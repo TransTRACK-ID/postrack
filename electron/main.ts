@@ -4,6 +4,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { getDevServerUrl, isDevMode, loadProjectEnv, validateDesktopEnv } from './env.js'
 import { startNitroServer } from './nitro-server.js'
 import { registerShutdownHandlers } from './shutdown.js'
+import { initAutoUpdater } from './updater.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -66,6 +67,7 @@ app.whenReady().then(async () => {
   try {
     const baseUrl = await resolveAppUrl()
     await createWindow(baseUrl)
+    initAutoUpdater()
   } catch {
     // Error already surfaced via dialog
   }

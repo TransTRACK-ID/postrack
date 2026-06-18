@@ -32,6 +32,8 @@
     "electron:build:app": "cross-env BUILD_TARGET=electron pnpm build && pnpm electron:compile",
     "electron:dist": "pnpm electron:build:app && electron-builder --mac --arm64",
     "electron:dist:dir": "pnpm electron:build:app && electron-builder --mac --arm64 --dir",
+    "electron:dist:all": "pnpm electron:build:app && electron-builder --mac --arm64 --x64",
+    "electron:publish": "pnpm electron:build:app && electron-builder --mac --arm64 --x64 --publish always",
     "test:electron": "vitest run tests/electron",
     "test:e2e:electron": "playwright test tests/e2e/electron"
   },
@@ -47,6 +49,7 @@
     "@vercel/kv": "^1.0.1",
     "dd-trace": "^4.55.0",
     "drizzle-orm": "^0.38.3",
+    "electron-updater": "^6.3.9",
     "highlight.js": "^11.11.1",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.3",
