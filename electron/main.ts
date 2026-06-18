@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog } from 'electron'
@@ -10,58 +11,110 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let mainWindow: BrowserWindow | null = null
 
+/**
+ * Resolve the window icon path. On macOS window icons are not shown in the
+ * title bar, so we return undefined there. In development we look in the project
+ * public/ folder; in production we look in the packaged resources or in the
+ * Nuxt output directory.
+ */
+function resolveWindowIcon(): string | undefined {
+  if (process.platform === 'darwin') {
+    return undefined
+  }
+
+  const candidates = app.isPackaged
+    ? [
+        path.join(process.resourcesPath, 'icon.png'),
+        path.join(process.resourcesPath, '.output/public/icon.png'),
+        path.join(app.getAppPath(), '.output/public/icon.png'),
+        path.join(__dirname, '../public/icon.png'),
+      ]
+    : [
+        path.join(process.cwd(), 'public/icon.png'),
+        path.join(__dirname, '../public/icon.png'),
+      ]
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      console.log('[Main] Using window icon:', candidate)
+      return candidate
+    }
+  }
+
+  console.warn('[Main] Window icon not found at any candidate path')
+  return undefined
+}
+
 async function resolveAppUrl(): Promise<string> {
   if (isDevMode()) {
+    console.log('[Main] Development mode — using dev server')
     return getDevServerUrl()
   }
 
+  console.log('[Main] Production mode — validating desktop environment')
   const envCheck = validateDesktopEnv()
   if (!envCheck.ok) {
+    console.error('[Main] Environment validation failed:', envCheck.message)
     await dialog.showErrorBox('Postrack — Configuration Error', envCheck.message)
     app.quit()
     throw new Error(envCheck.message)
   }
 
-  return startNitroServer()
+  console.log('[Main] Starting Nitro server...')
+  const baseUrl = await startNitroServer()
+  console.log('[Main] Nitro server ready at', baseUrl)
+  return baseUrl
 }
 
 async function createWindow(baseUrl: string): Promise<void> {
-  mainWindow = new BrowserWindow({
+  const iconPath = resolveWindowIcon()
+  const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     show: false,
-    icon: path.join(__dirname, '../public/icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: `${__dirname}/preload.js`,
+      preload: path.join(__dirname, 'preload.js'),
     },
-  })
+  }
+
+  if (iconPath) {
+    windowOptions.icon = iconPath
+  }
+
+  console.log('[Main] Creating BrowserWindow...')
+  mainWindow = new BrowserWindow(windowOptions)
 
   mainWindow.once('ready-to-show', () => {
+    console.log('[Main] Window ready-to-show — displaying')
     mainWindow?.show()
   })
 
+  mainWindow.on('closed', () => {
+    console.log('[Main] Window closed')
+    mainWindow = null
+  })
+
   try {
+    console.log('[Main] Loading URL:', baseUrl)
     await mainWindow.loadURL(baseUrl)
+    console.log('[Main] URL loaded successfully')
   } catch (err) {
-    const message =
-      isDevMode()
-        ? `Could not reach the dev server at ${baseUrl}.\n\nStart it with: pnpm dev`
-        : `Failed to load Postrack at ${baseUrl}.\n\n${String(err)}`
+    console.error('[Main] Failed to load URL:', baseUrl, err)
+    const message = isDevMode()
+      ? `Could not reach the dev server at ${baseUrl}.\n\nStart it with: pnpm dev`
+      : `Failed to load Postrack at ${baseUrl}.\n\n${String(err)}`
 
     await dialog.showErrorBox('Postrack — Load Error', message)
     app.quit()
   }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null
-  })
 }
 
 app.whenReady().then(async () => {
+  console.log('[Main] App ready — initializing...')
   loadProjectEnv()
   registerShutdownHandlers()
 
@@ -69,19 +122,33 @@ app.whenReady().then(async () => {
     const baseUrl = await resolveAppUrl()
     await createWindow(baseUrl)
     initAutoUpdater()
-  } catch {
-    // Error already surfaced via dialog
+    console.log('[Main] Initialization complete')
+  } catch (error) {
+    console.error('[Main] Initialization failed:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    await dialog.showErrorBox(
+      'Postrack — Startup Error',
+      `The application could not start:\n\n${errorMessage}\n\n` +
+        `Check the console logs for more details.`
+    )
+    app.quit()
   }
 
   app.on('activate', async () => {
+    console.log('[Main] App activated')
     if (BrowserWindow.getAllWindows().length === 0) {
-      const baseUrl = await resolveAppUrl()
-      await createWindow(baseUrl)
+      try {
+        const baseUrl = await resolveAppUrl()
+        await createWindow(baseUrl)
+      } catch (error) {
+        console.error('[Main] Failed to recreate window on activate:', error)
+      }
     }
   })
 })
 
 app.on('window-all-closed', () => {
+  console.log('[Main] All windows closed')
   if (process.platform !== 'darwin') {
     app.quit()
   }
