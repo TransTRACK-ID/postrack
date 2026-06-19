@@ -33,6 +33,12 @@ mac:
     - dmg
     - zip
   category: public.app-category.developer-tools
-  hardenedRuntime: true
+  hardenedRuntime: false
   gatekeeperAssess: false
   identity: null
+dmg:
+  sign: false
+  # Note: For unsigned developer distribution, users may need to:
+  # 1. Right-click the app → Open (first time only)
+  # 2. Or run: xattr -cr /Applications/Postrack.app
+  # to bypass the "unidentified developer" warning.
