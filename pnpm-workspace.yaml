@@ -1,0 +1,22 @@
+allowBuilds:
+  '@datadog/native-appsec': true
+  '@datadog/native-iast-taint-tracking': true
+  '@datadog/native-metrics': true
+  '@datadog/pprof': true
+  '@parcel/watcher': true
+  dd-trace: true
+  electron: true
+  esbuild: true
+  protobufjs: true
+
+# Backwards compatibility with pnpm 10.x (ignored by pnpm 11)
+onlyBuiltDependencies:
+  - '@datadog/native-appsec'
+  - '@datadog/native-iast-taint-tracking'
+  - '@datadog/native-metrics'
+  - '@datadog/pprof'
+  - '@parcel/watcher'
+  - dd-trace
+  - electron
+  - esbuild
+  - protobufjs

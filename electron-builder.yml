@@ -1,0 +1,44 @@
+appId: id.transtrack.postrack
+productName: Postrack
+icon: build/icons/icon.png
+directories:
+  output: release
+publish:
+  provider: github
+  owner: TransTRACK-ID
+  repo: postrack
+files:
+  - dist-electron/**/*
+  - package.json
+extraResources:
+  - from: .env
+    to: .env
+    filter: ["**/*"]
+  - from: .output
+    to: .output
+    filter: ["**/*"]
+  - from: drizzle
+    to: drizzle
+    filter: ["**/*"]
+  - from: node_modules
+    to: node_modules
+    filter:
+      - "pg/**"
+      - "drizzle-orm/**"
+      - "jsonwebtoken/**"
+  - from: build/icons/icon.png
+    to: icon.png
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+dmg:
+  sign: false
+  # Note: For unsigned developer distribution, users may need to:
+  # 1. Right-click the app → Open (first time only)
+  # 2. Or run: xattr -cr /Applications/Postrack.app
+  # to bypass the "unidentified developer" warning.

@@ -240,11 +240,7 @@ defineExpose({
 
       <!-- Logo -->
       <div class="flex items-center gap-2 md:gap-2.5">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="flex-shrink-0">
-          <rect width="24" height="24" rx="6" fill="#FF6C37"/>
-          <path d="M7 8.5C7 7.67 7.67 7 8.5 7H15.5C16.33 7 17 7.67 17 8.5V15.5C17 16.33 16.33 17 15.5 17H8.5C7.67 17 7 16.33 7 15.5V8.5Z" fill="white"/>
-          <path d="M10 10H14M10 12H14M10 14H12" stroke="#FF6C37" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+        <img src="/logo.png" alt="Postrack" class="w-6 h-6 rounded-md" />
         <span class="text-[15px] font-semibold text-text-primary hidden sm:block">{{ title }}</span>
         <span class="text-[10px] text-text-muted font-medium px-1.5 py-0.5 bg-bg-tertiary rounded border border-border-default hidden md:inline-block" title="App Version">v{{ currentVersion }}</span>
       </div>

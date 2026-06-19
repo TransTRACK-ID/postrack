@@ -2,9 +2,6 @@
    MOCK SERVICE - TAILWINDCSS DESIGN SYSTEM
    ============================================ */
 
-/* Speed-Highlight CSS for syntax highlighting */
-@import '@speed-highlight/core/themes/atom-dark.css';
-
 /* Tailwind Directives */
 @tailwind base;
 @tailwind components;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick } from 'vue';
 import { SSO_PROVIDER_METADATA, type SsoProviderType } from '../types/sso';
 
 interface SsoProviderInfo {
@@ -57,6 +58,9 @@ const loginWithSso = (providerType: string, providerId?: string) => {
 const login = async () => {
   isLoading.value = true;
   errorMessage.value = '';
+  
+  // Allow DOM to update before starting async operations
+  await nextTick();
 
   try {
     await $fetch('/api/auth/login', {
@@ -69,9 +73,9 @@ const login = async () => {
     const redirectUrl = urlParams.get('redirect');
     
     if (redirectUrl) {
-      await navigateTo(decodeURIComponent(redirectUrl), { external: true });
+      await navigateTo(decodeURIComponent(redirectUrl));
     } else {
-      await navigateTo('/admin', { external: true });
+      await navigateTo('/admin');
     }
   } catch (e: any) {
     console.error('Login error:', e);
@@ -118,9 +122,9 @@ const checkAuthAndRedirect = async () => {
       // User is already logged in, redirect to intended destination or admin
       if (redirectUrl) {
         console.log('[Login] User already logged in, redirecting to:', decodeURIComponent(redirectUrl));
-        await navigateTo(decodeURIComponent(redirectUrl), { external: true });
+        await navigateTo(decodeURIComponent(redirectUrl));
       } else {
-        await navigateTo('/admin', { external: true });
+        await navigateTo('/admin');
       }
     }
   } catch (e) {
@@ -135,11 +139,7 @@ const checkAuthAndRedirect = async () => {
     <div class="flex flex-col items-center w-full max-w-[400px] p-6 z-10">
       <!-- Logo -->
       <div class="mb-8">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="24" height="24" rx="6" fill="#FF6C37"/>
-          <path d="M7 8.5C7 7.67 7.67 7 8.5 7H15.5C16.33 7 17 7.67 17 8.5V15.5C17 16.33 16.33 17 15.5 17H8.5C7.67 17 7 16.33 7 15.5V8.5Z" fill="white"/>
-          <path d="M10 10H14M10 12H14M10 14H12" stroke="#FF6C37" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+        <img src="/logo.png" alt="Postrack" class="w-12 h-12 rounded-lg" />
       </div>
 
       <!-- Card -->
