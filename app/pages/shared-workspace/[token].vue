@@ -670,7 +670,7 @@ const goBack = () => {
         </div>
         
         <div v-if="selectedRequest" class="relative flex-1 flex overflow-hidden">
-          <div class="flex-1 overflow-auto">
+          <div class="flex-1 overflow-hidden min-h-0">
             <RequestBuilder
               ref="requestBuilderRef"
               :request="selectedRequest"

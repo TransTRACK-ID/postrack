@@ -4480,7 +4480,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
           <!-- Request Builder with Code Examples Sidebar -->
           <div v-if="selectedRequest && activeTabKey" class="flex-1 flex flex-col md:flex-row overflow-hidden">
             <!-- Main Request Builder -->
-            <div class="flex-1 overflow-auto min-h-0">
+            <div class="flex-1 overflow-hidden min-h-0">
               <RequestBuilder
                 ref="requestBuilderRef"
                 :request="selectedRequest"

@@ -148,6 +148,7 @@ type ResponseViewType = 'pretty' | 'preview' | 'raw' | 'headers' | 'cookies' | '
 const PANEL_STORAGE_KEY = 'requestBuilderPanelConfig';
 const DEFAULT_REQUEST_RATIO = 0.40; // 40% for request panel
 const MIN_PANEL_HEIGHT = 80; // Minimum height in pixels
+const RESIZE_HANDLE_HEIGHT = 8; // Height of the drag handle between panels
 const COLLAPSED_HEIGHT = 42; // Height when response is collapsed
 const MOBILE_BREAKPOINT = 768; // Mobile breakpoint in pixels
 
@@ -365,16 +366,21 @@ const updateContainerHeight = () => {
 };
 
 // Computed panel heights (only used on desktop)
+const getResizeHandleHeight = () => (hasResponse.value && !isMobile.value ? RESIZE_HANDLE_HEIGHT : 0);
+
 const requestPanelHeight = computed(() => {
   if (isMobile.value) return containerHeight;
-  if (isResponseCollapsed.value) return containerHeight - COLLAPSED_HEIGHT;
-  return Math.round(containerHeight * requestPanelRatio.value);
+  const handleHeight = getResizeHandleHeight();
+  if (isResponseCollapsed.value) return containerHeight - COLLAPSED_HEIGHT - handleHeight;
+  const availableHeight = containerHeight - handleHeight;
+  return Math.round(availableHeight * requestPanelRatio.value);
 });
 
 const responsePanelHeight = computed(() => {
   if (isMobile.value) return 0;
   if (isResponseCollapsed.value) return COLLAPSED_HEIGHT;
-  return containerHeight - requestPanelHeight.value;
+  const handleHeight = getResizeHandleHeight();
+  return Math.max(MIN_PANEL_HEIGHT, containerHeight - requestPanelHeight.value - handleHeight);
 });
 
 // Drag functionality
@@ -391,9 +397,11 @@ const handleDragMove = (e: MouseEvent) => {
   
   const rect = panelContainerRef.value.getBoundingClientRect();
   const relativeY = e.clientY - rect.top;
+  const handleHeight = getResizeHandleHeight();
+  const availableHeight = containerHeight - handleHeight;
   const newRatio = Math.max(
-    MIN_PANEL_HEIGHT / containerHeight,
-    Math.min(1 - (MIN_PANEL_HEIGHT / containerHeight), relativeY / containerHeight)
+    MIN_PANEL_HEIGHT / availableHeight,
+    Math.min(1 - (MIN_PANEL_HEIGHT / availableHeight), relativeY / availableHeight)
   );
   requestPanelRatio.value = newRatio;
 };
@@ -423,10 +431,12 @@ const handleOptionScroll = (e: WheelEvent) => {
   
   e.preventDefault();
   
+  const handleHeight = getResizeHandleHeight();
+  const availableHeight = containerHeight - handleHeight;
   const delta = e.deltaY > 0 ? 0.015 : -0.015;
   const newRatio = Math.max(
-    MIN_PANEL_HEIGHT / containerHeight,
-    Math.min(1 - (MIN_PANEL_HEIGHT / containerHeight), requestPanelRatio.value + delta)
+    MIN_PANEL_HEIGHT / availableHeight,
+    Math.min(1 - (MIN_PANEL_HEIGHT / availableHeight), requestPanelRatio.value + delta)
   );
   requestPanelRatio.value = newRatio;
 };
@@ -3388,7 +3398,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full min-h-0">
     <div class="p-4 border-b border-border-default bg-bg-secondary">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -3470,7 +3480,7 @@ defineExpose({
       </div>
     </div>
 
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="flex-1 flex flex-col overflow-hidden min-h-0">
       <div class="p-4 border-b border-border-default bg-bg-secondary">
         <div class="flex gap-2 bg-bg-input border border-border-default rounded-lg p-1 min-w-0">
           <select 
@@ -3552,7 +3562,7 @@ defineExpose({
       <!-- Split Panel Container -->
       <div 
         ref="panelContainerRef"
-        class="flex-1 flex flex-col overflow-hidden relative"
+        class="flex-1 flex flex-col overflow-hidden relative min-h-0"
       >
         <!-- REQUEST CONTENT AREA (takes remaining space before response panel) -->
         <div 
@@ -4646,7 +4656,7 @@ defineExpose({
         <!-- RESPONSE PANEL (Always visible, collapsible, at the bottom) -->
         <div 
           v-if="!isMobile"
-          class="response-panel flex flex-col overflow-hidden border-t border-border-default bg-bg-secondary flex-shrink-0"
+          class="response-panel flex flex-col overflow-hidden border-t border-border-default bg-bg-secondary flex-shrink-0 min-h-0"
           :class="{ 'is-collapsed': isResponseCollapsed || !hasResponse }"
           :style="{ height: !hasResponse ? COLLAPSED_HEIGHT + 'px' : responsePanelHeight + 'px' }"
         >
@@ -4806,10 +4816,10 @@ defineExpose({
           >
             <div 
               v-if="!isResponseCollapsed && response" 
-              class="flex-1 flex flex-col overflow-hidden"
+              class="flex-1 flex flex-col overflow-hidden min-h-0"
               :class="{ 'no-transition': isLoading }"
             >
-              <div v-if="response.success" class="flex-1 flex flex-col overflow-hidden">
+              <div v-if="response.success" class="flex-1 flex flex-col overflow-hidden min-h-0">
                 <!-- Search Bar -->
                 <div v-if="showSearch || searchQuery" class="px-4 py-2 border-b border-border-default">
                   <div class="flex items-center gap-2">
@@ -4959,7 +4969,7 @@ defineExpose({
                 </div>
 
                 <!-- Response Content Area -->
-                <div ref="responseContentRef" class="flex-1 overflow-auto p-4">
+                <div ref="responseContentRef" class="flex-1 overflow-auto min-h-0 p-4 pb-8">
                   <!-- Pretty JSON View -->
                   <div v-if="responseViewType === 'pretty' && isJsonResponse() && getHighlightedJson" class="space-y-1">
                     <div class="flex items-center gap-2 mb-3 pb-2 border-b border-border-default">
@@ -5140,7 +5150,7 @@ defineExpose({
               </div>
 
               <!-- Error Response -->
-              <div v-else class="flex-1 overflow-auto p-4">
+              <div v-else class="flex-1 overflow-auto min-h-0 p-4 pb-8">
                 <div class="bg-bg-secondary border border-accent-red/30 rounded-lg overflow-hidden">
                   <div class="flex items-center py-2.5 px-4 border-b border-accent-red/30">
                     <div class="flex items-center gap-3">
@@ -5243,7 +5253,7 @@ defineExpose({
           <!-- Mobile Response Content -->
           <div 
             v-if="!isResponseCollapsed && response"
-            class="flex-1 flex flex-col overflow-hidden"
+            class="flex-1 flex flex-col overflow-hidden min-h-0"
           >
             <!-- Mobile Response Tabs -->
             <div class="flex border-b border-border-default overflow-x-auto scrollbar-hide">
@@ -5263,7 +5273,7 @@ defineExpose({
             </div>
 
             <!-- Mobile Response Body -->
-            <div class="flex-1 overflow-auto p-3">
+            <div class="flex-1 overflow-auto min-h-0 p-3 pb-8">
               <!-- Pretty View -->
               <div v-if="responseViewType === 'pretty'" class="h-full">
                 <div v-if="response.success" class="h-full">
@@ -5531,6 +5541,7 @@ kbd {
 
 .response-panel {
   transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 0;
 }
 
 .response-panel.is-collapsed {
@@ -5601,20 +5612,16 @@ kbd {
 
 /* Slide fade animation for collapse/expand */
 .slide-fade-enter-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 1000px;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .slide-fade-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 1000px;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .slide-fade-enter-from,
 .slide-fade-leave-to {
   opacity: 0;
-  max-height: 0;
-  transform: translateY(-10px);
 }
 
 /* Disable transitions during loading */
