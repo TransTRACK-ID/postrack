@@ -6,6 +6,8 @@ import VariableInput from './VariableInput.vue'
 import VariableTextarea from './VariableTextarea.vue'
 import RequestExampleManager from './RequestExampleManager.vue'
 import MockConfiguration from './MockConfiguration.vue'
+import BulkEditPanel from './BulkEditPanel.vue'
+import { useBulkKeyValueEdit } from '~/composables/useBulkKeyValueEdit'
 import { useUsageTracking } from '~/composables/useUsageTracking'
 import { useClientRequest, isLocalUrl } from '~/composables/useClientRequest'
 import { stripComments, validateJSONC, formatJSONC } from '~/utils/jsonc'
@@ -469,8 +471,9 @@ const responseViewType = ref<ResponseViewType>('pretty');
 const previewContainerRef = ref<HTMLDivElement | null>(null);
 
 const queryParams = ref<QueryParam[]>([]);
-const isBulkEditMode = ref(false);
-const bulkQueryString = ref('');
+const queryBulkEdit = useBulkKeyValueEdit<QueryParam>();
+const headersBulkEdit = useBulkKeyValueEdit<HeaderParam>();
+const bodyBulkEdit = useBulkKeyValueEdit<BodyParam>();
 
 const pathVariables = ref<PathVariable[]>([]);
 
@@ -1279,34 +1282,22 @@ const updateUrlFromParams = () => {
   }
 };
 
-const parseBulkQuery = () => {
-  const params: QueryParam[] = [];
-  const pairs = bulkQueryString.value.split('&').filter(Boolean);
-  
-  pairs.forEach(pair => {
-    const [key, ...values] = pair.split('=');
-    const value = values.join('=');
-    if (key) {
-      params.push({
-        id: crypto.randomUUID(),
-        key,
-        value: decodeURIComponent(value),
-        enabled: true
-      });
-    }
-  });
-  
-  queryParams.value = params;
-  updateUrlFromParams();
-  isBulkEditMode.value = false;
-};
-
-const generateBulkQuery = () => {
-  const enabledParams = queryParams.value.filter(p => p.enabled && p.key);
-  bulkQueryString.value = enabledParams
-    .map(p => `${p.key}=${encodeURIComponent(p.value)}`)
-    .join('&');
-  isBulkEditMode.value = true;
+const toggleQueryBulkEdit = () => {
+  const result = queryBulkEdit.toggleBulkEdit(
+    queryParams.value,
+    (key, value, existing) => ({
+      id: existing?.id ?? crypto.randomUUID(),
+      key,
+      value,
+      enabled: existing?.enabled ?? true,
+      note: existing?.note,
+    }),
+    { format: 'colon' },
+  );
+  if (result) {
+    queryParams.value = result;
+    updateUrlFromParams();
+  }
 };
 
 const addQueryParam = () => {
@@ -1386,6 +1377,22 @@ const updateHeader = (id: string, field: keyof HeaderParam, value: string | bool
   const header = headers.value.find(h => h.id === id);
   if (header) {
     header[field] = value as never;
+  }
+};
+
+const toggleHeadersBulkEdit = () => {
+  const result = headersBulkEdit.toggleBulkEdit(
+    headers.value,
+    (key, value, existing) => ({
+      id: existing?.id ?? crypto.randomUUID(),
+      key,
+      value,
+      enabled: existing?.enabled ?? true,
+      note: existing?.note,
+    }),
+  );
+  if (result) {
+    headers.value = result;
   }
 };
 
@@ -1555,6 +1562,23 @@ const updateFormDataParam = (id: string, field: keyof BodyParam, value: string |
   const param = formDataParams.value.find(p => p.id === id);
   if (param) {
     param[field] = value as never;
+  }
+};
+
+const toggleBodyBulkEdit = () => {
+  const result = bodyBulkEdit.toggleBulkEdit(
+    formDataParams.value,
+    (key, value, existing) => ({
+      id: existing?.id ?? crypto.randomUUID(),
+      key,
+      value,
+      enabled: existing?.enabled ?? true,
+      type: existing?.type ?? 'text',
+      note: existing?.note,
+    }),
+  );
+  if (result) {
+    formDataParams.value = result;
   }
 };
 
@@ -3004,7 +3028,14 @@ watch(() => form.value.url, (newUrl) => {
   }
 }, { immediate: true });
 
+watch(activeTab, () => {
+  queryBulkEdit.isBulkEditMode = false;
+  headersBulkEdit.isBulkEditMode = false;
+  bodyBulkEdit.isBulkEditMode = false;
+});
+
 watch(bodyFormat, (newFormat) => {
+  bodyBulkEdit.isBulkEditMode = false;
   if ((newFormat === 'form-data' || newFormat === 'urlencoded') && formDataParams.value.length === 0) {
     formDataParams.value.push({
       id: crypto.randomUUID(),
@@ -3533,20 +3564,18 @@ defineExpose({
             <span class="text-xs text-text-muted">{{ queryParams.filter(p => p.enabled).length }} params</span>
             <button 
               v-if="!readOnly"
-              @click="isBulkEditMode ? parseBulkQuery() : generateBulkQuery()"
+              @click="toggleQueryBulkEdit"
               class="text-xs text-accent-blue hover:text-accent-blue/80"
             >
-              {{ isBulkEditMode ? 'Done' : 'Bulk Edit' }}
+              {{ queryBulkEdit.isBulkEditMode ? 'Done' : 'Bulk Edit' }}
             </button>
           </div>
 
-          <div v-if="isBulkEditMode && !readOnly" class="flex-1 overflow-auto p-4">
-            <textarea
-              v-model="bulkQueryString"
-              class="w-full h-full min-h-[200px] p-3 bg-bg-input border border-border-default rounded-lg text-text-primary font-mono text-sm resize-none focus:outline-none focus:border-accent-blue"
-              placeholder="key1=value1&amp;key2=value2"
-            />
-          </div>
+          <BulkEditPanel
+            v-if="queryBulkEdit.isBulkEditMode && !readOnly"
+            v-model="queryBulkEdit.bulkString"
+            placeholder="key1:value1&#10;key2:value2&#10;&#10;or paste: key1=value1&amp;key2=value2"
+          />
 
           <div v-else class="flex-1 overflow-auto">
             <div class="p-2">
@@ -3674,16 +3703,31 @@ defineExpose({
         <div v-else-if="activeTab === 'headers'" class="flex-1 flex flex-col overflow-hidden">
           <div class="p-2 border-b border-border-default bg-bg-secondary flex items-center justify-between">
             <span class="text-xs text-text-muted">{{ headers.filter(h => h.enabled).length }} headers</span>
-            <button
-              v-if="!readOnly"
-              @click="addPresetHeaders"
-              class="text-xs text-accent-blue hover:text-accent-blue/80"
-            >
-              Add Preset Headers
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                v-if="!readOnly"
+                @click="toggleHeadersBulkEdit"
+                class="text-xs text-accent-blue hover:text-accent-blue/80"
+              >
+                {{ headersBulkEdit.isBulkEditMode ? 'Done' : 'Bulk Edit' }}
+              </button>
+              <button
+                v-if="!readOnly && !headersBulkEdit.isBulkEditMode"
+                @click="addPresetHeaders"
+                class="text-xs text-accent-blue hover:text-accent-blue/80"
+              >
+                Add Preset Headers
+              </button>
+            </div>
           </div>
 
-          <div class="flex-1 overflow-auto">
+          <BulkEditPanel
+            v-if="headersBulkEdit.isBulkEditMode && !readOnly"
+            v-model="headersBulkEdit.bulkString"
+            placeholder="Content-Type:application/json&#10;Accept:application/json"
+          />
+
+          <div v-else class="flex-1 overflow-auto">
             <div class="p-2">
               <div
                 v-for="(header, index) in headers"
@@ -3819,7 +3863,26 @@ defineExpose({
               </div>
             </div>
 
-            <div v-else-if="bodyFormat === 'form-data'" class="space-y-2">
+            <div v-else-if="bodyFormat === 'form-data'" class="flex flex-col h-full -m-4">
+              <div class="p-2 border-b border-border-default bg-bg-secondary flex items-center justify-between">
+                <span class="text-xs text-text-muted">{{ formDataParams.filter(p => p.enabled).length }} fields</span>
+                <button
+                  v-if="!readOnly"
+                  @click="toggleBodyBulkEdit"
+                  class="text-xs text-accent-blue hover:text-accent-blue/80"
+                >
+                  {{ bodyBulkEdit.isBulkEditMode ? 'Done' : 'Bulk Edit' }}
+                </button>
+              </div>
+
+              <BulkEditPanel
+                v-if="bodyBulkEdit.isBulkEditMode && !readOnly"
+                v-model="bodyBulkEdit.bulkString"
+                placeholder="name:John Doe&#10;email:john@example.com"
+                class="flex-1"
+              />
+
+              <div v-else class="flex-1 overflow-auto p-4 space-y-2">
               <div
                 v-for="(param, index) in formDataParams"
                 :key="param.id"
@@ -3905,9 +3968,29 @@ defineExpose({
                 </svg>
                 Add Form Data Param
               </button>
+              </div>
             </div>
 
-            <div v-else-if="bodyFormat === 'urlencoded'" class="space-y-2">
+            <div v-else-if="bodyFormat === 'urlencoded'" class="flex flex-col h-full -m-4">
+              <div class="p-2 border-b border-border-default bg-bg-secondary flex items-center justify-between">
+                <span class="text-xs text-text-muted">{{ formDataParams.filter(p => p.enabled).length }} fields</span>
+                <button
+                  v-if="!readOnly"
+                  @click="toggleBodyBulkEdit"
+                  class="text-xs text-accent-blue hover:text-accent-blue/80"
+                >
+                  {{ bodyBulkEdit.isBulkEditMode ? 'Done' : 'Bulk Edit' }}
+                </button>
+              </div>
+
+              <BulkEditPanel
+                v-if="bodyBulkEdit.isBulkEditMode && !readOnly"
+                v-model="bodyBulkEdit.bulkString"
+                placeholder="username:john&#10;password:secret"
+                class="flex-1"
+              />
+
+              <div v-else class="flex-1 overflow-auto p-4 space-y-2">
               <div
                 v-for="(param, index) in formDataParams"
                 :key="param.id"
@@ -3967,6 +4050,7 @@ defineExpose({
                 </svg>
                 Add URL Encoded Param
               </button>
+              </div>
             </div>
 
             <div v-else-if="bodyFormat === 'raw'" class="space-y-3">
