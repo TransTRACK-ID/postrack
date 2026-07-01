@@ -407,6 +407,28 @@ const normalizeRequestForTab = (request: Partial<HttpRequest>): HttpRequest => {
     : request.body as Record<string, unknown> | string | null;
   const importedBodyPayload = normalizeImportedBodyPayload(normalizedBody);
 
+  let jsonBody = typeof request.jsonBody === 'string' ? request.jsonBody : '';
+  if (!jsonBody && importedBodyPayload.body !== null && importedBodyPayload.body !== undefined) {
+    if (typeof importedBodyPayload.body === 'string') {
+      try {
+        const parsed = JSON.parse(importedBodyPayload.body);
+        jsonBody = JSON.stringify(parsed, null, 2);
+      } catch {
+        jsonBody = importedBodyPayload.body;
+      }
+    } else if (
+      typeof importedBodyPayload.body === 'object'
+      && !Array.isArray(importedBodyPayload.body)
+      && !isRequestBodyFormat(importedBodyPayload.body[POSTMAN_BODY_FORMAT_META_KEY])
+    ) {
+      try {
+        jsonBody = JSON.stringify(importedBodyPayload.body, null, 2);
+      } catch {
+        jsonBody = '';
+      }
+    }
+  }
+
   return {
   id: typeof request.id === 'string' ? request.id : '',
   folderId: typeof request.folderId === 'string' || request.folderId === null ? request.folderId : '',
@@ -433,7 +455,7 @@ const normalizeRequestForTab = (request: Partial<HttpRequest>): HttpRequest => {
   bodyFormat: request.bodyFormat === 'json' || request.bodyFormat === 'raw' || request.bodyFormat === 'form-data' || request.bodyFormat === 'urlencoded' || request.bodyFormat === 'binary' || request.bodyFormat === 'none'
     ? request.bodyFormat
     : importedBodyPayload.bodyFormat,
-  jsonBody: typeof request.jsonBody === 'string' ? request.jsonBody : '',
+  jsonBody,
   rawBody: typeof request.rawBody === 'string' ? request.rawBody : (importedBodyPayload.rawBody ?? ''),
   rawContentType: typeof request.rawContentType === 'string' ? request.rawContentType : importedBodyPayload.rawContentType,
   formDataParams: Array.isArray(request.formDataParams)

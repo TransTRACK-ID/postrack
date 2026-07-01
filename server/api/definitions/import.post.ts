@@ -37,6 +37,11 @@ import {
   type OpenAPIEndpoint 
 } from '../../utils/openapi-parser';
 import { parseYAML } from '../../utils/yaml-parser';
+import {
+  cleanContentTypeKey,
+  extractOpenAPIRequestBody,
+  getMediaContentByType
+} from '../../utils/openapi-body-extractor';
 
 type ImportSource = 'file' | 'url' | 'raw';
 
@@ -216,93 +221,14 @@ function extractExamplesFromResponses(responses: any): Array<{
   return examples;
 }
 
-// Extract body from requestBody
-function extractBody(requestBody: any): Record<string, unknown> | string | null {
-  if (!requestBody?.content) return null;
-
-  // Prefer application/json
-  const jsonContent = requestBody.content['application/json'];
-  if (jsonContent?.example) {
-    return jsonContent.example;
-  }
-  if (jsonContent?.schema?.example) {
-    return jsonContent.schema.example;
-  }
-  if (jsonContent?.schema) {
-    // Generate sample from schema if no example
-    return generateSampleFromSchema(jsonContent.schema);
-  }
-
-  // Try other content types
-  for (const [contentType, mediaType] of Object.entries(requestBody.content)) {
-    const media = mediaType as any;
-    if (media.example) {
-      return media.example;
-    }
-    if (media.schema?.example) {
-      return media.schema.example;
-    }
-    if (media.schema) {
-      return generateSampleFromSchema(media.schema);
-    }
-  }
-
-  return null;
-}
-
-// Generate a sample object from a JSON schema
-function generateSampleFromSchema(schema: any): Record<string, unknown> | null {
-  if (!schema || typeof schema !== 'object') return null;
-  
-  if (schema.example) return schema.example;
-  
-  if (schema.type === 'object' && schema.properties) {
-    const sample: Record<string, unknown> = {};
-    for (const [key, prop] of Object.entries(schema.properties)) {
-      const propSchema = prop as any;
-      if (propSchema.example !== undefined) {
-        sample[key] = propSchema.example;
-      } else if (propSchema.default !== undefined) {
-        sample[key] = propSchema.default;
-      } else if (propSchema.type === 'string') {
-        sample[key] = propSchema.enum?.[0] || '';
-      } else if (propSchema.type === 'number' || propSchema.type === 'integer') {
-        sample[key] = 0;
-      } else if (propSchema.type === 'boolean') {
-        sample[key] = false;
-      } else if (propSchema.type === 'array') {
-        sample[key] = [];
-      } else if (propSchema.type === 'object') {
-        sample[key] = generateSampleFromSchema(propSchema) || {};
-      }
-    }
-    return sample;
-  }
-  
-  return null;
-}
-
-// Helper function to clean content type keys (remove surrounding quotes if present)
-function cleanContentTypeKey(key: string): string {
-  const cleaned = key.trim();
-  // Remove surrounding quotes if present (handles keys like '"application/json"')
-  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
-      (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-    return cleaned.slice(1, -1);
-  }
-  return cleaned;
-}
-
 // Extract Content-Type from requestBody
 function extractContentType(requestBody: any): string | null {
   if (!requestBody?.content) return null;
   
   const contentKeys = Object.keys(requestBody.content);
-  console.log('[Import] Raw content keys:', contentKeys);
   
   // Clean all content type keys
   const cleanedKeys = contentKeys.map(cleanContentTypeKey);
-  console.log('[Import] Cleaned content types:', cleanedKeys);
   
   // Priority order: application/json, then others
   const contentTypes = cleanedKeys.map(key => {
@@ -316,7 +242,6 @@ function extractContentType(requestBody: any): string | null {
   
   const jsonType = contentTypes.find(ct => ct.cleaned === 'application/json');
   if (jsonType) {
-    console.log('[Import] Found application/json, using key:', jsonType.original);
     return 'application/json';
   }
   
@@ -434,8 +359,11 @@ function extractParamNotes(parameters: any[], requestBody?: any): Record<string,
   }
   
   // Extract form-data descriptions from requestBody
-  if (requestBody?.content?.['multipart/form-data']?.schema?.properties) {
-    const props = requestBody.content['multipart/form-data'].schema.properties;
+  const multipartContent = requestBody?.content
+    ? getMediaContentByType(requestBody.content, 'multipart/form-data')
+    : null;
+  if (multipartContent?.schema?.properties) {
+    const props = multipartContent.schema.properties;
     const formDataNotes: Record<string, string> = {};
     for (const [key, prop] of Object.entries(props)) {
       const propSchema = prop as any;
@@ -449,8 +377,11 @@ function extractParamNotes(parameters: any[], requestBody?: any): Record<string,
   }
   
   // Extract urlencoded descriptions from requestBody
-  if (requestBody?.content?.['application/x-www-form-urlencoded']?.schema?.properties) {
-    const props = requestBody.content['application/x-www-form-urlencoded'].schema.properties;
+  const urlencodedContent = requestBody?.content
+    ? getMediaContentByType(requestBody.content, 'application/x-www-form-urlencoded')
+    : null;
+  if (urlencodedContent?.schema?.properties) {
+    const props = urlencodedContent.schema.properties;
     const urlencodedNotes: Record<string, string> = {};
     for (const [key, prop] of Object.entries(props)) {
       const propSchema = prop as any;
@@ -940,7 +871,7 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
         
         const extractedHeaders = extractHeaders(endpoint.parameters || [], endpoint.requestBody);
         const headersJson = extractedHeaders ? JSON.stringify(extractedHeaders) : null;
-        const endpointBody = extractBody(endpoint.requestBody);
+        const endpointBody = extractOpenAPIRequestBody(endpoint.requestBody, parsedSpec.schemas);
         const paramNotes = extractParamNotes(endpoint.parameters || [], endpoint.requestBody);
         
         const newRequest = (await db
@@ -1022,7 +953,7 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
         const baseRequestUrl = buildUrl(endpoint.path);
         const fullUrl = buildUrlWithQueryParams(baseRequestUrl, queryParams);
         const endpointHeaders = extractHeaders(endpoint.parameters || [], endpoint.requestBody);
-        const endpointBody = extractBody(endpoint.requestBody);
+        const endpointBody = extractOpenAPIRequestBody(endpoint.requestBody, parsedSpec.schemas);
         const paramNotes = extractParamNotes(endpoint.parameters || [], endpoint.requestBody);
         
         const newRequest = (await db

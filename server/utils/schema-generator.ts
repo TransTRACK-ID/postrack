@@ -82,7 +82,16 @@ export function generateMockData(
       return null;
 
     default:
-      // Fallback for missing type (sometimes implies object or any)
+      if (schema.properties) {
+        const result: Record<string, any> = {};
+        for (const [key, prop] of Object.entries(schema.properties)) {
+          result[key] = generateMockData(prop, definitions, depth + 1);
+        }
+        return result;
+      }
+      if (schema.items) {
+        return [generateMockData(schema.items, definitions, depth + 1)];
+      }
       return {};
   }
 }

@@ -126,6 +126,33 @@ export interface OpenAPIParseResult {
 const SUPPORTED_VERSIONS = ['3.0', '3.1'];
 
 /**
+ * Resolves a $ref pointer within an OpenAPI document (e.g. #/components/requestBodies/Pet).
+ */
+export function resolveOpenAPIRef(
+  specObj: Record<string, unknown>,
+  obj: unknown
+): unknown {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  const ref = (obj as Record<string, unknown>).$ref;
+  if (typeof ref !== 'string' || !ref.startsWith('#/')) {
+    return obj;
+  }
+
+  const parts = ref.slice(2).split('/');
+  let current: unknown = specObj;
+
+  for (const part of parts) {
+    if (!current || typeof current !== 'object') {
+      return obj;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+
+  return resolveOpenAPIRef(specObj, current);
+}
+
+/**
  * Validates and parses an OpenAPI specification
  */
 export function parseOpenAPISpec(spec: unknown): OpenAPIParseResult {
@@ -240,6 +267,11 @@ export function parseOpenAPISpec(spec: unknown): OpenAPIParseResult {
         const operation = pathItem[method] as Record<string, unknown> | undefined;
         if (!operation || typeof operation !== 'object') continue;
 
+        const rawRequestBody = operation.requestBody ?? pathItem.requestBody;
+        const resolvedRequestBody = rawRequestBody
+          ? resolveOpenAPIRef(specObj, rawRequestBody) as OpenAPIRequestBody
+          : undefined;
+
         const endpoint: OpenAPIEndpoint = {
           path: cleanString(path) || path,
           method: method.toUpperCase(),
@@ -248,7 +280,7 @@ export function parseOpenAPISpec(spec: unknown): OpenAPIParseResult {
           description: cleanString(operation.description),
           tags: operation.tags as string[] | undefined,
           parameters: extractParameters(operation.parameters, pathItem.parameters),
-          requestBody: operation.requestBody as OpenAPIRequestBody | undefined,
+          requestBody: resolvedRequestBody,
           responses: operation.responses as Record<string, OpenAPIResponse> | undefined,
           security: operation.security as Record<string, string[]>[] | undefined
         };
