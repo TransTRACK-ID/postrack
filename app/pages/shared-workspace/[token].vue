@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick } from 'vue';
 import RequestBuilder from '~/components/RequestBuilder.vue';
 import CodeExamples from '~/components/CodeExamples.vue';
 import MethodBadge from '~/components/MethodBadge.vue';
@@ -185,6 +186,7 @@ onMounted(async () => {
     // Attach resize listeners
     document.addEventListener('mousemove', onResize);
     document.addEventListener('mouseup', stopResize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   }
 
   try {
@@ -218,6 +220,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousemove', onResize);
   document.removeEventListener('mouseup', stopResize);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 
 // Current selected request
@@ -306,6 +309,54 @@ const selectRequest = (request: HttpRequest) => {
   const project = findProjectForRequest(request);
   if (project) {
     selectedProjectId.value = project.id;
+  }
+};
+
+const findRequestInFolders = (folders: FolderWithRequests[], requestId: string): HttpRequest | null => {
+  for (const folder of folders) {
+    const directMatch = folder.requests.find(request => request.id === requestId);
+    if (directMatch) return directMatch;
+
+    const nestedMatch = findRequestInFolders(folder.children, requestId);
+    if (nestedMatch) return nestedMatch;
+  }
+
+  return null;
+};
+
+const findRequestInWorkspace = (ws: SharedWorkspace, requestId: string): HttpRequest | null => {
+  for (const project of ws.projects) {
+    for (const collection of project.collections) {
+      const match = findRequestInFolders(collection.folders, requestId);
+      if (match) return match;
+    }
+  }
+
+  return null;
+};
+
+const refreshSelectedRequestFromWorkspace = async () => {
+  if (!selectedRequest.value?.id || !workspace.value) return;
+
+  const freshRequest = findRequestInWorkspace(workspace.value, selectedRequest.value.id);
+  if (!freshRequest) return;
+
+  selectedRequest.value = freshRequest;
+  await nextTick();
+  await requestBuilderRef.value?.syncAfterSave?.(freshRequest);
+};
+
+const refreshSharedWorkspace = async () => {
+  const response = await $fetch<SharedWorkspace>(`/api/shared-workspace/${token.value}`, {
+    credentials: 'include'
+  });
+  workspace.value = response;
+  await refreshSelectedRequestFromWorkspace();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && selectedRequest.value?.id) {
+    void refreshSharedWorkspace();
   }
 };
 
@@ -416,11 +467,7 @@ const executeSharedSave = async (request: HttpRequest) => {
       }
     });
     
-    // Refresh workspace data
-    const response = await $fetch<SharedWorkspace>(`/api/shared-workspace/${token.value}`, {
-      credentials: 'include'
-    });
-    workspace.value = response;
+    await refreshSharedWorkspace();
   } catch (err) {
     console.error('Failed to save request:', err);
   }
@@ -674,6 +721,7 @@ const goBack = () => {
             <RequestBuilder
               ref="requestBuilderRef"
               :request="selectedRequest"
+              :tab-key="`shared-${selectedRequest.id}`"
               :environment-id="currentEnvironmentId"
               :collection-id="currentCollectionId"
               :read-only="isReadOnly"

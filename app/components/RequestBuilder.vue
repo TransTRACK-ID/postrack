@@ -737,6 +737,14 @@ const resolvePathVariables = (url: string): string => {
 // Track whether this is the first load (for state restoration)
 const isFirstLoad = ref(true);
 
+const getRequestUpdatedAtTime = (request: HttpRequest): number => {
+  const value = request.updatedAt;
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
 // Function to load request data into form state
 const loadRequestData = async (request: HttpRequest) => {
   // Increment load ID to track this specific load operation
@@ -1202,6 +1210,15 @@ const loadRequestData = async (request: HttpRequest) => {
 // Note: { immediate: true } removed - initial load handled in onMounted to ensure isMounted is set first
 watch(() => props.tabKey, () => {
   isFirstLoad.value = true;
+  lastLoadedRequestSnapshot.value = '';
+  loadRequestData(props.request);
+});
+
+// Reload when switching requests in contexts without tab keys (e.g. shared workspace)
+watch(() => props.request.id, (newId, oldId) => {
+  if (!isMounted.value || !newId || newId === oldId) return;
+  isFirstLoad.value = true;
+  lastLoadedRequestSnapshot.value = '';
   loadRequestData(props.request);
 });
 
@@ -2922,10 +2939,28 @@ const buildCurrentRequestState = () => ({
     enabled: param.enabled,
     note: param.note
   })),
+  bodyFormat: bodyFormat.value,
+  jsonBody: jsonBody.value,
+  rawBody: rawBody.value,
+  rawContentType: rawContentType.value,
+  formDataParams: formDataParams.value.map(param => ({
+    key: param.key,
+    value: param.value,
+    enabled: param.enabled,
+    type: param.type
+  })),
   order: props.request.order,
   createdAt: props.request.createdAt,
   updatedAt: new Date()
 });
+
+const syncAfterSave = async (request?: HttpRequest) => {
+  const requestToLoad = request ?? props.request;
+  isFirstLoad.value = true;
+  lastLoadedRequestSnapshot.value = '';
+  await loadRequestData(requestToLoad);
+  captureCurrentStateAsSaved();
+};
 
 const openSaveDialog = () => {
   emit('saveRequest', buildCurrentRequestState());
@@ -3071,6 +3106,20 @@ watch(hasUnsavedChanges, (newValue, oldValue) => {
 
   emit('unsavedChanges', props.request, newValue, buildDraftSnapshot());
 });
+
+// Reload when another user updates the same request on the server
+watch(
+  () => getRequestUpdatedAtTime(props.request),
+  (newUpdatedAt, oldUpdatedAt) => {
+    if (!isMounted.value || isLoadingRequestData.value) return;
+    if (!oldUpdatedAt || newUpdatedAt === oldUpdatedAt) return;
+    if (hasUnsavedChanges.value) return;
+    isFirstLoad.value = true;
+    lastLoadedRequestSnapshot.value = '';
+    loadRequestData(props.request);
+    captureCurrentStateAsSaved();
+  }
+);
 
 onMounted(async () => {
   isMounted.value = true;
@@ -3393,7 +3442,9 @@ defineExpose({
   apiKey,
   refreshCollectionAuth: () => refreshCollectionAuth(props.collectionId),
   getCurrentRequestState: buildCurrentRequestState,
-  captureCurrentStateAsSaved
+  getDraftSnapshot: buildDraftSnapshot,
+  captureCurrentStateAsSaved,
+  syncAfterSave
 });
 </script>
 

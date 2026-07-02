@@ -1719,6 +1719,67 @@ const queuePersistRequestTabs = () => {
   persistRequestTabsDebounced();
 };
 
+const getRequestUpdatedAtTime = (request: Partial<HttpRequest>): number => {
+  const value = request.updatedAt;
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
+const fetchFreshRequest = async (requestId: string): Promise<HttpRequest | null> => {
+  if (!requestId) return null;
+
+  try {
+    const fullRequest = await $fetch<HttpRequest>(`/api/admin/requests/${requestId}`);
+    const normalized = normalizeRequestForTab(fullRequest);
+    prefetchedRequests.value.set(requestId, normalized);
+    return normalized;
+  } catch (e: any) {
+    if (e?.status !== 404 && e?.statusCode !== 404) {
+      console.warn('[Refresh] Failed to load request:', requestId, e);
+    }
+    return null;
+  }
+};
+
+const applyFreshRequestToTab = async (tabKey: string, freshRequest: HttpRequest) => {
+  const tabIndex = openTabs.value.findIndex(tab => tab.key === tabKey);
+  if (tabIndex === -1) return;
+
+  openTabs.value[tabIndex] = {
+    ...openTabs.value[tabIndex],
+    request: freshRequest
+  };
+
+  if (activeTabKey.value === tabKey) {
+    selectedRequest.value = freshRequest;
+    await nextTick();
+    await requestBuilderRef.value?.syncAfterSave?.(freshRequest);
+  }
+};
+
+const refreshOpenTabsFromServer = async (options?: { tabKeys?: string[]; force?: boolean }) => {
+  const tabsToRefresh = options?.tabKeys
+    ? openTabs.value.filter(tab => options.tabKeys!.includes(tab.key))
+    : openTabs.value;
+
+  await Promise.all(tabsToRefresh.map(async (tab) => {
+    if (!tab.request.id || tab.hasUnsavedChanges) return;
+
+    const freshRequest = await fetchFreshRequest(tab.request.id);
+    if (!freshRequest) return;
+
+    if (!options?.force) {
+      const localUpdatedAt = getRequestUpdatedAtTime(tab.request);
+      const freshUpdatedAt = getRequestUpdatedAtTime(freshRequest);
+      if (freshUpdatedAt <= localUpdatedAt) return;
+    }
+
+    await applyFreshRequestToTab(tab.key, freshRequest);
+  }));
+};
+
 const loadPersistedRequestTabs = async () => {
   isHydratingRequestTabs.value = true;
 
@@ -1761,6 +1822,7 @@ const loadPersistedRequestTabs = async () => {
     isHydratingRequestTabs.value = false;
     hasHydratedRequestTabs.value = true;
     syncSelectedRequestWithActiveTab();
+    void refreshOpenTabsFromServer({ force: true });
   }
 };
 
@@ -1768,6 +1830,13 @@ const handleWindowVisibilityChange = () => {
   if (document.visibilityState === 'hidden') {
     persistRequestTabsDebounced.cancel();
     void persistRequestTabsNow(true);
+    return;
+  }
+
+  if (document.visibilityState === 'visible') {
+    void refreshOpenTabsFromServer({
+      tabKeys: activeTabKey.value ? [activeTabKey.value] : undefined
+    });
   }
 };
 
@@ -2455,9 +2524,21 @@ const handleSelectRequest = async (request: HttpRequest) => {
   // Check if tab already exists for this request
   const existingTab = openTabs.value.find(tab => tab.request.id === normalizedRequest.id);
   if (existingTab) {
-    existingTab.request = normalizeRequestForTab(existingTab.request);
     activeTabKey.value = existingTab.key;
-    selectedRequest.value = existingTab.request;
+
+    if (!existingTab.hasUnsavedChanges) {
+      const freshRequest = await fetchFreshRequest(normalizedRequest.id);
+      if (freshRequest) {
+        existingTab.request = freshRequest;
+        selectedRequest.value = freshRequest;
+        await nextTick();
+        await requestBuilderRef.value?.syncAfterSave?.(freshRequest);
+      } else {
+        selectedRequest.value = existingTab.request;
+      }
+    } else {
+      selectedRequest.value = existingTab.request;
+    }
   } else {
     // Create new tab with the request data we already have
     const newTabKey = createTabKey();
@@ -2473,7 +2554,7 @@ const handleSelectRequest = async (request: HttpRequest) => {
 };
 
 // Tab handlers
-const handleSelectTab = (tabKey: string) => {
+const handleSelectTab = async (tabKey: string) => {
   activeAdminPanel.value = 'requests';
   const tab = openTabs.value.find(t => t.key === tabKey);
   if (tab) {
@@ -2484,6 +2565,8 @@ const handleSelectTab = (tabKey: string) => {
     
     // Check if this request is in a shared workspace
     isSharedWorkspace.value = checkIfRequestIsInSharedWorkspace(tab.request);
+
+    await refreshOpenTabsFromServer({ tabKeys: [tabKey] });
   }
 };
 
@@ -2697,12 +2780,16 @@ const executeSave = async (request: any) => {
     console.log('[Frontend Save] Sending body:', JSON.stringify(body, null, 2));
     
     try {
-      await $fetch(`/api/admin/requests/${request.id}`, {
+      const savedRequest = await $fetch<HttpRequest>(`/api/admin/requests/${request.id}`, {
         method: 'PUT',
         body
       });
 
-      const normalizedRequest = normalizeRequestForTab(request);
+      const draft = requestBuilderRef.value?.getDraftSnapshot?.() as RequestDraftSnapshot | undefined;
+      const normalizedRequest = buildPersistedRequestFromDraft(
+        normalizeRequestForTab({ ...request, ...savedRequest }),
+        draft
+      );
       
       // Update selectedRequest if it matches
       if (selectedRequest.value && selectedRequest.value.id === request.id) {
@@ -2714,15 +2801,16 @@ const executeSave = async (request: any) => {
       if (tabIdx !== -1 && openTabs.value[tabIdx].request.id === request.id) {
         openTabs.value[tabIdx] = {
           ...openTabs.value[tabIdx],
-          request: normalizedRequest
+          request: normalizedRequest,
+          hasUnsavedChanges: false
         };
+      } else {
+        updateTabUnsavedStatus(normalizedRequest, false);
       }
       
-      // Reset unsaved flag on the tab
-      updateTabUnsavedStatus(normalizedRequest, false);
-      
-      // Tell RequestBuilder to capture current state as saved so its indicator clears
-      requestBuilderRef.value?.captureCurrentStateAsSaved?.();
+      // Sync RequestBuilder with the saved server state
+      await nextTick();
+      await requestBuilderRef.value?.syncAfterSave?.(normalizedRequest);
       
       // Update prefetch cache so subsequent hovers show fresh data
       prefetchedRequests.value.set(request.id, normalizedRequest);
