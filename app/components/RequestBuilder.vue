@@ -898,8 +898,14 @@ const loadRequestData = async (request: HttpRequest) => {
       }));
     }
 
-    // Then set body from request if it exists
-    if (request.body !== null && request.body !== undefined) {
+    // When draft fields are present (unsaved tab state), prefer them over request.body.
+    // Without this, stale request.body overwrites jsonBody/rawBody when switching tabs.
+    const hasExplicitBodyFormat = Boolean(
+      persistedBodyFormat && BODY_FORMATS.includes(persistedBodyFormat)
+    );
+
+    // Then set body from request.body only when no explicit draft body format was restored
+    if (!hasExplicitBodyFormat && request.body !== null && request.body !== undefined) {
       try {
         if (typeof request.body === 'string') {
           // Try to parse as JSON
@@ -3107,6 +3113,27 @@ watch(hasUnsavedChanges, (newValue, oldValue) => {
   emit('unsavedChanges', props.request, newValue, buildDraftSnapshot());
 });
 
+// Continuously persist body draft while editing (hasUnsavedChanges only fires on boolean toggle)
+const emitDraftUpdate = debounce(() => {
+  if (!isMounted.value || isLoadingRequestData.value) return;
+  if (!hasUnsavedChanges.value) return;
+  emit('unsavedChanges', props.request, true, buildDraftSnapshot());
+}, 200);
+
+watch(jsonBody, emitDraftUpdate);
+watch(rawBody, emitDraftUpdate);
+watch(bodyFormat, emitDraftUpdate);
+watch(rawContentType, emitDraftUpdate);
+watch(formDataParams, emitDraftUpdate, { deep: true });
+
+const flushDraft = () => {
+  if (!isMounted.value || isLoadingRequestData.value || !hasUnsavedChanges.value) {
+    return false;
+  }
+  emit('unsavedChanges', props.request, true, buildDraftSnapshot());
+  return true;
+};
+
 // Reload when another user updates the same request on the server
 watch(
   () => getRequestUpdatedAtTime(props.request),
@@ -3443,6 +3470,8 @@ defineExpose({
   refreshCollectionAuth: () => refreshCollectionAuth(props.collectionId),
   getCurrentRequestState: buildCurrentRequestState,
   getDraftSnapshot: buildDraftSnapshot,
+  hasUnsavedChanges,
+  flushDraft,
   captureCurrentStateAsSaved,
   syncAfterSave
 });

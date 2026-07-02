@@ -550,6 +550,10 @@ const hydrateOpenTabs = (session: PersistedTabSession | null | undefined) => {
       tab.scriptLogs = persistedTab.scriptLogs;
       tab.draftSnapshot = persistedTab.draftSnapshot;
       tab.expandedNodes = persistedTab.expandedNodes;
+
+      if (tab.hasUnsavedChanges && persistedTab.draftSnapshot) {
+        tab.request = buildPersistedRequestFromDraft(tab.request, persistedTab.draftSnapshot);
+      }
     }
   });
 
@@ -2498,6 +2502,8 @@ const handleHoverRequest = async (requestId: string) => {
 
 // Request handlers
 const handleSelectRequest = async (request: HttpRequest) => {
+  flushActiveTabDraft();
+
   activeAdminPanel.value = 'requests';
   selectedMock.value = null;
 
@@ -2555,6 +2561,10 @@ const handleSelectRequest = async (request: HttpRequest) => {
 
 // Tab handlers
 const handleSelectTab = async (tabKey: string) => {
+  if (tabKey === activeTabKey.value) return;
+
+  flushActiveTabDraft();
+
   activeAdminPanel.value = 'requests';
   const tab = openTabs.value.find(t => t.key === tabKey);
   if (tab) {
@@ -2614,6 +2624,7 @@ const handleCloseTabs = (tabKeys: string[]) => {
 
 const handleNewTab = () => {
   if (!canEditWorkspace.value) return;
+  flushActiveTabDraft();
   activeAdminPanel.value = 'requests';
   const newRequest: HttpRequest = {
     id: '',
@@ -2652,6 +2663,10 @@ const handleReorderTabs = (fromIndex: number, toIndex: number) => {
   openTabs.value.splice(toIndex, 0, tab);
 };
 
+const flushActiveTabDraft = () => {
+  requestBuilderRef.value?.flushDraft?.();
+};
+
 const updateTabUnsavedStatus = (
   request: HttpRequest,
   hasUnsavedChanges: boolean,
@@ -2682,7 +2697,8 @@ const updateTabUnsavedStatus = (
     const nextRequest = buildPersistedRequestFromDraft(request, draft);
     openTabs.value[tabIndex] = {
       ...openTabs.value[tabIndex],
-      request: nextRequest
+      request: nextRequest,
+      draftSnapshot: draft
     };
     
     // Only update selectedRequest if it's the active tab and actually different
