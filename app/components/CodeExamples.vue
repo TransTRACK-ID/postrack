@@ -502,7 +502,7 @@ const copyCode = () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-bg-sidebar">
+  <div class="flex flex-col h-full min-h-0 bg-bg-sidebar">
     <!-- Header -->
     <div class="p-3 border-b border-border-default">
       <span class="text-xs font-semibold text-text-primary uppercase tracking-wide">Code Examples</span>
@@ -526,7 +526,7 @@ const copyCode = () => {
     </div>
     
     <!-- Code Display -->
-    <div class="flex-1 overflow-auto p-3 bg-bg-tertiary">
+    <div class="flex-1 min-h-0 overflow-auto p-3 bg-bg-tertiary">
       <div v-if="getCodeExample" class="code-highlight-block font-mono text-[10px] leading-normal text-text-primary m-0 whitespace-pre-wrap break-words">{{ getCodeExample }}</div>
       <div v-else class="text-xs text-text-muted h-full flex items-center justify-center">
         Select a request to see code examples

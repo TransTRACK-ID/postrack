@@ -71,7 +71,7 @@ const handleFeedbackSubmit = async (data: {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-hidden">
+  <div class="flex h-screen h-dvh min-h-0 flex-col overflow-hidden bg-bg-primary">
     <OpenSourceBanner />
     <AdminShellFrame class="flex-1 min-h-0">
       <slot />

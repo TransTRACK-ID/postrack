@@ -311,6 +311,8 @@ const showMobileTabs = ref(false); // For mobile fallback
 
 const useServerProxy = ref(false);
 
+let panelResizeObserver: ResizeObserver | null = null;
+
 // Load saved panel preferences and proxy setting
 onMounted(() => {
   const saved = localStorage.getItem(PANEL_STORAGE_KEY);
@@ -326,6 +328,13 @@ onMounted(() => {
   
   checkMobile();
   updateContainerHeight();
+
+  if (panelContainerRef.value) {
+    panelResizeObserver = new ResizeObserver(() => {
+      updateContainerHeight();
+    });
+    panelResizeObserver.observe(panelContainerRef.value);
+  }
   
   window.addEventListener('resize', handleWindowResize);
   window.addEventListener('wheel', handleOptionScroll, { passive: false });
@@ -334,6 +343,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  panelResizeObserver?.disconnect();
+  panelResizeObserver = null;
   window.removeEventListener('resize', handleWindowResize);
   window.removeEventListener('wheel', handleOptionScroll);
   document.removeEventListener('mousemove', handleDragMove);
@@ -358,29 +369,46 @@ const handleWindowResize = () => {
   updateContainerHeight();
 };
 
-let containerHeight = 0;
+const containerHeight = ref(0);
 const updateContainerHeight = () => {
   if (panelContainerRef.value) {
-    containerHeight = panelContainerRef.value.getBoundingClientRect().height;
+    containerHeight.value = panelContainerRef.value.getBoundingClientRect().height;
   }
 };
 
 // Computed panel heights (only used on desktop)
-const getResizeHandleHeight = () => (hasResponse.value && !isMobile.value ? RESIZE_HANDLE_HEIGHT : 0);
+const getResizeHandleHeight = () =>
+  hasResponse.value && !isMobile.value && !isResponseCollapsed.value ? RESIZE_HANDLE_HEIGHT : 0;
 
 const requestPanelHeight = computed(() => {
-  if (isMobile.value) return containerHeight;
+  if (isMobile.value) return containerHeight.value;
   const handleHeight = getResizeHandleHeight();
-  if (isResponseCollapsed.value) return containerHeight - COLLAPSED_HEIGHT - handleHeight;
-  const availableHeight = containerHeight - handleHeight;
-  return Math.round(availableHeight * requestPanelRatio.value);
+  if (isResponseCollapsed.value) {
+    return Math.max(0, containerHeight.value - COLLAPSED_HEIGHT - handleHeight);
+  }
+  const availableHeight = Math.max(0, containerHeight.value - handleHeight);
+  const ratioHeight = Math.round(availableHeight * requestPanelRatio.value);
+  return Math.min(ratioHeight, availableHeight - MIN_PANEL_HEIGHT);
 });
 
 const responsePanelHeight = computed(() => {
   if (isMobile.value) return 0;
   if (isResponseCollapsed.value) return COLLAPSED_HEIGHT;
   const handleHeight = getResizeHandleHeight();
-  return Math.max(MIN_PANEL_HEIGHT, containerHeight - requestPanelHeight.value - handleHeight);
+  return Math.max(
+    MIN_PANEL_HEIGHT,
+    containerHeight.value - requestPanelHeight.value - handleHeight
+  );
+});
+
+const requestContentStyle = computed(() => {
+  if (isMobile.value || !hasResponse.value) {
+    return {};
+  }
+  if (isResponseCollapsed.value) {
+    return { flex: '1 1 0%', minHeight: '0' };
+  }
+  return { height: `${requestPanelHeight.value}px`, flex: 'none' };
 });
 
 // Drag functionality
@@ -398,10 +426,10 @@ const handleDragMove = (e: MouseEvent) => {
   const rect = panelContainerRef.value.getBoundingClientRect();
   const relativeY = e.clientY - rect.top;
   const handleHeight = getResizeHandleHeight();
-  const availableHeight = containerHeight - handleHeight;
+  const availableHeight = Math.max(0, containerHeight.value - handleHeight);
   const newRatio = Math.max(
     MIN_PANEL_HEIGHT / availableHeight,
-    Math.min(1 - (MIN_PANEL_HEIGHT / availableHeight), relativeY / availableHeight)
+    Math.min(1 - MIN_PANEL_HEIGHT / availableHeight, relativeY / availableHeight)
   );
   requestPanelRatio.value = newRatio;
 };
@@ -432,11 +460,11 @@ const handleOptionScroll = (e: WheelEvent) => {
   e.preventDefault();
   
   const handleHeight = getResizeHandleHeight();
-  const availableHeight = containerHeight - handleHeight;
+  const availableHeight = Math.max(0, containerHeight.value - handleHeight);
   const delta = e.deltaY > 0 ? 0.015 : -0.015;
   const newRatio = Math.max(
     MIN_PANEL_HEIGHT / availableHeight,
-    Math.min(1 - (MIN_PANEL_HEIGHT / availableHeight), requestPanelRatio.value + delta)
+    Math.min(1 - MIN_PANEL_HEIGHT / availableHeight, requestPanelRatio.value + delta)
   );
   requestPanelRatio.value = newRatio;
 };
@@ -444,10 +472,15 @@ const handleOptionScroll = (e: WheelEvent) => {
 // Toggle response panel collapse
 const toggleResponseCollapse = () => {
   isResponseCollapsed.value = !isResponseCollapsed.value;
+  nextTick(updateContainerHeight);
 };
 
 // Check if response has content or is currently loading
 const hasResponse = computed(() => response.value !== null || isLoading.value);
+
+watch([isResponseCollapsed, hasResponse], () => {
+  nextTick(updateContainerHeight);
+});
 
 // Track elapsed time while request is loading
 watch(isLoading, (loading) => {
@@ -3646,8 +3679,9 @@ defineExpose({
       >
         <!-- REQUEST CONTENT AREA (takes remaining space before response panel) -->
         <div 
-          class="request-content-area flex-1 flex flex-col overflow-hidden"
-          :style="!isMobile && hasResponse ? { height: requestPanelHeight + 'px', flex: 'none' } : {}"
+          class="request-content-area flex flex-col overflow-hidden min-h-0"
+          :class="{ 'flex-1': !isMobile && hasResponse && isResponseCollapsed }"
+          :style="requestContentStyle"
         >
           <div v-if="activeTab === 'params'" class="flex-1 flex flex-col overflow-hidden">
           <div class="p-2 border-b border-border-default bg-bg-secondary flex items-center justify-between">
@@ -4715,7 +4749,7 @@ defineExpose({
 
         <!-- RESIZE HANDLE (only on desktop when there's a response) -->
         <div
-          v-if="!isMobile && hasResponse"
+          v-if="!isMobile && hasResponse && !isResponseCollapsed"
           class="resize-handle group flex-shrink-0"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="startDrag"
@@ -4736,7 +4770,7 @@ defineExpose({
         <!-- RESPONSE PANEL (Always visible, collapsible, at the bottom) -->
         <div 
           v-if="!isMobile"
-          class="response-panel flex flex-col overflow-hidden border-t border-border-default bg-bg-secondary flex-shrink-0 min-h-0"
+          class="response-panel flex flex-col overflow-hidden border-t border-border-default bg-bg-secondary flex-shrink-0 min-h-0 mt-auto"
           :class="{ 'is-collapsed': isResponseCollapsed || !hasResponse }"
           :style="{ height: !hasResponse ? COLLAPSED_HEIGHT + 'px' : responsePanelHeight + 'px' }"
         >

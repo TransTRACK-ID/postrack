@@ -1669,7 +1669,7 @@ defineExpose({
     </div>
 
     <!-- Hierarchy View -->
-    <div v-if="activeView === 'hierarchy'" class="flex-1 overflow-y-auto py-2">
+    <div v-if="activeView === 'hierarchy'" class="flex-1 min-h-0 overflow-y-auto py-2">
       <div v-if="currentWorkspace">
         <!-- Empty State: no projects -->
         <div v-if="currentWorkspace.projects.length === 0" class="flex flex-col items-center justify-center gap-3 py-10 px-5 text-text-muted text-center">
