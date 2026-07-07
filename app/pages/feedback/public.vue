@@ -5,6 +5,16 @@
       <div class="max-w-4xl mx-auto px-4 py-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
+            <button
+              class="flex items-center justify-center w-9 h-9 bg-transparent border-none rounded-md text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-text-primary"
+              title="Back to workspace"
+              @click="goBack"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </svg>
+            </button>
             <div class="w-10 h-10 rounded-lg bg-accent-orange/10 flex items-center justify-center">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent-orange">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -450,6 +460,10 @@ const filteredResponses = (responses: Record<string, unknown>) => {
 
 const formatDateFull = (date: string): string => {
   return new Date(date).toLocaleString();
+};
+
+const goBack = () => {
+  navigateTo('/admin');
 };
 
 const openFeedbackModal = () => {

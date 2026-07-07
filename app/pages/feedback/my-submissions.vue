@@ -3,16 +3,38 @@
     <!-- Header -->
     <div class="border-b border-border-default bg-bg-secondary">
       <div class="max-w-5xl mx-auto px-4 py-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-accent-orange/10 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent-orange">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <button
+              class="flex items-center justify-center w-9 h-9 bg-transparent border-none rounded-md text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-text-primary"
+              title="Back to workspace"
+              @click="goBack"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </svg>
+            </button>
+            <div class="w-10 h-10 rounded-lg bg-accent-orange/10 flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent-orange">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-lg font-semibold text-text-primary">My Feedback</h1>
+              <p class="text-[12px] text-text-secondary">Track your submissions and their status</p>
+            </div>
+          </div>
+          <button
+            @click="openFeedbackModal"
+            class="px-4 py-2 bg-accent-orange text-white rounded-md hover:bg-accent-orange-hover transition-colors text-[13px] font-medium flex items-center gap-2"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-          </div>
-          <div>
-            <h1 class="text-lg font-semibold text-text-primary">My Feedback</h1>
-            <p class="text-[12px] text-text-secondary">Track your submissions and their status</p>
-          </div>
+            Submit Feedback
+          </button>
         </div>
       </div>
     </div>
@@ -57,13 +79,7 @@
           </svg>
         </div>
         <h3 class="text-[14px] font-medium text-text-primary mb-1">No Submissions Yet</h3>
-        <p class="text-[12px] text-text-secondary mb-4">You haven't submitted any feedback yet.</p>
-        <button
-          @click="openFeedbackModal"
-          class="px-4 py-2 bg-accent-orange text-white rounded-md hover:bg-accent-orange-hover transition-colors text-[13px] font-medium"
-        >
-          Submit Feedback
-        </button>
+        <p class="text-[12px] text-text-secondary">You haven't submitted any feedback yet.</p>
       </div>
 
       <!-- Submissions List -->
@@ -456,6 +472,10 @@ const formatDate = (date: string): string => {
 
 const formatDateFull = (date: string): string => {
   return new Date(date).toLocaleString();
+};
+
+const goBack = () => {
+  navigateTo('/admin');
 };
 
 const openFeedbackModal = () => {
