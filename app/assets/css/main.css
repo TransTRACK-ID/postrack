@@ -572,6 +572,24 @@
   to { transform: translateX(-100%); }
 }
 
+@keyframes adminShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.admin-skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.035) 45%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.035) 55%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: adminShimmer 1.6s ease-in-out infinite;
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

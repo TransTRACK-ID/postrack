@@ -40,6 +40,11 @@ interface Props {
   /** When false, hide import and environment management actions (view-only workspace member) */
   canEditWorkspace?: boolean;
   isSidebarCollapsed?: boolean;
+  /** Hide sidebar toggle and workspace/env chrome (super admin, SSO, etc.) */
+  hideSidebarChrome?: boolean;
+  /** Destination for the header back button on sidebar-less pages */
+  backTo?: string;
+  backLabel?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -54,7 +59,10 @@ const props = withDefaults(defineProps<Props>(), {
   isMockSidebarActive: false,
   isMobile: false,
   canEditWorkspace: true,
-  isSidebarCollapsed: false
+  isSidebarCollapsed: false,
+  hideSidebarChrome: false,
+  backTo: '/admin',
+  backLabel: 'Back',
 });
 
 const emit = defineEmits<{
@@ -129,7 +137,7 @@ const checkSuperAdmin = async () => {
 
 // Feedback feature
 const { shouldShowFeedback } = useFeedback();
-const openFeedbackModal = inject<() => void>('openFeedbackModal');
+const openFeedbackModal = inject<(() => void) | undefined>('openFeedbackModal');
 
 const logout = async () => {
   isLoggingOut.value = true;
@@ -221,8 +229,22 @@ defineExpose({
   <header class="h-12 md:h-12 bg-bg-header border-b border-border-default flex items-center justify-between px-3 md:px-4 flex-shrink-0">
     <!-- Left Section -->
     <div class="flex items-center gap-2 md:gap-4">
+      <!-- Back to workspace (sidebar-less admin pages) -->
+      <button
+        v-if="hideSidebarChrome"
+        class="inline-flex items-center justify-center gap-1.5 min-w-10 h-10 px-2 rounded-md text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+        :title="`Back to ${backLabel}`"
+        @click="navigateTo(backTo)"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        <span class="hidden sm:inline text-[13px] font-medium">{{ backLabel }}</span>
+      </button>
+
       <!-- Sidebar Toggle -->
       <button
+        v-if="!hideSidebarChrome"
         class="flex items-center justify-center w-10 h-10 rounded-md text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
         @click="emit('toggleSidebar')"
         title="Toggle Sidebar"
@@ -259,7 +281,7 @@ defineExpose({
     <div class="hidden md:flex items-center gap-2">
       <!-- Workspace Switcher - Hidden when Mocks sidebar is active -->
       <WorkspaceSwitcher
-        v-if="!isEnvironmentsPage && !isMockSidebarActive"
+        v-if="!hideSidebarChrome && !isEnvironmentsPage && !isMockSidebarActive"
         :workspaces="workspaces"
         :selected-workspace-id="selectedWorkspaceId"
         :current-user-email="currentUserEmail"
@@ -271,12 +293,12 @@ defineExpose({
         @delete="emit('deleteWorkspace', $event)"
       />
 
-      <div v-if="!isEnvironmentsPage && !isMockSidebarActive" class="w-px h-6 bg-border-default mx-1"></div>
+      <div v-if="!hideSidebarChrome && !isEnvironmentsPage && !isMockSidebarActive" class="w-px h-6 bg-border-default mx-1"></div>
 
       <!-- Environment Switcher - Hidden when Mocks sidebar is active -->
       <EnvironmentSwitcher
         ref="environmentSwitcherRef"
-        v-if="!isEnvironmentsPage && !isMockSidebarActive"
+        v-if="!hideSidebarChrome && !isEnvironmentsPage && !isMockSidebarActive"
         :environments="environments"
         :active-environment-id="activeEnvironmentId"
         :can-edit-environments="canEditWorkspace"
@@ -290,7 +312,7 @@ defineExpose({
 
       <!-- Import Button - Hidden when Mocks sidebar is active -->
       <button
-        v-if="showActions && !isEnvironmentsPage && !isMockSidebarActive && canEditWorkspace"
+        v-if="showActions && !hideSidebarChrome && !isEnvironmentsPage && !isMockSidebarActive && canEditWorkspace"
         class="inline-flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-bg-tertiary text-text-secondary border border-border-default rounded-md cursor-pointer text-[13px] font-medium transition-all duration-fast hover:bg-bg-hover hover:text-text-primary hover:border-accent-orange"
         @click="emit('importOpenAPI')"
         title="Import OpenAPI"
@@ -305,7 +327,7 @@ defineExpose({
 
       <!-- Export Button - Hidden when Mocks sidebar is active -->
       <button
-        v-if="showActions && !isEnvironmentsPage && !isMockSidebarActive"
+        v-if="showActions && !hideSidebarChrome && !isEnvironmentsPage && !isMockSidebarActive"
         class="inline-flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-bg-tertiary text-text-secondary border border-border-default rounded-md cursor-pointer text-[13px] font-medium transition-all duration-fast hover:bg-bg-hover hover:text-text-primary hover:border-accent-orange"
         @click="emit('exportOpenAPI')"
         title="Export OpenAPI"
@@ -450,7 +472,7 @@ defineExpose({
           class="absolute right-0 top-full mt-1 w-64 bg-bg-secondary border border-border-default rounded-lg shadow-lg py-2 z-50 max-h-[80vh] overflow-y-auto"
         >
           <!-- Workspace Selection -->
-          <div v-if="workspaces.length > 0" class="px-3 py-2 border-b border-border-default">
+          <div v-if="!hideSidebarChrome && workspaces.length > 0" class="px-3 py-2 border-b border-border-default">
             <div class="text-xs text-text-muted uppercase tracking-wide mb-2 font-medium">Workspace</div>
             <select
               :value="selectedWorkspaceId"
@@ -476,7 +498,7 @@ defineExpose({
           </div>
 
           <!-- Environment Selection -->
-          <div v-if="environments.length > 0 && !isEnvironmentsPage" class="px-3 py-2 border-b border-border-default">
+          <div v-if="!hideSidebarChrome && environments.length > 0 && !isEnvironmentsPage" class="px-3 py-2 border-b border-border-default">
             <div class="text-xs text-text-muted uppercase tracking-wide mb-2 font-medium">Environment</div>
             <select
               :value="activeEnvironmentId || ''"
@@ -500,7 +522,7 @@ defineExpose({
           <!-- Action Buttons -->
           <div class="py-1">
             <button
-              v-if="showActions && !isEnvironmentsPage && canEditWorkspace"
+              v-if="showActions && !hideSidebarChrome && !isEnvironmentsPage && canEditWorkspace"
               class="w-full flex items-center gap-3 px-3 py-3 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors min-h-[44px]"
               @click="emit('importOpenAPI'); showMobileActions = false"
             >
@@ -513,7 +535,7 @@ defineExpose({
             </button>
 
             <button
-              v-if="showActions && !isEnvironmentsPage"
+              v-if="showActions && !hideSidebarChrome && !isEnvironmentsPage"
               class="w-full flex items-center gap-3 px-3 py-3 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors min-h-[44px]"
               @click="emit('exportOpenAPI'); showMobileActions = false"
             >

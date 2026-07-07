@@ -2,7 +2,9 @@
 import { SSO_PROVIDER_METADATA, type SsoProvider, type SsoProviderType, type SsoConfig } from '../../types/sso';
 
 definePageMeta({
-  middleware: ['super-admin']
+  layout: 'admin',
+  middleware: ['super-admin'],
+  adminShell: { hideSidebar: true },
 });
 
 interface ProviderForm {
@@ -229,11 +231,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 overflow-hidden">
-    <AppHeader title="SSO Configuration" :show-actions="false" />
-
-    <main class="flex-1 overflow-hidden bg-bg-primary">
-      <div class="h-full flex flex-col max-w-5xl mx-auto p-6 overflow-y-auto">
+  <div class="flex flex-col h-full min-h-0 overflow-hidden bg-bg-primary">
+      <div class="h-full flex flex-col max-w-5xl mx-auto p-6 overflow-y-auto w-full">
         <!-- Breadcrumb -->
         <div class="flex items-center gap-2 mb-4 text-sm">
           <NuxtLink to="/" class="flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors">
@@ -372,7 +371,6 @@ onMounted(() => {
           </div>
         </div>
       </div>
-    </main>
 
     <!-- Add/Edit Modal -->
     <Teleport to="body">

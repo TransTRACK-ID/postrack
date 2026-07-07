@@ -2,7 +2,9 @@
 import { ref, computed, onMounted, watch } from 'vue';
 
 definePageMeta({
-  middleware: ['super-admin']
+  layout: 'admin',
+  middleware: ['super-admin'],
+  adminShell: { hideSidebar: true },
 });
 
 import RequestBuilder from '~/components/RequestBuilder.vue';
@@ -391,22 +393,10 @@ const collapseAll = () => {
 
 <template>
   <div class="h-full min-h-0 flex flex-col bg-bg-secondary">
-    <!-- Header -->
+    <!-- Panel Header -->
     <header class="h-12 bg-bg-header border-b border-border-default flex items-center justify-between px-4 flex-shrink-0">
       <!-- Left -->
       <div class="flex items-center gap-4">
-        <button
-          @click="navigateTo('/admin')"
-          class="inline-flex items-center gap-1.5 py-1.5 px-2.5 text-text-secondary hover:text-text-primary transition-colors text-[13px] font-medium"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-          Back to Dashboard
-        </button>
-        
-        <div class="w-px h-6 bg-border-default"></div>
-        
         <div class="flex items-center gap-2">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>

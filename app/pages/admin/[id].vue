@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: 'admin',
+});
+
 interface Collection {
   id: string;
   name: string;
@@ -113,24 +117,11 @@ const getCollectionColor = (collectionId: string) => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen bg-bg-primary">
-    <!-- Header -->
-    <header class="flex items-center justify-between py-3 px-6 bg-bg-header border-b border-border-default">
-      <div class="flex items-center gap-4">
-        <!-- Back Button -->
-        <button 
-          class="flex items-center justify-center w-9 h-9 bg-transparent border-none rounded-md text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-text-primary"
-          @click="goBack"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-        </button>
-        <div>
-          <h1 class="text-base font-semibold text-text-primary m-0">Edit Mock</h1>
-          <span class="text-xs text-text-muted font-mono">{{ form.path }}</span>
-        </div>
+  <div class="flex flex-col h-full min-h-0 overflow-hidden bg-bg-primary">
+    <header class="flex items-center justify-between py-3 px-6 bg-bg-header border-b border-border-default flex-shrink-0">
+      <div>
+        <h1 class="text-base font-semibold text-text-primary m-0">Edit Mock</h1>
+        <span class="text-xs text-text-muted font-mono">{{ form.path }}</span>
       </div>
     </header>
 

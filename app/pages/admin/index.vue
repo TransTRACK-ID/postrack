@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, nextTick, onMounted, onUnmounted, type Ref } from 'vue';
+import { watch, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, type Ref } from 'vue';
 import { debounce } from 'perfect-debounce';
 import RequestBuilder from '~/components/RequestBuilder.vue';
 import CodeExamples from '~/components/CodeExamples.vue';
@@ -20,12 +20,16 @@ import CollectionDocBlocksEditor from '~/components/CollectionDocBlocksEditor.vu
 import { useKeyboardShortcuts } from '~/composables/useKeyboardShortcuts';
 import { useExampleData } from '~/composables/useExampleData';
 import { useToast } from '~/composables/useToast';
-import { useSidebarResize } from '~/composables/useSidebarResize';
 import {
   reorderRequestsOptimistically,
   reorderFoldersOptimistically,
   reorderProjectsOptimistically
 } from '~/composables/useOptimisticMove';
+
+definePageMeta({
+  layout: 'admin',
+  keepalive: true,
+});
 
 const emit = defineEmits<{
   saved: [];
@@ -140,36 +144,45 @@ interface RequestDraftSnapshot {
 const REQUEST_TABS_SETTINGS_KEY = 'requestTabsSession';
 const WORKSPACE_TABS_STORAGE_KEY = 'workspaceTabs';
 
-const { data: mocks, refresh: refreshMocks, error } = await useFetch<Mock[]>('/api/admin/mocks');
-const { data: collections, refresh: refreshCollections } = await useFetch<Collection[]>('/api/admin/collections');
-const { data: workspaces, refresh: refreshWorkspaces } = await useFetch<any[]>('/api/admin/tree-light', { dedupe: 'defer' });
-const { data: definitions, refresh: refreshDefinitions } = await useFetch<any[]>('/api/definitions');
-
-// Fetch current user info for permission checks
-const { data: authData } = await useFetch('/api/auth/check');
-const currentUserEmail = computed(() => authData.value?.user?.email || null);
-
-const isSuperAdmin = ref(false);
-const checkSuperAdmin = async () => {
-  if (!currentUserEmail.value) {
-    isSuperAdmin.value = false;
-    return;
-  }
-  try {
-    const data = await $fetch<{ isSuperAdmin: boolean }>('/api/admin/super/check');
-    isSuperAdmin.value = data.isSuperAdmin;
-  } catch {
-    isSuperAdmin.value = false;
-  }
-};
-
-watch(currentUserEmail, (email) => {
-  if (email) checkSuperAdmin();
-  else isSuperAdmin.value = false;
-}, { immediate: true });
-
-const selectedWorkspaceId = ref<string | null>(null);
-const selectedProjectId = ref<string | null>(null);
+const shell = useAdminShell();
+const {
+  mocks,
+  collections,
+  workspaces,
+  definitions,
+  error,
+  refreshMocks,
+  refreshCollections,
+  refreshWorkspaces,
+  refreshDefinitions,
+  definitionsRefreshTrigger,
+  currentUserEmail,
+  isSuperAdmin,
+  selectedWorkspaceId,
+  selectedProjectId,
+  currentWorkspace,
+  canEditWorkspace,
+  canEditWorkspaceById,
+  workspaceIdForProjectId,
+  workspaceIdForCollectionId,
+  currentWorkspaceId,
+  currentProjectId,
+  hasWorkspaces,
+  isMobile,
+  isSidebarOpen,
+  closeSidebar,
+  sidebarWidth,
+  isSidebarCollapsed,
+  isSidebarResizing,
+  startResize,
+  handleToggleSidebar,
+  sidebarActiveView,
+  isMockSidebarActive,
+  appHeaderRef,
+  appSidebarRef,
+  registerPageBindings,
+  clearPageBindings,
+} = shell;
 
 // Prefetch cache for full request details (populated on hover)
 const prefetchedRequests = ref<Map<string, HttpRequest>>(new Map());
@@ -178,47 +191,17 @@ type AdminPanel = 'requests' | 'environments';
 const activeAdminPanel = ref<AdminPanel>('requests');
 const route = useRoute();
 
-// Initialize from localStorage or find first workspace with projects
-const initSelectedWorkspace = () => {
-  if (workspaces.value && workspaces.value.length > 0) {
-    const savedWorkspaceId = typeof window !== 'undefined' ? localStorage.getItem('selectedWorkspaceId') : null;
-    
-    // Try saved workspace first
-    if (savedWorkspaceId) {
-      const savedWs = workspaces.value.find((w: any) => w.id === savedWorkspaceId);
-      if (savedWs && savedWs.projects?.length > 0) {
-        selectedWorkspaceId.value = savedWs.id;
-        selectedProjectId.value = savedWs.projects[0].id;
-        return;
-      }
-    }
-    
-    // Find first workspace with projects
-    const firstWsWithProjects = workspaces.value.find((w: any) => w.projects?.length > 0);
-    if (firstWsWithProjects) {
-      selectedWorkspaceId.value = firstWsWithProjects.id;
-      selectedProjectId.value = firstWsWithProjects.projects[0].id;
-    }
-  }
-};
-
-// Watch for workspaces loaded
+// Clear prefetched requests when workspace tree reloads
 watch(workspaces, () => {
-  if (workspaces.value) {
-    initSelectedWorkspace();
-  }
   prefetchedRequests.value.clear();
-}, { immediate: true });
-
-// Watch for workspace changes and save to localStorage
-watch(selectedWorkspaceId, (newId) => {
-  if (newId && typeof window !== 'undefined') {
-    localStorage.setItem('selectedWorkspaceId', newId);
-  }
 });
 
-// Handle workspace selection from sidebar
+// Handle workspace selection from sidebar (includes tab persistence per workspace)
 const handleWorkspaceSelect = (workspaceId: string) => {
+  if (selectedWorkspaceId.value === workspaceId) {
+    return;
+  }
+
   // Save current workspace tabs before switching
   if (selectedWorkspaceId.value && openTabs.value.length > 0) {
     saveWorkspaceTabs(selectedWorkspaceId.value);
@@ -251,49 +234,6 @@ const handleWorkspaceSelect = (workspaceId: string) => {
   }
 };
 
-const currentWorkspace = computed(() => {
-  return workspaces.value?.find((w: any) => w.id === selectedWorkspaceId.value);
-});
-
-/** False when the user is a workspace member with view-only access */
-const canEditWorkspace = computed(() => {
-  const ws = currentWorkspace.value as { permission?: 'owner' | 'edit' | 'view' | null; isOwner?: boolean } | undefined;
-  if (!ws) return true;
-  const perm = ws.permission;
-  if (perm) return perm === 'owner' || perm === 'edit';
-  return Boolean(ws.isOwner);
-});
-
-/** Edit permission for any workspace by id (used when action targets a specific workspace/project/collection) */
-const canEditWorkspaceById = (workspaceId: string | null | undefined): boolean => {
-  if (!workspaceId || !workspaces.value) return true;
-  const ws = workspaces.value.find((w: any) => w.id === workspaceId) as
-    | { permission?: 'owner' | 'edit' | 'view' | null; isOwner?: boolean }
-    | undefined;
-  if (!ws) return true;
-  const perm = ws.permission;
-  if (perm) return perm === 'owner' || perm === 'edit';
-  return Boolean(ws.isOwner);
-};
-
-const workspaceIdForProjectId = (projectId: string | null | undefined): string | null => {
-  if (!projectId || !workspaces.value) return null;
-  for (const w of workspaces.value as any[]) {
-    if (w.projects?.some((p: any) => p.id === projectId)) return w.id;
-  }
-  return null;
-};
-
-const workspaceIdForCollectionId = (collectionId: string | null | undefined): string | null => {
-  if (!collectionId || !workspaces.value) return null;
-  for (const w of workspaces.value as any[]) {
-    for (const p of w.projects || []) {
-      if (p.collections?.some((c: any) => c.id === collectionId)) return w.id;
-    }
-  }
-  return null;
-};
-
 /** Only workspace owner (including invited owners) or super admin may rename/delete containers */
 const canRenameWorkspaceById = (workspaceId: string | null | undefined): boolean => {
   if (!workspaceId || !workspaces.value) return false;
@@ -305,12 +245,6 @@ const canRenameWorkspaceById = (workspaceId: string | null | undefined): boolean
   return false;
 };
 const canDeleteWorkspaceById = canRenameWorkspaceById;
-
-const currentWorkspaceId = computed(() => selectedWorkspaceId.value);
-
-const currentProjectId = computed(() => selectedProjectId.value);
-
-const hasWorkspaces = computed(() => workspaces.value && workspaces.value.length > 0);
 
 const REQUEST_BODY_FORMATS = ['none', 'json', 'form-data', 'urlencoded', 'raw', 'binary'] as const;
 type RequestBodyFormat = typeof REQUEST_BODY_FORMATS[number];
@@ -651,9 +585,6 @@ const selectedRequest = ref<HttpRequest | null>(null);
 // RequestBuilder ref for accessing current request state (used by CodeExamples)
 const requestBuilderRef = ref<any>(null);
 
-// AppHeader ref for accessing EnvironmentSwitcher
-const appHeaderRef = ref<any>(null);
-
 // Computed property to get the project ID of the currently selected request
 const currentRequestProjectId = computed(() => {
   if (!selectedRequest.value) return null;
@@ -661,14 +592,16 @@ const currentRequestProjectId = computed(() => {
 });
 
 // Fetch environments based on the currently selected request's project
-const { data: environments, refresh: refreshEnvironments } = await useFetch<Environment[]>(
+const { data: environments, refresh: refreshEnvironments } = useFetch<Environment[]>(
   computed(() => {
     const projectId = currentRequestProjectId.value || currentProjectId.value;
     return projectId ? `/api/admin/projects/${projectId}/environments` : '';
   }),
   {
+    lazy: true,
     immediate: true,
-    watch: [currentRequestProjectId, currentProjectId]
+    watch: [currentRequestProjectId, currentProjectId],
+    default: () => [],
   }
 );
 
@@ -1498,7 +1431,6 @@ const showDeleteGroupConfirm = ref(false);
 const showSaveDialog = ref(false);
 const showSaveAsDialog = ref(false);
 const showImportModal = ref(false);
-const definitionsRefreshTrigger = ref(0);
 const showProjectModal = ref(false);
 const projectWorkspaceId = ref<string | null>(null);
 const showWorkspaceModal = ref(false);
@@ -1508,41 +1440,6 @@ const workspaceToRename = ref<{ id: string; name: string } | null>(null);
 // Code Examples Panel Toggle (default ON, persisted in localStorage)
 const CODE_EXAMPLES_STORAGE_KEY = 'showCodeExamplesPanel';
 const showCodeExamples = ref(true);
-
-// Mobile responsiveness
-const isMobile = ref(false);
-const isSidebarOpen = ref(false);
-const MOBILE_BREAKPOINT = 768;
-
-const checkMobile = () => {
-  if (typeof window !== 'undefined') {
-    isMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
-    if (!isMobile.value) {
-      isSidebarOpen.value = true;
-    }
-  }
-};
-
-const toggleSidebar = () => {
-  if (isMobile.value) {
-    isSidebarOpen.value = !isSidebarOpen.value;
-  }
-};
-
-const closeSidebar = () => {
-  isSidebarOpen.value = false;
-};
-
-// Sidebar resize and collapse state
-const { width: sidebarWidth, isCollapsed: isSidebarCollapsed, isResizing: isSidebarResizing, startResize, toggleCollapse } = useSidebarResize();
-
-const handleToggleSidebar = () => {
-  if (isMobile.value) {
-    toggleSidebar();
-  } else {
-    toggleCollapse();
-  }
-};
 
 // Load saved preference
 onMounted(() => {
@@ -1577,17 +1474,6 @@ watch(showCodeExamples, (newValue) => {
 const toggleCodeExamples = () => {
   showCodeExamples.value = !showCodeExamples.value;
 };
-
-// Ref for AppSidebar to access its exposed properties
-const appSidebarRef = ref<{ activeView: Ref<'hierarchy' | 'mocks' | 'history' | 'definitions'> } | null>(null);
-
-// Track sidebar active view locally (updated via event from AppSidebar)
-const sidebarActiveView = ref<'hierarchy' | 'mocks' | 'history' | 'definitions'>('hierarchy');
-
-// Computed property to check if non-workspace sidebar view is active (mocks, definitions, history)
-const isMockSidebarActive = computed(() => {
-  return ['mocks', 'definitions', 'history'].includes(sidebarActiveView.value);
-});
 
 // Delete workspace modal state
 const showDeleteWorkspaceConfirm = ref(false);
@@ -1890,14 +1776,12 @@ watch([openTabs, activeTabKey], () => {
 }, { deep: true });
 
 onMounted(async () => {
+  registerAdminPageBindings();
+
   // Check localStorage for hide warning preference
   if (typeof window !== 'undefined') {
     hideTeamWarningForever.value = localStorage.getItem('hideTeamCollectionSaveWarning') === 'true';
   }
-
-  // Initialize mobile detection
-  checkMobile();
-  window.addEventListener('resize', checkMobile);
 
   await loadPersistedRequestTabs();
   window.addEventListener('beforeunload', handleWindowBeforeUnload);
@@ -1907,8 +1791,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleWindowBeforeUnload);
   document.removeEventListener('visibilitychange', handleWindowVisibilityChange);
-  window.removeEventListener('resize', checkMobile);
   persistRequestTabsDebounced.cancel();
+  clearPageBindings();
 });
 
 // Helper to create a new tab key
@@ -4122,101 +4006,112 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
         showHelp();
     }
 });
+
+const shellHeaderProps = computed(() => ({
+  environments: safeEnvironments.value,
+  activeEnvironmentId: activeEnvironment.value?.id || null,
+  currentProjectId: currentProjectId.value || null,
+}));
+
+const shellSidebarProps = computed(() => ({
+  selectedMockId: selectedMock.value?.id,
+  isDuplicatingRequest: isDuplicatingRequest.value,
+}));
+
+const adminPageBindings = {
+  headerProps: shellHeaderProps,
+  sidebarProps: shellSidebarProps,
+  headerListeners: {
+    openSettings,
+    exportOpenAPI,
+    importOpenAPI: openImportModal,
+    activateEnvironment,
+    manageEnvironments: () => openEnvironmentSettings('manage'),
+    createEnvironment: () => openEnvironmentSettings('create'),
+    renameEnvironment: (env: unknown, name: unknown) => {
+      environmentToRename.value = env as typeof environmentToRename.value;
+      environmentRenameForm.value.name = name as string;
+      showEnvironmentRenameModal.value = true;
+    },
+    updateEnvironment: updateEnvironmentFromDropdown,
+    selectWorkspace: handleWorkspaceSelect,
+    createWorkspace: openCreateWorkspace,
+    renameWorkspace: openRenameWorkspace,
+    shareWorkspace: openShareWorkspace,
+    deleteWorkspace: confirmDeleteWorkspace,
+    toggleSidebar: handleToggleSidebar,
+  },
+  sidebarListeners: {
+    selectMock: handleSelectMock,
+    selectRequest: handleSelectRequest,
+    hoverRequest: handleHoverRequest,
+    createMock: goToCreate,
+    createResource: () => { showResourceModal.value = true; },
+    createCollection: openCreateCollection,
+    createRequest: openCreateRequest,
+    importCurl: openImportCurl,
+    createFolder: openCreateFolder,
+    createProject: openCreateProject,
+    createWorkspace: openCreateWorkspace,
+    renameWorkspace: openRenameWorkspace,
+    shareWorkspace: openShareWorkspace,
+    shareFolder: openShareFolder,
+    renameProject: openRenameProject,
+    deleteProject: confirmDeleteProject,
+    editCollection: openEditCollection,
+    renameCollection: openRenameCollection,
+    publishCollectionDocs: handlePublishCollectionDocs,
+    deleteCollection: confirmDeleteCollection,
+    deleteGroup: confirmDeleteGroup,
+    deleteFolder: confirmDeleteFolder,
+    duplicateFolder: confirmDuplicateFolder,
+    renameFolder: openRenameFolder,
+    deleteRequest: confirmDeleteRequest,
+    duplicateRequest: handleDuplicateRequest,
+    restoreRequest: handleRestoreRequest,
+    compare: handleCompareResponses,
+    viewDefinitionDocs: handleViewDefinitionDocs,
+    generateDefinitionMocks: handleGenerateDefinitionMocks,
+    reimportDefinition: handleReimportDefinition,
+    reorderFolders: handleReorderFolders,
+    reorderRequests: handleReorderRequests,
+    reorderProjects: handleReorderProjects,
+    selectWorkspace: handleWorkspaceSelect,
+    importComplete: () => {
+      refresh();
+      definitionsRefreshTrigger.value++;
+    },
+  },
+  onAfterSidebarRefresh: () => refreshOpenTabsFromServer(),
+};
+
+const registerAdminPageBindings = () => {
+  registerPageBindings(adminPageBindings);
+};
+
+onActivated(() => {
+  registerAdminPageBindings();
+
+  if (selectedWorkspaceId.value && openTabs.value.length === 0) {
+    const workspaceTabs = loadWorkspaceTabs(selectedWorkspaceId.value);
+    if (workspaceTabs?.tabs?.length) {
+      hydrateOpenTabs(workspaceTabs);
+      const activeTab = getActiveOpenTab();
+      if (activeTab) {
+        syncWorkspaceSelectionForRequest(activeTab.request);
+      }
+      syncSelectedRequestWithActiveTab();
+    }
+  }
+});
+
+onDeactivated(() => {
+  clearPageBindings();
+});
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 overflow-hidden">
-    <!-- Header -->
-    <AppHeader 
-      ref="appHeaderRef"
-      title="Postrack"
-      :environments="safeEnvironments"
-      :active-environment-id="activeEnvironment?.id || null"
-      :current-project-id="currentProjectId || null"
-      :workspaces="workspaces || []"
-      :selected-workspace-id="selectedWorkspaceId"
-      :current-user-email="currentUserEmail"
-      :can-edit-workspace="canEditWorkspace"
-      :is-mock-sidebar-active="isMockSidebarActive"
-      :is-mobile="isMobile"
-      :is-sidebar-collapsed="isSidebarCollapsed"
-      @open-settings="openSettings"
-      @export-open-a-p-i="exportOpenAPI"
-      @import-open-a-p-i="openImportModal"
-      @activate-environment="activateEnvironment"
-      @manage-environments="openEnvironmentSettings('manage')"
-      @create-environment="openEnvironmentSettings('create')"
-      @rename-environment="(env, name) => { environmentToRename.value = env; environmentRenameForm.value.name = name; showEnvironmentRenameModal.value = true; }"
-      @update-environment="updateEnvironmentFromDropdown"
-      @saved="appHeaderRef?.environmentSwitcherRef?.resetSaving?.()"
-      @select-workspace="handleWorkspaceSelect"
-      @create-workspace="openCreateWorkspace"
-      @rename-workspace="openRenameWorkspace"
-      @share-workspace="openShareWorkspace"
-      @delete-workspace="confirmDeleteWorkspace"
-      @toggle-sidebar="handleToggleSidebar"
-    />
-
-    <div class="flex flex-1 overflow-hidden relative">
-      <!-- Sidebar -->
-      <AppSidebar
-        ref="appSidebarRef"
-        :collections="collections || []"
-        :mocks="mocks || []"
-        :selected-mock-id="selectedMock?.id"
-        :workspaces="workspaces || []"
-        :selected-workspace-id="selectedWorkspaceId"
-        :refresh-trigger="definitionsRefreshTrigger"
-        :is-mobile="isMobile"
-        :is-open="isSidebarOpen"
-        :is-duplicating-request="isDuplicatingRequest"
-        :width="sidebarWidth"
-        :is-collapsed="isSidebarCollapsed"
-        :is-resizing="isSidebarResizing"
-        :is-super-admin="isSuperAdmin"
-        :start-resize="startResize"
-        @select-mock="handleSelectMock"
-        @select-request="handleSelectRequest"
-        @hover-request="handleHoverRequest"
-        @create-mock="goToCreate"
-        @create-resource="showResourceModal = true"
-        @create-collection="openCreateCollection"
-        @create-request="openCreateRequest"
-        @import-curl="openImportCurl"
-        @create-folder="openCreateFolder"
-        @create-project="openCreateProject"
-        @create-workspace="openCreateWorkspace"
-        @rename-workspace="openRenameWorkspace"
-        @share-workspace="openShareWorkspace"
-        @share-folder="openShareFolder"
-        @rename-project="openRenameProject"
-        @delete-project="confirmDeleteProject"
-        @edit-collection="openEditCollection"
-        @rename-collection="openRenameCollection"
-        @publish-collection-docs="handlePublishCollectionDocs"
-        @delete-collection="confirmDeleteCollection"
-        @delete-group="confirmDeleteGroup"
-        @delete-folder="confirmDeleteFolder"
-        @duplicate-folder="confirmDuplicateFolder"
-        @rename-folder="openRenameFolder"
-        @delete-request="confirmDeleteRequest"
-        @duplicate-request="handleDuplicateRequest"
-        @restore-request="handleRestoreRequest"
-        @compare="handleCompareResponses"
-        @view-definition-docs="handleViewDefinitionDocs"
-        @generate-definition-mocks="handleGenerateDefinitionMocks"
-        @reimport-definition="handleReimportDefinition"
-        @reorder-folders="handleReorderFolders"
-        @reorder-requests="handleReorderRequests"
-        @reorder-projects="handleReorderProjects"
-        @select-workspace="handleWorkspaceSelect($event)"
-        @import-complete="definitionsRefreshTrigger++"
-        @active-view-change="sidebarActiveView = $event"
-        @close-sidebar="closeSidebar"
-      />
-
-      <!-- Main Content -->
-      <main :class="['flex flex-col flex-1 overflow-hidden bg-bg-primary', isMobile && isSidebarOpen ? 'opacity-50' : '']">
+  <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
         <!-- No Workspaces Empty State -->
         <div v-if="!hasWorkspaces" class="flex flex-col items-center justify-center h-full p-10 text-center">
           <div class="mb-8">
@@ -4708,10 +4603,6 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
             Select a request from the tabs
           </div>
         </div>
-      </main>
-    </div>
-
-    <!-- Settings Modal -->
     <Modal :show="showSettingsModal" title="Settings" @close="showSettingsModal = false">
       <div class="mb-4">
         <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">Global Bearer Token Secret</label>
@@ -5286,7 +5177,7 @@ const { isHelpVisible, showHelp, hideHelp } = useKeyboardShortcuts({
       :show="showImportModal"
       :workspaces="workspaces || []"
       @close="showImportModal = false"
-      @import-complete="() => { refresh(); definitionsRefreshTrigger++; }"
+      @import-complete="() => { refresh(); definitionsRefreshTrigger.value++; }"
     />
 
     <!-- API Documentation Viewer Modal -->

@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue';
 
+definePageMeta({
+  layout: 'admin',
+  middleware: ['super-admin'],
+  adminShell: {
+    hideSidebar: true,
+    backTo: '/admin/super-admin',
+    backLabel: 'Super Admin',
+  },
+});
+
 interface OverviewStats {
   totalEvents: number;
   eventsLast7Days: number;
@@ -394,18 +404,6 @@ const clearEventFilters = () => {
     <!-- Header -->
     <header class="h-12 bg-bg-header border-b border-border-default flex items-center justify-between px-4 flex-shrink-0">
       <div class="flex items-center gap-4">
-        <button
-          @click="navigateTo('/admin/super-admin')"
-          class="inline-flex items-center gap-1.5 py-1.5 px-2.5 text-text-secondary hover:text-text-primary transition-colors text-[13px] font-medium"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-          Back to Dashboard
-        </button>
-        
-        <div class="w-px h-6 bg-border-default"></div>
-        
         <div class="flex items-center gap-2">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 3v18h18"/>

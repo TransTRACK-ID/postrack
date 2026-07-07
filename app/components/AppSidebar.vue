@@ -126,6 +126,7 @@ interface Props {
   isResizing?: boolean;
   startResize?: (e: MouseEvent) => void;
   isSuperAdmin?: boolean;
+  isRefreshing?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -142,7 +143,8 @@ const props = withDefaults(defineProps<Props>(), {
   width: 280,
   isCollapsed: false,
   isResizing: false,
-  isSuperAdmin: false
+  isSuperAdmin: false,
+  isRefreshing: false
 });
 
 const emit = defineEmits<{
@@ -2378,6 +2380,15 @@ defineExpose({
       class="fixed inset-0 z-40"
       @click="closeContextMenu"
     ></div>
+
+    <!-- Background refresh overlay (sidebar/tree only) -->
+    <div
+      v-if="isRefreshing"
+      class="absolute inset-0 z-[75] bg-bg-sidebar/55 pointer-events-none"
+      aria-hidden="true"
+    >
+      <div class="absolute inset-0 admin-skeleton-shimmer" />
+    </div>
 
     </div><!-- End of Sidebar Content Container -->
 
