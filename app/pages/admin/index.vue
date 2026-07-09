@@ -1485,6 +1485,7 @@ const shareWorkspaceId = ref('');
 const shareWorkspaceName = ref('');
 const shareFolderId = ref('');
 const shareFolderName = ref('');
+const shareFolderIsSharedBase = ref(false);
 
 // Open share workspace modal
 const openShareWorkspace = (workspace: { id: string; name: string }) => {
@@ -1492,18 +1493,36 @@ const openShareWorkspace = (workspace: { id: string; name: string }) => {
   shareWorkspaceName.value = workspace.name;
   shareFolderId.value = '';
   shareFolderName.value = '';
+  shareFolderIsSharedBase.value = false;
   showShareModal.value = true;
 };
 
-// Open share folder modal
 const openShareFolder = (folder: any) => {
   if (!currentWorkspace.value) return;
   shareWorkspaceId.value = currentWorkspace.value.id;
   shareWorkspaceName.value = currentWorkspace.value.name;
   shareFolderId.value = folder.id;
   shareFolderName.value = folder.name;
+  shareFolderIsSharedBase.value = !!folder.isSharedBase;
   showShareModal.value = true;
 };
+
+const handleToggleDocsBase = async (folder: any) => {
+  try {
+    await $fetch(`/api/admin/folders/${folder.id}`, {
+      method: 'PUT',
+      body: { isSharedBase: !folder.isSharedBase }
+    });
+    showToast(
+      folder.isSharedBase ? 'Customer docs base removed' : 'Folder marked as customer docs base',
+      'success'
+    );
+    await refreshWorkspaces();
+  } catch (e: any) {
+    showToast(e.data?.message || e.message || 'Failed to update folder', 'error');
+  }
+};
+
   const showFolderModal = ref(false);
   const folderCollectionId = ref<string | null>(null);
   const folderCollectionName = ref<string>('');
@@ -4056,6 +4075,7 @@ const adminPageBindings = {
     renameWorkspace: openRenameWorkspace,
     shareWorkspace: openShareWorkspace,
     shareFolder: openShareFolder,
+    toggleDocsBase: handleToggleDocsBase,
     renameProject: openRenameProject,
     deleteProject: confirmDeleteProject,
     editCollection: openEditCollection,
@@ -5312,6 +5332,7 @@ onDeactivated(() => {
       :workspace-name="shareWorkspaceName"
       :folder-id="shareFolderId"
       :folder-name="shareFolderName"
+      :folder-is-shared-base="shareFolderIsSharedBase"
       @close="showShareModal = false"
       @shared="refreshWorkspaces"
     />

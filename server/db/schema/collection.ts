@@ -13,6 +13,7 @@ export const collections = pgTable('collections', {
   isPublic: boolean('is_public').notNull().default(false),
   publicSlug: text('public_slug'),
   docMode: text('doc_mode').notNull().default('explorer'),
+  publishScope: text('publish_scope').notNull().default('full').$type<'full' | 'shared_base'>(),
   baseUrl: text('base_url'),
   createdAt: timestamp('created_at')
     .notNull()

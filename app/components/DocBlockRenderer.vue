@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { marked } from 'marked';
 import ApiEndpointBlock from './ApiEndpointBlock.vue';
+import RichMarkdownContent from './RichMarkdownContent.vue';
 
 interface DocBlock {
   id: string;
@@ -59,15 +59,6 @@ const props = defineProps<{
   endpoints?: PublicEndpoint[];
 }>();
 
-const renderMarkdown = (content: string): string => {
-  if (!content) return '';
-  try {
-    return marked.parse(content, { async: false }) as string;
-  } catch {
-    return content;
-  }
-};
-
 const findEndpoint = (requestId: string): PublicEndpoint | undefined => {
   if (!props.endpoints) return undefined;
   return props.endpoints.find(ep => ep.id === requestId);
@@ -77,9 +68,10 @@ const findEndpoint = (requestId: string): PublicEndpoint | undefined => {
 <template>
   <div class="doc-block mb-6">
     <!-- Markdown -->
-    <div v-if="block.type === 'markdown'" class="prose prose-invert prose-sm max-w-none">
-      <div v-html="renderMarkdown(typeof block.content === 'string' ? block.content : '')"></div>
-    </div>
+    <RichMarkdownContent
+      v-if="block.type === 'markdown'"
+      :content="typeof block.content === 'string' ? block.content : ''"
+    />
 
     <!-- Image -->
     <div v-else-if="block.type === 'image'" class="my-6">
@@ -132,65 +124,3 @@ const findEndpoint = (requestId: string): PublicEndpoint | undefined => {
     <hr v-else-if="block.type === 'divider'" class="border-border-default my-8" />
   </div>
 </template>
-
-<style scoped>
-.doc-block :deep(.prose) {
-  color: inherit;
-}
-.doc-block :deep(.prose h1) {
-  font-size: 1.5em;
-  font-weight: 600;
-  margin: 0.8em 0 0.4em;
-}
-.doc-block :deep(.prose h2) {
-  font-size: 1.25em;
-  font-weight: 600;
-  margin: 0.8em 0 0.4em;
-}
-.doc-block :deep(.prose h3) {
-  font-size: 1.125em;
-  font-weight: 600;
-  margin: 0.6em 0 0.3em;
-}
-.doc-block :deep(.prose p) {
-  margin: 0.5em 0;
-  line-height: 1.6;
-}
-.doc-block :deep(.prose ul) {
-  list-style-type: disc;
-  padding-left: 1.5em;
-  margin: 0.5em 0;
-}
-.doc-block :deep(.prose ol) {
-  list-style-type: decimal;
-  padding-left: 1.5em;
-  margin: 0.5em 0;
-}
-.doc-block :deep(.prose li) {
-  margin: 0.25em 0;
-}
-.doc-block :deep(.prose code) {
-  background-color: var(--bg-input, rgba(255,255,255,0.05));
-  padding: 0.15em 0.4em;
-  border-radius: 0.25em;
-  font-size: 0.9em;
-}
-.doc-block :deep(.prose pre) {
-  background-color: var(--bg-input, rgba(255,255,255,0.05));
-  padding: 0.75em;
-  border-radius: 0.5em;
-  overflow-x: auto;
-  margin: 0.5em 0;
-}
-.doc-block :deep(.prose pre code) {
-  background: none;
-  padding: 0;
-}
-.doc-block :deep(.prose a) {
-  color: var(--accent-blue, #3b82f6);
-  text-decoration: underline;
-}
-.doc-block :deep(.prose strong) {
-  font-weight: 600;
-}
-</style>

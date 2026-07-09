@@ -244,6 +244,7 @@ export default defineEventHandler(async (event) => {
                 isPublic: collection.isPublic,
                 publicSlug: collection.publicSlug,
                 docMode: collection.docMode,
+                publishScope: collection.publishScope ?? 'full',
                 baseUrl: collection.baseUrl,
                 folders: folderTree,
                 requests: collectionRootRequests,

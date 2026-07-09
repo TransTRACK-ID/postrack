@@ -1,7 +1,8 @@
 import { db } from '../../../db';
-import { collections } from '../../../db/schema';
+import { collections, folders } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { cache } from '../../../utils/cache';
+import { findSharedBaseFolder } from '../../../utils/sharedBaseFolder';
 
 interface UpdateCollectionBody {
   name?: string;
@@ -11,6 +12,7 @@ interface UpdateCollectionBody {
   publicSlug?: string;
   docMode?: string;
   baseUrl?: string | null;
+  publishScope?: 'full' | 'shared_base';
 }
 
 export default defineEventHandler(async (event) => {
@@ -124,6 +126,21 @@ export default defineEventHandler(async (event) => {
     if (body.isPublic !== undefined) {
       updateData.isPublic = body.isPublic;
 
+      const nextPublishScope = body.publishScope ?? existing.publishScope ?? 'full';
+      if (body.isPublic && nextPublishScope === 'shared_base') {
+        const collectionFolders = await db
+          .select()
+          .from(folders)
+          .where(eq(folders.collectionId, id));
+
+        if (!findSharedBaseFolder(collectionFolders)) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Mark a root folder as customer docs base before publishing with scoped docs'
+          });
+        }
+      }
+
       if (body.isPublic && !body.publicSlug && !existing.publicSlug) {
         updateData.publicSlug = body.name?.toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
@@ -157,6 +174,32 @@ export default defineEventHandler(async (event) => {
           statusMessage: 'baseUrl must be a string or null'
         });
       }
+    }
+
+    if (body.publishScope !== undefined) {
+      if (!['full', 'shared_base'].includes(body.publishScope)) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'publishScope must be either "full" or "shared_base"'
+        });
+      }
+
+      const willBePublic = body.isPublic ?? existing.isPublic;
+      if (body.publishScope === 'shared_base' && willBePublic) {
+        const collectionFolders = await db
+          .select()
+          .from(folders)
+          .where(eq(folders.collectionId, id));
+
+        if (!findSharedBaseFolder(collectionFolders)) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Mark a root folder as customer docs base before publishing with scoped docs'
+          });
+        }
+      }
+
+      updateData.publishScope = body.publishScope;
     }
 
     if (body.publicSlug !== undefined) {

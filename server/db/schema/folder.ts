@@ -1,4 +1,4 @@
-import { pgTable, text, integer, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, index } from 'drizzle-orm/pg-core';
 import { collections } from './collection';
 
 export const folders = pgTable('folders', {
@@ -9,7 +9,8 @@ export const folders = pgTable('folders', {
   parentFolderId: text('parent_folder_id')
     .references((): any => folders.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  order: integer('order').notNull().default(0)
+  order: integer('order').notNull().default(0),
+  isSharedBase: boolean('is_shared_base').notNull().default(false)
 }, (table) => ({
   collectionIdx: index('idx_folders_collection').on(table.collectionId),
   parentIdx: index('idx_folders_parent').on(table.parentFolderId),

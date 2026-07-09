@@ -1,6 +1,7 @@
 import { db } from '../../../db';
 import { collections, folders, savedRequests, requestExamples, collectionDocBlocks } from '../../../db/schema';
 import { eq, asc, or, inArray } from 'drizzle-orm';
+import { collectFolderSubtreeIds, findSharedBaseFolder } from '../../../utils/sharedBaseFolder';
 
 interface ExampleResponse {
   statusCode: number;
@@ -431,26 +432,51 @@ export default defineEventHandler(async (event) => {
       .where(eq(folders.collectionId, collection.id))
       .orderBy(asc(folders.order));
 
-    // Get all requests for this collection
-    // Requests can either be at collection level (collectionId set, folderId null)
-    // OR inside folders (folderId set, collectionId null) - due to DB constraint
-    const folderIds = allFolders.map(f => f.id);
-    const allRequestsRaw = folderIds.length > 0
-      ? await db
-          .select()
-          .from(savedRequests)
-          .where(
-            or(
-              eq(savedRequests.collectionId, collection.id),
-              inArray(savedRequests.folderId, folderIds)
+    const publishScope = collection.publishScope ?? 'full';
+    let scopedFolderIds: Set<string> | null = null;
+
+    if (publishScope === 'shared_base') {
+      const sharedBaseFolder = findSharedBaseFolder(allFolders);
+      if (!sharedBaseFolder) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: 'Public documentation is not available for this collection'
+        });
+      }
+
+      scopedFolderIds = collectFolderSubtreeIds(allFolders, sharedBaseFolder.id);
+    }
+
+    const visibleFolders = scopedFolderIds
+      ? allFolders.filter((folder) => scopedFolderIds!.has(folder.id))
+      : allFolders;
+
+    const folderIds = visibleFolders.map(f => f.id);
+
+    const allRequestsRaw = scopedFolderIds
+      ? folderIds.length > 0
+        ? await db
+            .select()
+            .from(savedRequests)
+            .where(inArray(savedRequests.folderId, folderIds))
+            .orderBy(asc(savedRequests.order))
+        : []
+      : folderIds.length > 0
+        ? await db
+            .select()
+            .from(savedRequests)
+            .where(
+              or(
+                eq(savedRequests.collectionId, collection.id),
+                inArray(savedRequests.folderId, folderIds)
+              )
             )
-          )
-          .orderBy(asc(savedRequests.order))
-      : await db
-          .select()
-          .from(savedRequests)
-          .where(eq(savedRequests.collectionId, collection.id))
-          .orderBy(asc(savedRequests.order));
+            .orderBy(asc(savedRequests.order))
+        : await db
+            .select()
+            .from(savedRequests)
+            .where(eq(savedRequests.collectionId, collection.id))
+            .orderBy(asc(savedRequests.order));
 
     // Get all examples for these requests
     const requestIds = allRequestsRaw.map(r => r.id);
@@ -463,12 +489,14 @@ export default defineEventHandler(async (event) => {
       : [];
 
     // Build folder tree with requests and examples
-    const folderTree = buildPublicFolderTree(allFolders, allRequestsRaw, allExamplesRaw);
+    const folderTree = buildPublicFolderTree(visibleFolders, allRequestsRaw, allExamplesRaw);
 
-    // Get collection-level requests (not in any folder)
-    const collectionRequests = allRequestsRaw
-      .filter(req => !req.folderId)
-      .map(req => createPublicEndpoint(req, allExamplesRaw));
+    // Get collection-level requests (not in any folder) — excluded when scoped to shared base
+    const collectionRequests = scopedFolderIds
+      ? []
+      : allRequestsRaw
+          .filter(req => !req.folderId)
+          .map(req => createPublicEndpoint(req, allExamplesRaw));
 
     // Collect all endpoints (for tags and stats)
     const allEndpoints: PublicEndpoint[] = [...collectionRequests];
@@ -510,24 +538,30 @@ export default defineEventHandler(async (event) => {
       .where(eq(collectionDocBlocks.collectionId, collection.id))
       .orderBy(asc(collectionDocBlocks.order));
 
-    const parsedDocBlocks = allDocBlocks.map(block => {
-      let parsedContent: any = block.content;
-      if (typeof block.content === 'string') {
-        try {
-          parsedContent = JSON.parse(block.content);
-        } catch {
-          parsedContent = block.content;
+    const parsedDocBlocks = allDocBlocks
+      .filter((block) => {
+        if (!scopedFolderIds) return true;
+        if (block.folderId === null) return true;
+        return scopedFolderIds.has(block.folderId);
+      })
+      .map(block => {
+        let parsedContent: any = block.content;
+        if (typeof block.content === 'string') {
+          try {
+            parsedContent = JSON.parse(block.content);
+          } catch {
+            parsedContent = block.content;
+          }
         }
-      }
-      return {
-        id: block.id,
-        type: block.type,
-        content: parsedContent,
-        order: block.order,
-        folderId: block.folderId,
-        requestId: block.requestId
-      };
-    });
+        return {
+          id: block.id,
+          type: block.type,
+          content: parsedContent,
+          order: block.order,
+          folderId: block.folderId,
+          requestId: block.requestId
+        };
+      });
 
     const result: CollectionDocsResponse = {
       collection: {

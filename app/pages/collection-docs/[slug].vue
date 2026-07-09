@@ -142,6 +142,7 @@ export const FolderTree = defineComponent({
 <script setup lang="ts">
 import DocBlockRenderer from '~/components/DocBlockRenderer.vue';
 import ApiEndpointBlock from '~/components/ApiEndpointBlock.vue';
+import RichMarkdownContent from '~/components/RichMarkdownContent.vue';
 
 const route = useRoute();
 const slug = computed(() => route.params.slug as string);
@@ -275,6 +276,57 @@ const showViewToggle = computed(() => {
 const collectionLevelBlocks = computed(() => {
   if (!data.value?.docBlocks) return [];
   return data.value.docBlocks.filter(b => !b.folderId && !b.requestId).sort((a, b) => a.order - b.order);
+});
+
+const hasCollectionIntro = computed(() => {
+  return Boolean(data.value?.collection.description?.trim()) || collectionLevelBlocks.value.length > 0;
+});
+
+interface ExplorerEndpointGroup {
+  id: string;
+  name: string;
+  endpoints: CollectionDocsResponse['endpoints'];
+}
+
+const explorerEndpointGroups = computed((): ExplorerEndpointGroup[] => {
+  if (!data.value) return [];
+
+  const groups: ExplorerEndpointGroup[] = [];
+  const folderEndpointIds = new Set<string>();
+
+  const collectFolderEndpointIds = (folders: CollectionDocsResponse['folders']) => {
+    for (const folder of folders) {
+      folder.requests?.forEach((request: { id: string }) => folderEndpointIds.add(request.id));
+      collectFolderEndpointIds(folder.children || []);
+    }
+  };
+
+  collectFolderEndpointIds(data.value.folders || []);
+
+  const rootEndpoints = data.value.endpoints.filter((endpoint) => !folderEndpointIds.has(endpoint.id));
+  if (rootEndpoints.length > 0) {
+    groups.push({ id: 'collection-root', name: 'General', endpoints: rootEndpoints });
+  }
+
+  const addFolderGroups = (folders: CollectionDocsResponse['folders']) => {
+    for (const folder of folders) {
+      if (folder.requests?.length) {
+        groups.push({
+          id: folder.id,
+          name: folder.name,
+          endpoints: folder.requests
+        });
+      }
+      addFolderGroups(folder.children || []);
+    }
+  };
+
+  addFolderGroups(data.value.folders || []);
+  return groups;
+});
+
+const showExplorerLanding = computed(() => {
+  return !selectedEndpoint.value && (hasCollectionIntro.value || explorerEndpointGroups.value.length > 0);
 });
 
 const folderBlocks = (folderId: string) => {
@@ -518,14 +570,14 @@ watch(() => viewMode.value, (mode) => {
 </script>
 
 <template>
-  <div v-if="pending" class="min-h-full flex items-center justify-center bg-bg-secondary">
+  <div v-if="pending" class="h-full min-h-0 flex items-center justify-center bg-bg-secondary">
     <div class="text-center">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-orange mx-auto mb-4"></div>
       <p class="text-text-secondary">Loading documentation...</p>
     </div>
   </div>
 
-  <div v-else-if="error" class="min-h-full flex items-center justify-center bg-bg-secondary">
+  <div v-else-if="error" class="h-full min-h-0 flex items-center justify-center bg-bg-secondary">
     <div class="text-center max-w-md">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-accent-red opacity-50 mx-auto mb-4">
         <circle cx="12" cy="12" r="10"></circle>
@@ -538,7 +590,7 @@ watch(() => viewMode.value, (mode) => {
     </div>
   </div>
 
-  <div v-else-if="data" class="min-h-full bg-bg-secondary">
+  <div v-else-if="data" class="h-full min-h-0 bg-bg-secondary">
     <div class="flex flex-col h-full min-h-0">
       <header class="flex items-center justify-between py-3 px-5 border-b border-border-default bg-bg-header">
         <div class="flex items-center gap-3">
@@ -552,7 +604,6 @@ watch(() => viewMode.value, (mode) => {
           </div>
           <div>
             <h1 class="text-base font-semibold text-text-primary m-0 leading-tight">{{ data.collection.name }}</h1>
-            <p v-if="data.collection.description" class="text-[11px] text-text-muted m-0 mt-0.5">{{ data.collection.description }}</p>
           </div>
         </div>
 
@@ -870,6 +921,78 @@ watch(() => viewMode.value, (mode) => {
             </div>
           </div>
 
+          <div v-else-if="showExplorerLanding" class="flex-1 min-h-0 overflow-y-auto">
+            <div class="p-5 pb-8">
+              <div class="max-w-3xl">
+                <template v-if="hasCollectionIntro">
+                  <div class="mb-6 pb-5 border-b border-border-default">
+                    <h2 class="text-lg font-semibold text-text-primary m-0">Overview</h2>
+                    <p class="text-xs text-text-muted mt-1 m-0">Collection introduction and change notes</p>
+                  </div>
+
+                  <RichMarkdownContent
+                    v-if="data.collection.description"
+                    :content="data.collection.description"
+                    class="mb-6"
+                  />
+
+                  <DocBlockRenderer
+                    v-for="block in collectionLevelBlocks"
+                    :key="block.id"
+                    :block="block"
+                    :base-url="data.collection.baseUrl"
+                    :endpoints="data.endpoints"
+                  />
+                </template>
+
+                <section
+                  v-if="explorerEndpointGroups.length"
+                  :class="hasCollectionIntro ? 'mt-10 pt-8 border-t border-border-default' : ''"
+                >
+                  <div class="mb-4">
+                    <h2 class="text-sm font-semibold text-text-primary m-0">
+                      {{ hasCollectionIntro ? 'Browse endpoints' : 'Endpoints' }}
+                    </h2>
+                    <p class="text-xs text-text-muted mt-1 m-0">
+                      {{ data.stats.totalEndpoints }} documented endpoint{{ data.stats.totalEndpoints === 1 ? '' : 's' }} in this collection
+                    </p>
+                  </div>
+
+                  <div class="space-y-5">
+                    <div v-for="group in explorerEndpointGroups" :key="group.id">
+                      <h3 class="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">
+                        {{ group.name }}
+                      </h3>
+                      <div class="rounded-md border border-border-default bg-bg-primary divide-y divide-border-default overflow-hidden">
+                        <button
+                          v-for="endpoint in group.endpoints"
+                          :key="endpoint.id"
+                          type="button"
+                          class="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/40"
+                          @click="selectEndpoint(endpoint)"
+                        >
+                          <span
+                            class="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded flex-shrink-0 tracking-wide uppercase"
+                            :style="{
+                              backgroundColor: getMethodColor(endpoint.method) + '18',
+                              color: getMethodColor(endpoint.method)
+                            }"
+                          >
+                            {{ endpoint.method }}
+                          </span>
+                          <span class="font-mono text-xs text-text-primary truncate">{{ endpoint.cleanPath }}</span>
+                          <span v-if="endpoint.name" class="text-[11px] text-text-muted truncate ml-auto hidden sm:inline">
+                            {{ endpoint.name }}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+
           <div v-else class="flex-1 flex items-center justify-center text-text-muted">
             <div class="text-center max-w-xs px-6">
               <div class="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mx-auto mb-4">
@@ -893,9 +1016,11 @@ watch(() => viewMode.value, (mode) => {
             <!-- Collection header -->
             <div id="guide-section-collection" class="mb-8 pb-6 border-b border-border-default scroll-mt-8">
               <h1 class="text-2xl font-semibold text-text-primary">{{ data.collection.name }}</h1>
-              <p v-if="data.collection.description" class="text-sm text-text-secondary mt-2">
-                {{ data.collection.description }}
-              </p>
+              <RichMarkdownContent
+                v-if="data.collection.description"
+                :content="data.collection.description"
+                class="mt-3"
+              />
               <div v-if="data.collection.baseUrl" class="mt-3 flex items-center gap-2">
                 <span class="text-[11px] text-text-muted uppercase tracking-wide">Base URL</span>
                 <code class="text-xs font-mono text-text-primary bg-bg-input px-2 py-1 rounded">{{ data.collection.baseUrl }}</code>

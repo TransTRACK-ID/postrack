@@ -26,6 +26,7 @@ interface FolderTreeItemProps {
     parentFolderId: string | null;
     name: string;
     order: number;
+    isSharedBase?: boolean;
     requests: HttpRequest[];
     children: any[];
   };
@@ -254,7 +255,15 @@ const isBeforeRequestsDrop = computed(() =>
       </svg>
 
       <!-- Name -->
-      <span class="flex-1">{{ folder.name }}</span>
+      <span class="flex-1 truncate">{{ folder.name }}</span>
+
+      <span
+        v-if="folder.isSharedBase"
+        class="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent-green/15 text-accent-green flex-shrink-0"
+        title="Customer documentation base folder"
+      >
+        Docs Base
+      </span>
 
       <!-- Count -->
       <span class="text-[10px] text-text-muted bg-bg-tertiary py-px px-1.5 rounded-lg mr-1.5">

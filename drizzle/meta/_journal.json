@@ -162,6 +162,13 @@
       "when": 1781667923386,
       "tag": "0023_good_dragon_man",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783590471609,
+      "tag": "0024_unusual_young_avengers",
+      "breakpoints": true
     }
   ]
 }

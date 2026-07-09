@@ -7,6 +7,7 @@ interface UpdateFolderBody {
   name?: string;
   parentFolderId?: string | null;
   order?: number;
+  isSharedBase?: boolean;
 }
 
 // Helper function to check for circular reference
@@ -75,6 +76,7 @@ export default defineEventHandler(async (event) => {
       name: string;
       parentFolderId: string | null;
       order: number;
+      isSharedBase: boolean;
     }> = {};
 
     // Determine target parent for duplicate check
@@ -108,6 +110,13 @@ export default defineEventHandler(async (event) => {
     }
 
     if (body.parentFolderId !== undefined) {
+      if (existing.isSharedBase && body.parentFolderId !== null) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Customer docs base folders must stay at the collection root'
+        });
+      }
+
       if (body.parentFolderId !== null && typeof body.parentFolderId !== 'string') {
         throw createError({
           statusCode: 400,
@@ -170,6 +179,37 @@ export default defineEventHandler(async (event) => {
       updateData.order = body.order;
     }
 
+    if (body.isSharedBase !== undefined) {
+      if (typeof body.isSharedBase !== 'boolean') {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'isSharedBase must be a boolean'
+        });
+      }
+
+      if (body.isSharedBase) {
+        if (existing.parentFolderId !== null) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Only root-level folders can be marked as customer docs base'
+          });
+        }
+
+        const existingBase = allCollectionFolders.find(
+          (folder) => folder.isSharedBase && folder.id !== id
+        );
+
+        if (existingBase) {
+          await db
+            .update(folders)
+            .set({ isSharedBase: false })
+            .where(eq(folders.id, existingBase.id));
+        }
+      }
+
+      updateData.isSharedBase = body.isSharedBase;
+    }
+
     // Check for duplicate names at target level (if name or parent is changing)
     if (updateData.name !== undefined || updateData.parentFolderId !== undefined) {
       const nameToCheck = updateData.name || existing.name;
@@ -202,6 +242,7 @@ export default defineEventHandler(async (event) => {
     const user = event.context.user;
     if (user?.id) {
       cache.delete(CacheKeys.workspaceTree(user.id));
+      cache.deletePattern('tree:');
     }
 
     return updatedFolder;

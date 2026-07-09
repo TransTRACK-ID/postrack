@@ -1,4 +1,11 @@
 <script setup lang="ts">
+interface FolderNode {
+  id: string;
+  isSharedBase?: boolean;
+  requests?: unknown[];
+  children?: FolderNode[];
+}
+
 interface Props {
   show: boolean;
   collection: {
@@ -7,6 +14,8 @@ interface Props {
     description?: string | null;
     isPublic?: boolean;
     publicSlug?: string | null;
+    publishScope?: 'full' | 'shared_base';
+    folders?: FolderNode[];
   };
 }
 
@@ -21,10 +30,28 @@ const isPublic = ref(false);
 const publicSlug = ref('');
 const docMode = ref('explorer');
 const baseUrl = ref('');
+const publishScope = ref<'full' | 'shared_base'>('full');
 const isSubmitting = ref(false);
 const error = ref('');
 const successMessage = ref('');
 const copiedUrl = ref(false);
+
+const countRequestsInFolderTree = (folder: FolderNode): number => {
+  let count = folder.requests?.length ?? 0;
+  for (const child of folder.children ?? []) {
+    count += countRequestsInFolderTree(child);
+  }
+  return count;
+};
+
+const sharedBaseFolder = computed(() =>
+  props.collection?.folders?.find((folder) => folder.isSharedBase) ?? null
+);
+
+const scopedEndpointCount = computed(() => {
+  if (!sharedBaseFolder.value) return 0;
+  return countRequestsInFolderTree(sharedBaseFolder.value);
+});
 
 const appUrl = computed(() => {
   if (typeof window !== 'undefined') {
@@ -35,7 +62,9 @@ const appUrl = computed(() => {
 
 const canSubmit = computed(() => {
   if (!isPublic.value) return true;
-  return publicSlug.value.trim().length > 0;
+  if (!publicSlug.value.trim()) return false;
+  if (publishScope.value === 'shared_base' && !sharedBaseFolder.value) return false;
+  return true;
 });
 
 const resetForm = () => {
@@ -43,6 +72,7 @@ const resetForm = () => {
   publicSlug.value = props.collection?.publicSlug || '';
   docMode.value = (props.collection as any)?.docMode || 'explorer';
   baseUrl.value = (props.collection as any)?.baseUrl || '';
+  publishScope.value = props.collection?.publishScope || 'full';
   error.value = '';
   successMessage.value = '';
   copiedUrl.value = false;
@@ -75,13 +105,19 @@ const updateDocs = async () => {
     return;
   }
 
+  if (isPublic.value && publishScope.value === 'shared_base' && !sharedBaseFolder.value) {
+    error.value = 'Mark a root folder as customer docs base before publishing scoped documentation';
+    return;
+  }
+
   isSubmitting.value = true;
 
   try {
     const updateData: Record<string, any> = {
       isPublic: isPublic.value,
       docMode: docMode.value,
-      baseUrl: baseUrl.value.trim() || null
+      baseUrl: baseUrl.value.trim() || null,
+      publishScope: publishScope.value
     };
 
     if (isPublic.value) {
@@ -205,6 +241,29 @@ const copyUrl = async () => {
               </button>
             </div>
             <code class="text-[11px] text-text-primary font-mono break-all">{{ appUrl }}</code>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
+              Publish Scope
+            </label>
+            <select
+              v-model="publishScope"
+              class="w-full py-2 px-3 bg-bg-input border border-border-default rounded-md text-text-primary text-sm focus:outline-none focus:border-accent-blue"
+              :disabled="isSubmitting"
+            >
+              <option value="full">Full collection</option>
+              <option value="shared_base">Customer docs base only</option>
+            </select>
+            <p v-if="publishScope === 'full'" class="text-[11px] text-text-muted mt-1">
+              All folders and endpoints in this collection appear in public docs.
+            </p>
+            <p v-else-if="sharedBaseFolder" class="text-[11px] text-accent-green mt-1">
+              Customers will see {{ scopedEndpointCount }} endpoint{{ scopedEndpointCount === 1 ? '' : 's' }} under "{{ sharedBaseFolder.name }}".
+            </p>
+            <p v-else class="text-[11px] text-accent-red mt-1">
+              Mark a root folder as customer docs base before using scoped publishing.
+            </p>
           </div>
         </div>
 

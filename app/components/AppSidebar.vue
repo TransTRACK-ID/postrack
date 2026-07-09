@@ -60,6 +60,7 @@ interface FolderWithRequestsAndChildren {
   parentFolderId: string | null;
   name: string;
   order: number;
+  isSharedBase?: boolean;
   requests: HttpRequest[];
   children: FolderWithRequestsAndChildren[];
 }
@@ -162,6 +163,7 @@ const emit = defineEmits<{
   renameWorkspace: [workspace: { id: string; name: string }];
   shareWorkspace: [workspace: { id: string; name: string }];
   shareFolder: [folder: any];
+  toggleDocsBase: [folder: any];
   renameProject: [project: { id: string; name: string }];
   deleteProject: [project: { id: string; name: string }];
   editCollection: [collection: { id: string; name: string; description: string }];
@@ -1164,6 +1166,9 @@ const handleContextAction = (action: string) => {
         emit('deleteFolder', data);
       } else if (action === 'share-folder') {
         emit('shareFolder', data);
+      } else if (action === 'set-docs-base') {
+        emit('toggleDocsBase', data);
+        closeContextMenu();
       } else if (action === 'copy-prompt') {
         copyFolderPromptToClipboard(data);
       }
@@ -2245,6 +2250,17 @@ defineExpose({
                 <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
               </svg>
               Share Folder
+            </button>
+            <button
+              v-if="canEdit && !contextMenu.data?.parentFolderId"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-green/50 focus-visible:outline-none"
+              @click.stop="handleContextAction('set-docs-base')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-accent-green">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+              {{ contextMenu.data?.isSharedBase ? 'Remove Customer Docs Base' : 'Set as Customer Docs Base' }}
             </button>
             <button
               class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"

@@ -39,6 +39,7 @@ interface Props {
   workspaceName: string;
   folderId?: string;
   folderName?: string;
+  folderIsSharedBase?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -46,7 +47,8 @@ const props = withDefaults(defineProps<Props>(), {
   workspaceId: '',
   workspaceName: '',
   folderId: '',
-  folderName: ''
+  folderName: '',
+  folderIsSharedBase: false
 });
 
 const emit = defineEmits<{
@@ -336,6 +338,12 @@ watch(() => props.workspaceId, (newVal) => {
           <p class="text-xs text-text-muted m-0">
             <span v-if="folderName">Share this folder with other registered users</span>
             <span v-else>Share this workspace with other registered users</span>
+          </p>
+          <p
+            v-if="folderName && folderIsSharedBase"
+            class="text-[11px] text-accent-green mt-1.5 mb-0"
+          >
+            This folder is the customer documentation base.
           </p>
         </div>
       </div>
