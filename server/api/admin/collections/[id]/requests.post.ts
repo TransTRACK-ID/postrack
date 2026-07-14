@@ -1,24 +1,13 @@
 import { db } from '../../../../db';
-import { collections, savedRequests, folders, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type RequestPathVariables, type RequestParamNotes } from '../../../../db/schema';
+import { collections, savedRequests, folders, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type RequestPathVariables, type RequestParamNotes, type RequestProtocol, type SocketConfig } from '../../../../db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { cache, CacheKeys } from '../../../../utils/cache';
-
-function parseJsonField<T>(value: unknown): T | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return null;
-    }
-  }
-  return value as T;
-}
+import { resolveRequestProtocol, validateRequestMethod, validateRequestUrl } from '../../../../utils/request-protocol';
+import { formatSavedRequestResponse } from '../../../../utils/saved-request-response';
 
 interface CreateRequestBody {
   name: string;
+  protocol?: RequestProtocol;
   method: HttpMethod;
   url: string;
   headers?: RequestHeaders;
@@ -30,9 +19,8 @@ interface CreateRequestBody {
   paramNotes?: RequestParamNotes;
   queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
   order?: number;
+  socketConfig?: SocketConfig;
 }
-
-const validMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export default defineEventHandler(async (event) => {
   const collectionId = getRouterParam(event, 'id');
@@ -70,37 +58,9 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // Validate method
-  if (!body.method || typeof body.method !== 'string') {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'HTTP method is required'
-    });
-  }
-
-  const method = body.method.toUpperCase() as HttpMethod;
-  if (!validMethods.includes(method)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Invalid HTTP method. Must be one of: ${validMethods.join(', ')}`
-    });
-  }
-
-  // Validate URL
-  if (!body.url || typeof body.url !== 'string') {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'URL is required'
-    });
-  }
-
-  const trimmedUrl = body.url.trim();
-  if (trimmedUrl.length === 0) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'URL cannot be empty'
-    });
-  }
+  const protocol = resolveRequestProtocol(body.protocol);
+  const method = validateRequestMethod(protocol, body.method || (protocol === 'websocket' ? 'WS' : 'GET'));
+  const trimmedUrl = validateRequestUrl(protocol, body.url);
 
   // Validate order if provided
   let order = 0;
@@ -166,8 +126,10 @@ export default defineEventHandler(async (event) => {
         collectionId,
         folderId: null,  // Explicitly null for collection-level requests
         name: trimmedName,
+        protocol,
         method,
         url: trimmedUrl,
+        socketConfig: body.socketConfig || null,
         headers: body.headers || null,
         body: body.body || null,
         auth: body.auth || null,
@@ -186,25 +148,7 @@ export default defineEventHandler(async (event) => {
       cache.delete(CacheKeys.workspaceTree(user.id));
     }
 
-    return {
-      ...newRequest,
-      headers: parseJsonField<Record<string, string>>(newRequest.headers),
-      body: parseJsonField<Record<string, unknown> | string>(newRequest.body),
-      auth: parseJsonField<{
-        type: string;
-        credentials?: Record<string, string>;
-      } | null>(newRequest.auth),
-      mockConfig: parseJsonField<{
-        isEnabled: boolean;
-        statusCode: number;
-        delay: number;
-        responseBody: Record<string, unknown> | string | null;
-        responseHeaders: Record<string, string>;
-      } | null>(newRequest.mockConfig),
-      pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(newRequest.pathVariables),
-      paramNotes: parseJsonField<Record<string, Record<string, string>>>(newRequest.paramNotes),
-      queryParams: parseJsonField<Array<{ key: string; value: string; enabled: boolean; note?: string }>>(newRequest.queryParams)
-    };
+    return formatSavedRequestResponse(newRequest);
   } catch (error: any) {
     // Re-throw if it's already an H3 error
     if (error.statusCode) {

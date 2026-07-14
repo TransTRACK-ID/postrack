@@ -7,6 +7,7 @@ import VariableTextarea from './VariableTextarea.vue'
 import RequestExampleManager from './RequestExampleManager.vue'
 import MockConfiguration from './MockConfiguration.vue'
 import BulkEditPanel from './BulkEditPanel.vue'
+import WebSocketPanel from './WebSocketPanel.vue'
 import { useBulkKeyValueEdit } from '~/composables/useBulkKeyValueEdit'
 import { useUsageTracking } from '~/composables/useUsageTracking'
 import { useClientRequest, isLocalUrl } from '~/composables/useClientRequest'
@@ -75,6 +76,7 @@ interface HttpRequest {
   id: string;
   folderId: string;
   name: string;
+  protocol?: import('../../server/db/schema/savedRequest').RequestProtocol;
   method: string;
   url: string;
   headers: Record<string, string> | null;
@@ -85,6 +87,7 @@ interface HttpRequest {
     credentials?: Record<string, string>;
   } | null;
   mockConfig?: import('../../server/db/schema/savedRequest').MockConfig | null;
+  socketConfig?: import('../../server/db/schema/savedRequest').SocketConfig;
   pathVariables?: import('../../server/db/schema/savedRequest').RequestPathVariables | null;
   paramNotes?: import('../../server/db/schema/savedRequest').RequestParamNotes | null;
   queryParams?: import('../../server/db/schema/savedRequest').QueryParam[];
@@ -153,6 +156,7 @@ const COLLAPSED_HEIGHT = 42; // Height when response is collapsed
 const MOBILE_BREAKPOINT = 768; // Mobile breakpoint in pixels
 
 export interface RequestDraftSnapshot {
+  protocol?: import('../../server/db/schema/savedRequest').RequestProtocol;
   method: string;
   url: string;
   headers: Record<string, string> | null;
@@ -164,6 +168,7 @@ export interface RequestDraftSnapshot {
   } | null;
   inheritAuth?: number;
   mockConfig?: import('../../server/db/schema/savedRequest').MockConfig | null;
+  socketConfig?: import('../../server/db/schema/savedRequest').SocketConfig;
   preScript?: string;
   postScript?: string;
   pathVariables?: import('../../server/db/schema/savedRequest').RequestPathVariables | null;
@@ -213,6 +218,56 @@ const emit = defineEmits<{
 }>();
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
+const REQUEST_PROTOCOLS = ['http', 'websocket'] as const;
+
+const form = ref({
+  protocol: (props.request.protocol || 'http') as typeof REQUEST_PROTOCOLS[number],
+  method: props.request.method as typeof HTTP_METHODS[number] | 'WS',
+  url: props.request.url
+});
+
+const socketConfig = ref<import('../../server/db/schema/savedRequest').SocketConfig>(
+  props.request.socketConfig || {
+    subprotocols: [],
+    initialMessage: '',
+    messageFormat: 'text'
+  }
+);
+
+const isWebSocket = computed(() => form.value.protocol === 'websocket');
+
+const availableTabs = computed((): TabType[] => {
+  if (isWebSocket.value) {
+    return props.readOnly
+      ? ['params', 'headers', 'auth', 'examples']
+      : ['params', 'headers', 'auth', 'preScript', 'postScript', 'examples'];
+  }
+  return props.readOnly
+    ? ['params', 'headers', 'body', 'auth', 'examples']
+    : ['params', 'headers', 'body', 'auth', 'preScript', 'postScript', 'mock', 'examples'];
+});
+
+const handleProtocolChange = (newProtocol: typeof REQUEST_PROTOCOLS[number]) => {
+  form.value.protocol = newProtocol;
+  if (newProtocol === 'websocket') {
+    form.value.method = 'WS';
+    if (!form.value.url || form.value.url.startsWith('http')) {
+      form.value.url = form.value.url.replace(/^https?:\/\//, 'wss://') || 'wss://';
+    }
+    if (activeTab.value === 'body' || activeTab.value === 'mock') {
+      activeTab.value = 'params';
+    }
+  } else if (form.value.method === 'WS') {
+    form.value.method = 'GET';
+    if (form.value.url.startsWith('ws')) {
+      form.value.url = form.value.url.replace(/^wss?:\/\//, 'https://');
+    }
+  }
+};
+
+const handleSocketConfigChange = (config: import('../../server/db/schema/savedRequest').SocketConfig) => {
+  socketConfig.value = config;
+};
 const COMMON_HEADERS = [
   'Accept',
   'Accept-Encoding',
@@ -246,11 +301,6 @@ const RAW_CONTENT_TYPES = [
   'application/javascript',
   'application/xml'
 ] as const;
-
-const form = ref({
-  method: props.request.method as typeof HTTP_METHODS[number],
-  url: props.request.url
-});
 
 const requestName = ref(props.request.name);
 const isEditingName = ref(false);
@@ -402,6 +452,9 @@ const responsePanelHeight = computed(() => {
 });
 
 const requestContentStyle = computed(() => {
+  if (isWebSocket.value) {
+    return { flex: '1 1 0%', minHeight: '0' };
+  }
   if (isMobile.value || !hasResponse.value) {
     return {};
   }
@@ -410,6 +463,12 @@ const requestContentStyle = computed(() => {
   }
   return { height: `${requestPanelHeight.value}px`, flex: 'none' };
 });
+
+const tabPanelClass = computed(() =>
+  isWebSocket.value
+    ? 'ws-tab-panel flex flex-col min-h-0 overflow-hidden'
+    : 'flex-1 flex flex-col overflow-hidden'
+);
 
 // Drag functionality
 const startDrag = (e: MouseEvent) => {
@@ -649,6 +708,7 @@ const isMounted = ref(false);
 
 // Shared type for request comparison state used by both originalRequestState and lastSavedState
 interface RequestCompareState {
+  protocol: import('../../server/db/schema/savedRequest').RequestProtocol;
   method: string;
   url: string;
   headers: Record<string, string> | null;
@@ -656,6 +716,7 @@ interface RequestCompareState {
   auth: any;
   inheritAuth: number;
   mockConfig: import('../../server/db/schema/savedRequest').MockConfig | null;
+  socketConfig: import('../../server/db/schema/savedRequest').SocketConfig;
   preScript: string;
   postScript: string;
   pathVariables: import('../../server/db/schema/savedRequest').RequestPathVariables | null;
@@ -671,6 +732,7 @@ const lastSavedState = ref<RequestCompareState | null>(null);
 // Function to capture current state as saved
 const captureCurrentStateAsSaved = () => {
   lastSavedState.value = {
+    protocol: form.value.protocol,
     method: form.value.method,
     url: form.value.url,
     headers: buildHeadersRecord(),
@@ -703,6 +765,7 @@ const captureCurrentStateAsSaved = () => {
     },
     inheritAuth: inheritFromParent.value ? 1 : 0,
     mockConfig: mockConfig.value,
+    socketConfig: socketConfig.value ? JSON.parse(JSON.stringify(socketConfig.value)) : null,
     preScript: preScript.value,
     postScript: postScript.value,
     pathVariables: buildPathVariablesRecord(),
@@ -802,8 +865,14 @@ const loadRequestData = async (request: HttpRequest) => {
     }
     
     // Reset all form state first to prevent stale data
-    form.value.method = request.method as typeof HTTP_METHODS[number];
+    form.value.protocol = (request.protocol || 'http') as typeof REQUEST_PROTOCOLS[number];
+    form.value.method = request.method as typeof HTTP_METHODS[number] | 'WS';
     form.value.url = request.url;
+    socketConfig.value = request.socketConfig || {
+      subprotocols: [],
+      initialMessage: '',
+      messageFormat: 'text'
+    };
   
     // Reset query params from URL first, then merge with persisted queryParams if available
     const urlParams = parseUrlQuery(request.url);
@@ -1183,6 +1252,7 @@ const loadRequestData = async (request: HttpRequest) => {
     const builtBody = buildBodyForSave();
     const builtParamNotes = buildParamNotes();
     originalRequestState.value = {
+      protocol: form.value.protocol,
       method: form.value.method,
       url: form.value.url,
       headers: JSON.parse(JSON.stringify(buildHeadersRecord())),
@@ -1216,6 +1286,7 @@ const loadRequestData = async (request: HttpRequest) => {
       })) || {},
       inheritAuth: inheritFromParent.value ? 1 : 0,
       mockConfig: mockConfig.value ? JSON.parse(JSON.stringify(mockConfig.value)) : null,
+      socketConfig: socketConfig.value ? JSON.parse(JSON.stringify(socketConfig.value)) : null,
       preScript: preScript.value || '',
       postScript: postScript.value || '',
       pathVariables: JSON.parse(JSON.stringify(buildPathVariablesRecord())),
@@ -1577,6 +1648,7 @@ const buildDraftSnapshot = (): RequestDraftSnapshot => {
   } || null;
 
   return {
+    protocol: form.value.protocol,
     method: form.value.method,
     url: form.value.url,
     headers: buildHeadersRecord(),
@@ -1584,6 +1656,7 @@ const buildDraftSnapshot = (): RequestDraftSnapshot => {
     auth: currentAuth,
     inheritAuth: inheritFromParent.value ? 1 : 0,
     mockConfig: mockConfig.value,
+    socketConfig: socketConfig.value,
     preScript: preScript.value,
     postScript: postScript.value,
     pathVariables: buildPathVariablesRecord(),
@@ -2330,6 +2403,7 @@ const hasUnsavedChanges = computed(() => {
   // NEVER use props.request directly as it can be mutated by parent component
   // Deep clone fallback objects to ensure immutability consistency with originalRequestState
   const compareState = lastSavedState.value || originalRequestState.value || {
+    protocol: props.request.protocol || 'http',
     method: props.request.method,
     url: props.request.url,
     headers: props.request.headers ? JSON.parse(JSON.stringify(props.request.headers)) : {},
@@ -2337,11 +2411,15 @@ const hasUnsavedChanges = computed(() => {
     auth: props.request.auth ? JSON.parse(JSON.stringify(props.request.auth)) : null,
     inheritAuth: (props.request as any).inheritAuth || 0,
     mockConfig: props.request.mockConfig ? JSON.parse(JSON.stringify(props.request.mockConfig)) : null,
+    socketConfig: props.request.socketConfig ? JSON.parse(JSON.stringify(props.request.socketConfig)) : null,
     preScript: props.request.preScript,
     postScript: props.request.postScript,
     pathVariables: props.request.pathVariables ? JSON.parse(JSON.stringify(props.request.pathVariables)) : {},
     paramNotes: (props.request as any).paramNotes ? JSON.parse(JSON.stringify((props.request as any).paramNotes)) : null
   };
+
+  const protocolChanged = form.value.protocol !== (compareState.protocol || 'http');
+  const socketConfigChanged = JSON.stringify(socketConfig.value) !== JSON.stringify(compareState.socketConfig || null);
 
   const urlChanged = currentUrl !== compareState.url;
   const methodChanged = currentMethod !== compareState.method;
@@ -2358,7 +2436,7 @@ const hasUnsavedChanges = computed(() => {
   const pathVarsChanged = JSON.stringify(currentPathVariables) !== JSON.stringify(compareState.pathVariables || {});
   const paramNotesChanged = JSON.stringify(currentParamNotes) !== JSON.stringify(compareState.paramNotes || null);
 
-  return urlChanged || methodChanged || headersChanged || bodyChanged || authChanged || inheritAuthChanged || mockConfigChanged || preScriptChanged || postScriptChanged || pathVarsChanged || paramNotesChanged;
+  return protocolChanged || socketConfigChanged || urlChanged || methodChanged || headersChanged || bodyChanged || authChanged || inheritAuthChanged || mockConfigChanged || preScriptChanged || postScriptChanged || pathVarsChanged || paramNotesChanged;
 });
 
 const getContentType = () => {
@@ -2936,8 +3014,10 @@ const buildCurrentRequestState = () => ({
   folderId: props.request.folderId,
   collectionId: props.request.collectionId,
   name: requestName.value,
+  protocol: form.value.protocol,
   method: form.value.method,
   url: form.value.url,
+  socketConfig: socketConfig.value,
   headers: buildHeadersRecord(),
   body: buildBodyForSave(),
   auth: {
@@ -3222,7 +3302,7 @@ watch(inheritFromParent, (newValue) => {
 })
 
 const sendRequest = async () => {
-  if (!form.value.url) return;
+  if (!form.value.url || isWebSocket.value) return;
 
   if (authType.value === 'oauth2' && oauth2.value.accessToken) {
     await autoRefreshToken();
@@ -3596,8 +3676,21 @@ defineExpose({
     <div class="flex-1 flex flex-col overflow-hidden min-h-0">
       <div class="p-4 border-b border-border-default bg-bg-secondary">
         <div class="flex gap-2 bg-bg-input border border-border-default rounded-lg p-1 min-w-0">
-          <select 
+          <select
             v-if="!readOnly"
+            :value="form.protocol"
+            class="py-2.5 px-2 bg-transparent border-none border-r border-border-default font-semibold text-xs cursor-pointer min-w-[90px] shrink-0 focus:outline-none text-text-primary uppercase"
+            @change="handleProtocolChange(($event.target as HTMLSelectElement).value as typeof REQUEST_PROTOCOLS[number])"
+          >
+            <option value="http">HTTP</option>
+            <option value="websocket">WebSocket</option>
+          </select>
+          <span
+            v-else
+            class="py-2.5 px-2 border-r border-border-default font-semibold text-xs min-w-[90px] shrink-0 text-center uppercase text-text-secondary"
+          >{{ form.protocol === 'websocket' ? 'WS' : 'HTTP' }}</span>
+          <select 
+            v-if="!readOnly && !isWebSocket"
             v-model="form.method" 
             :class="[
               'py-2.5 px-3 bg-transparent border-none border-r border-border-default font-semibold text-sm cursor-pointer min-w-[100px] shrink-0 focus:outline-none',
@@ -3606,6 +3699,10 @@ defineExpose({
           >
             <option v-for="m in HTTP_METHODS" :key="m" :value="m">{{ m }}</option>
           </select>
+          <span
+            v-else-if="isWebSocket"
+            class="py-2.5 px-3 border-r border-border-default font-semibold text-sm min-w-[100px] shrink-0 text-center text-method-ws"
+          >WS</span>
           <span
             v-else
             class="py-2.5 px-3 border-r border-border-default font-semibold text-sm min-w-[100px] shrink-0 text-center"
@@ -3616,12 +3713,13 @@ defineExpose({
             :disabled="readOnly"
             :variables="environmentVariables"
             :path-variables="pathVariables.filter(v => v.enabled).map(v => v.key)"
-            placeholder="https://api.example.com/endpoint"
+            :placeholder="isWebSocket ? 'wss://api.example.com/socket' : 'https://api.example.com/endpoint'"
             class="flex-1 min-w-0 text-text-primary font-mono text-sm placeholder:text-text-muted overflow-hidden url-input-inline"
             @update:variable="(...args) => emit('update:variable', ...args)"
-            @keyup.enter="sendRequest"
+            @keyup.enter="!isWebSocket && sendRequest()"
           />
           <button
+            v-if="!isWebSocket"
             :class="[
               'shrink-0 py-2.5 px-8 font-semibold rounded-md border-none cursor-pointer transition-all duration-fast flex items-center gap-2',
               isLoading
@@ -3650,7 +3748,7 @@ defineExpose({
       <div class="border-b border-border-default bg-bg-secondary">
         <div class="flex gap-0">
           <button
-            v-for="tab in (readOnly ? ['params', 'headers', 'body', 'auth', 'examples'] : ['params', 'headers', 'body', 'auth', 'preScript', 'postScript', 'mock', 'examples']) as TabType[]"
+            v-for="tab in availableTabs"
             :key="tab"
             @click="activeTab = tab"
             class="px-4 py-3 text-xs font-medium capitalize transition-all duration-fast border-b-2 focus:outline-none whitespace-nowrap relative overflow-hidden group"
@@ -3680,10 +3778,13 @@ defineExpose({
         <!-- REQUEST CONTENT AREA (takes remaining space before response panel) -->
         <div 
           class="request-content-area flex flex-col overflow-hidden min-h-0"
-          :class="{ 'flex-1': !isMobile && hasResponse && isResponseCollapsed }"
+          :class="{
+            'flex-1': isWebSocket || (!isMobile && hasResponse && isResponseCollapsed),
+            'is-websocket-layout': isWebSocket
+          }"
           :style="requestContentStyle"
         >
-          <div v-if="activeTab === 'params'" class="flex-1 flex flex-col overflow-hidden">
+          <div v-if="activeTab === 'params'" :class="tabPanelClass">
           <div class="p-2 border-b border-border-default bg-bg-secondary flex items-center justify-between">
             <span class="text-xs text-text-muted">{{ queryParams.filter(p => p.enabled).length }} params</span>
             <button 
@@ -3824,7 +3925,7 @@ defineExpose({
           </div>
         </div>
 
-        <div v-else-if="activeTab === 'headers'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'headers'" :class="tabPanelClass">
           <div class="p-2 border-b border-border-default bg-bg-secondary flex items-center justify-between">
             <span class="text-xs text-text-muted">{{ headers.filter(h => h.enabled).length }} headers</span>
             <div class="flex items-center gap-3">
@@ -3921,7 +4022,7 @@ defineExpose({
           </datalist>
         </div>
 
-        <div v-else-if="activeTab === 'body'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'body'" :class="tabPanelClass">
           <div class="p-2 border-b border-border-default bg-bg-secondary">
             <select 
               v-if="!readOnly"
@@ -4215,7 +4316,7 @@ defineExpose({
           </div>
         </div>
 
-        <div v-else-if="activeTab === 'auth'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'auth'" :class="tabPanelClass">
           <div class="flex-1 overflow-auto p-4">
             <div v-if="readOnly" class="space-y-4">
               <p class="text-xs text-text-muted">
@@ -4688,7 +4789,7 @@ defineExpose({
         </div>
 
         <!-- Pre-Script Tab -->
-        <div v-else-if="activeTab === 'preScript'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'preScript'" :class="tabPanelClass">
           <div class="p-3 border-b border-border-default bg-bg-secondary">
             <p class="text-xs text-text-muted">
               JavaScript code to run before the request. Use <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.environment.set("key", "value")</code> to update environment variables.
@@ -4712,7 +4813,7 @@ defineExpose({
         </div>
 
         <!-- Post-Script Tab -->
-        <div v-else-if="activeTab === 'postScript'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'postScript'" :class="tabPanelClass">
           <div class="p-3 border-b border-border-default bg-bg-secondary">
             <p class="text-xs text-text-muted">
               JavaScript code to run after the request. Access response via <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.response</code>.
@@ -4737,19 +4838,34 @@ defineExpose({
         </div>
 
         <!-- Mock Tab -->
-        <div v-else-if="activeTab === 'mock'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'mock'" :class="tabPanelClass">
           <MockConfiguration v-model="mockConfig" />
         </div>
 
         <!-- Examples Tab -->
-        <div v-else-if="activeTab === 'examples'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-else-if="activeTab === 'examples'" :class="tabPanelClass">
           <RequestExampleManager :request-id="props.request.id" :read-only="readOnly" />
+        </div>
+
+        <div
+          v-if="isWebSocket"
+          class="ws-panel-host flex-1 min-h-0 overflow-hidden flex flex-col border-t border-border-default"
+        >
+          <WebSocketPanel
+            class="h-full min-h-0"
+            :url="form.url"
+            :socket-config="socketConfig"
+            :environment-id="environmentId"
+            :auth-query-params="_buildAuthQueryParams()"
+            :pre-script="preScript"
+            @socket-config-change="handleSocketConfigChange"
+          />
         </div>
         </div><!-- /REQUEST CONTENT AREA -->
 
         <!-- RESIZE HANDLE (only on desktop when there's a response) -->
         <div
-          v-if="!isMobile && hasResponse && !isResponseCollapsed"
+          v-if="!isMobile && hasResponse && !isResponseCollapsed && !isWebSocket"
           class="resize-handle group flex-shrink-0"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="startDrag"
@@ -4769,7 +4885,7 @@ defineExpose({
 
         <!-- RESPONSE PANEL (Always visible, collapsible, at the bottom) -->
         <div 
-          v-if="!isMobile"
+          v-if="!isMobile && !isWebSocket"
           class="response-panel flex flex-col overflow-hidden border-t border-border-default bg-bg-secondary flex-shrink-0 min-h-0 mt-auto"
           :class="{ 'is-collapsed': isResponseCollapsed || !hasResponse }"
           :style="{ height: !hasResponse ? COLLAPSED_HEIGHT + 'px' : responsePanelHeight + 'px' }"
@@ -5666,6 +5782,21 @@ kbd {
 .request-content-area {
   position: relative;
   min-height: 0; /* Important for flex child to shrink properly */
+}
+
+.request-content-area.is-websocket-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-tab-panel {
+  flex: 0 1 auto;
+  max-height: min(200px, 28vh);
+}
+
+.ws-panel-host {
+  flex: 1 1 0%;
+  min-height: 180px;
 }
 
 /* Ensure proper stacking order */

@@ -5,7 +5,8 @@ export const METHOD_COLORS = Object.freeze({
   PATCH: '#AB47BC',
   DELETE: '#EF5350',
   HEAD: '#8b5cf6',
-  OPTIONS: '#64748b'
+  OPTIONS: '#64748b',
+  WS: '#14b8a6'
 } as const);
 
 const METHOD_COLOR_CLASSES: Record<string, string> = {
@@ -15,7 +16,8 @@ const METHOD_COLOR_CLASSES: Record<string, string> = {
   PATCH: 'text-method-patch',
   DELETE: 'text-method-delete',
   HEAD: 'text-method-head',
-  OPTIONS: 'text-method-options'
+  OPTIONS: 'text-method-options',
+  WS: 'text-method-ws'
 };
 
 export function getMethodColor(method: string): string {

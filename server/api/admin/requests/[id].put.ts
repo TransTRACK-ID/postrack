@@ -1,25 +1,14 @@
 import { db } from '../../../db';
-import { savedRequests, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type MockConfig, type RequestPathVariables, type RequestParamNotes, type QueryParam, type ParamSchema } from '../../../db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { savedRequests, type HttpMethod, type RequestHeaders, type RequestBody, type RequestAuth, type MockConfig, type RequestPathVariables, type RequestParamNotes, type QueryParam, type ParamSchema, type RequestProtocol, type SocketConfig } from '../../../db/schema';
+import { eq } from 'drizzle-orm';
 import { trackResourceAction } from '../../../services/usageTracking';
 import { cache, CacheKeys } from '../../../utils/cache';
-
-function parseJsonField<T>(value: unknown): T | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return null;
-    }
-  }
-  return value as T;
-}
+import { resolveRequestProtocol, validateRequestMethod, validateRequestUrl } from '../../../utils/request-protocol';
+import { formatSavedRequestResponse } from '../../../utils/saved-request-response';
 
 interface UpdateRequestBody {
   name?: string;
+  protocol?: RequestProtocol;
   method?: HttpMethod;
   url?: string;
   headers?: RequestHeaders;
@@ -36,9 +25,8 @@ interface UpdateRequestBody {
   paramSchema?: ParamSchema[];
   curlExample?: string;
   order?: number;
+  socketConfig?: SocketConfig;
 }
-
-const validMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id');
@@ -78,9 +66,12 @@ export default defineEventHandler(async (event) => {
       });
     }
 
+    const effectiveProtocol = resolveRequestProtocol(body.protocol, existing.protocol);
+
     // Prepare update data
     const updateData: Partial<{
       name: string;
+      protocol: RequestProtocol;
       method: HttpMethod;
       url: string;
       headers: RequestHeaders | null;
@@ -97,10 +88,18 @@ export default defineEventHandler(async (event) => {
       paramSchema: string | null;
       curlExample: string | null;
       order: number;
+      socketConfig: SocketConfig;
       updatedAt: Date;
     }> = {
       updatedAt: new Date()
     };
+
+    if (body.protocol !== undefined) {
+      updateData.protocol = effectiveProtocol;
+      if (effectiveProtocol === 'websocket') {
+        updateData.method = 'WS';
+      }
+    }
 
     // Validate and set name
     if (body.name !== undefined) {
@@ -132,42 +131,14 @@ export default defineEventHandler(async (event) => {
 
     // Validate and set method
     if (body.method !== undefined) {
-      if (typeof body.method !== 'string') {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'HTTP method must be a string'
-        });
-      }
-
-      const method = body.method.toUpperCase() as HttpMethod;
-      if (!validMethods.includes(method)) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Invalid HTTP method. Must be one of: ${validMethods.join(', ')}`
-        });
-      }
-
-      updateData.method = method;
+      updateData.method = validateRequestMethod(effectiveProtocol, body.method);
     }
 
     // Validate and set URL
     if (body.url !== undefined) {
-      if (typeof body.url !== 'string') {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'URL must be a string'
-        });
-      }
-
-      const trimmedUrl = body.url.trim();
-      if (trimmedUrl.length === 0) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'URL cannot be empty'
-        });
-      }
-
-      updateData.url = trimmedUrl;
+      updateData.url = validateRequestUrl(effectiveProtocol, body.url);
+    } else if (body.protocol === 'websocket' && existing.url) {
+      validateRequestUrl('websocket', existing.url);
     }
 
     // Set headers (can be null or object)
@@ -241,6 +212,11 @@ export default defineEventHandler(async (event) => {
       updateData.curlExample = body.curlExample || null;
     }
 
+    // Set socketConfig (can be null or object)
+    if (body.socketConfig !== undefined) {
+      updateData.socketConfig = body.socketConfig;
+    }
+
     // Validate and set order
     if (body.order !== undefined) {
       if (typeof body.order !== 'number' || !Number.isInteger(body.order)) {
@@ -280,26 +256,7 @@ export default defineEventHandler(async (event) => {
       cache.delete(CacheKeys.workspaceTree(user.id));
     }
 
-    return {
-      ...updatedRequest,
-      headers: parseJsonField<Record<string, string>>(updatedRequest.headers),
-      body: parseJsonField<Record<string, unknown> | string>(updatedRequest.body),
-      auth: parseJsonField<{
-        type: string;
-        credentials?: Record<string, string>;
-      } | null>(updatedRequest.auth),
-      mockConfig: parseJsonField<{
-        isEnabled: boolean;
-        statusCode: number;
-        delay: number;
-        responseBody: Record<string, unknown> | string | null;
-        responseHeaders: Record<string, string>;
-      } | null>(updatedRequest.mockConfig),
-      pathVariables: parseJsonField<Record<string, { value: string; description?: string }>>(updatedRequest.pathVariables),
-      paramNotes: parseJsonField<Record<string, Record<string, string>>>(updatedRequest.paramNotes),
-      queryParams: parseJsonField<Array<{ key: string; value: string; enabled: boolean; note?: string }>>(updatedRequest.queryParams),
-      paramSchema: parseJsonField<ParamSchema[]>(updatedRequest.paramSchema)
-    };
+    return formatSavedRequestResponse(updatedRequest);
   } catch (error: any) {
     // Re-throw if it's already an H3 error
     if (error.statusCode) {

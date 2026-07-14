@@ -2,11 +2,13 @@ import { db } from '../../../db';
 import { savedRequests, folders, collections, projects } from '../../../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { validateShareToken } from '../../../utils/permissions';
-import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables } from '../../../db/schema/savedRequest';
+import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables, RequestProtocol, SocketConfig } from '../../../db/schema/savedRequest';
+import { resolveRequestProtocol, validateRequestMethod, validateRequestUrl } from '../../../utils/request-protocol';
 
 interface CreateRequestBody {
   folderId: string;
   name: string;
+  protocol?: RequestProtocol;
   method: HttpMethod;
   url: string;
   headers?: RequestHeaders;
@@ -14,9 +16,8 @@ interface CreateRequestBody {
   auth?: RequestAuth;
   pathVariables?: RequestPathVariables;
   queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
+  socketConfig?: SocketConfig;
 }
-
-const validMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export default defineEventHandler(async (event) => {
   const token = getRouterParam(event, 'token');
@@ -71,19 +72,9 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (!body.method || !validMethods.includes(body.method.toUpperCase() as HttpMethod)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Invalid HTTP method. Must be one of: ${validMethods.join(', ')}`
-    });
-  }
-
-  if (!body.url || typeof body.url !== 'string') {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'URL is required'
-    });
-  }
+  const protocol = resolveRequestProtocol(body.protocol);
+  const method = validateRequestMethod(protocol, body.method || (protocol === 'websocket' ? 'WS' : 'GET'));
+  const trimmedUrl = validateRequestUrl(protocol, body.url);
 
   try {
     // Verify the folder belongs to the shared workspace
@@ -161,8 +152,10 @@ export default defineEventHandler(async (event) => {
       .values({
         folderId: body.folderId,
         name: body.name.trim(),
-        method: body.method.toUpperCase() as HttpMethod,
-        url: body.url.trim(),
+        protocol,
+        method,
+        url: trimmedUrl,
+        socketConfig: body.socketConfig || null,
         headers: body.headers || null,
         body: body.body || null,
         auth: body.auth || null,

@@ -164,10 +164,17 @@
       "breakpoints": true
     },
     {
-      "idx": 24,
+      "idx": 25,
       "version": "7",
-      "when": 1783590471609,
-      "tag": "0024_unusual_young_avengers",
+      "when": 1784000000000,
+      "tag": "0025_add_request_protocol",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783996563152,
+      "tag": "0026_futuristic_celestials",
       "breakpoints": true
     }
   ]

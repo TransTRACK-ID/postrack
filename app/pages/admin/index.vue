@@ -62,6 +62,7 @@ interface HttpRequest {
   folderId: string | null;
   collectionId?: string | null;
   name: string;
+  protocol?: 'http' | 'websocket';
   method: string;
   url: string;
   headers: Record<string, string> | null;
@@ -69,6 +70,11 @@ interface HttpRequest {
   auth: {
     type: string;
     credentials?: Record<string, string>;
+  } | null;
+  socketConfig?: {
+    subprotocols?: string[];
+    initialMessage?: string;
+    messageFormat?: 'text' | 'json';
   } | null;
   mockConfig?: {
     isEnabled: boolean;
@@ -368,7 +374,8 @@ const normalizeRequestForTab = (request: Partial<HttpRequest>): HttpRequest => {
   folderId: typeof request.folderId === 'string' || request.folderId === null ? request.folderId : '',
   collectionId: typeof request.collectionId === 'string' || request.collectionId === null ? request.collectionId : null,
   name: typeof request.name === 'string' && request.name.trim().length > 0 ? request.name : 'Untitled Request',
-  method: typeof request.method === 'string' ? request.method : 'GET',
+  protocol: request.protocol === 'websocket' ? 'websocket' : 'http',
+  method: typeof request.method === 'string' ? request.method : (request.protocol === 'websocket' ? 'WS' : 'GET'),
   url: typeof request.url === 'string' ? request.url : '',
   headers: request.headers && typeof request.headers === 'object' && !Array.isArray(request.headers)
     ? request.headers as Record<string, string>
@@ -380,6 +387,9 @@ const normalizeRequestForTab = (request: Partial<HttpRequest>): HttpRequest => {
   inheritAuth: typeof request.inheritAuth === 'number' ? request.inheritAuth : 0,
   mockConfig: request.mockConfig && typeof request.mockConfig === 'object'
     ? request.mockConfig as NonNullable<HttpRequest['mockConfig']>
+    : null,
+  socketConfig: request.socketConfig && typeof request.socketConfig === 'object'
+    ? request.socketConfig as NonNullable<HttpRequest['socketConfig']>
     : null,
   preScript: typeof request.preScript === 'string' ? request.preScript : '',
   postScript: typeof request.postScript === 'string' ? request.postScript : '',
@@ -1383,6 +1393,7 @@ const buildPersistedRequestFromDraft = (request: HttpRequest, draft?: RequestDra
 
   return normalizeRequestForTab({
     ...normalizedRequest,
+    protocol: draft.protocol ?? normalizedRequest.protocol,
     method: draft.method,
     url: draft.url,
     headers: draft.headers ?? null,
@@ -1390,6 +1401,7 @@ const buildPersistedRequestFromDraft = (request: HttpRequest, draft?: RequestDra
     auth: draft.auth ?? null,
     inheritAuth: draft.inheritAuth ?? normalizedRequest.inheritAuth ?? 0,
     mockConfig: draft.mockConfig ?? null,
+    socketConfig: draft.socketConfig ?? normalizedRequest.socketConfig ?? null,
     preScript: draft.preScript ?? '',
     postScript: draft.postScript ?? '',
     pathVariables: draft.pathVariables ?? null,
@@ -2525,7 +2537,7 @@ const handleCloseTabs = (tabKeys: string[]) => {
   }
 };
 
-const handleNewTab = () => {
+const handleNewTab = (protocol: 'http' | 'websocket' = 'http') => {
   if (!canEditWorkspace.value) return;
   flushActiveTabDraft();
   activeAdminPanel.value = 'requests';
@@ -2533,12 +2545,18 @@ const handleNewTab = () => {
     id: '',
     folderId: '',
     collectionId: null,
-    name: 'Untitled Request',
-    method: 'GET',
-    url: '',
+    name: protocol === 'websocket' ? 'Untitled WebSocket' : 'Untitled Request',
+    protocol,
+    method: protocol === 'websocket' ? 'WS' : 'GET',
+    url: protocol === 'websocket' ? 'wss://' : '',
     headers: null,
     body: null,
     auth: null,
+    socketConfig: protocol === 'websocket' ? {
+      subprotocols: [],
+      initialMessage: '',
+      messageFormat: 'text'
+    } : null,
     bodyFormat: 'none',
     jsonBody: '',
     rawBody: '',
@@ -2679,6 +2697,7 @@ const executeSave = async (request: any) => {
   if (request.id && request.id !== '') {
     const body = {
       name: request.name,
+      protocol: request.protocol || 'http',
       method: request.method,
       url: request.url,
       headers: request.headers,
@@ -2686,6 +2705,7 @@ const executeSave = async (request: any) => {
       auth: request.auth,
       inheritAuth: request.inheritAuth,
       mockConfig: request.mockConfig,
+      socketConfig: request.socketConfig,
       preScript: request.preScript,
       postScript: request.postScript,
       pathVariables: request.pathVariables,
@@ -2851,12 +2871,14 @@ const handleSave = async (data: any) => {
           method: 'POST',
           body: {
             name: data.name,
+            protocol: requestToSave.value.protocol || 'http',
             method: requestToSave.value.method,
             url: requestToSave.value.url,
             headers: requestToSave.value.headers,
             body: requestToSave.value.body,
             auth: requestToSave.value.auth,
             mockConfig: requestToSave.value.mockConfig,
+            socketConfig: requestToSave.value.socketConfig,
             preScript: requestToSave.value.preScript,
             postScript: requestToSave.value.postScript,
             pathVariables: requestToSave.value.pathVariables,
@@ -2869,6 +2891,7 @@ const handleSave = async (data: any) => {
           method: 'POST',
           body: {
             name: data.name,
+            protocol: requestToSave.value.protocol || 'http',
             method: requestToSave.value.method,
             url: requestToSave.value.url,
             headers: requestToSave.value.headers,
@@ -2876,6 +2899,7 @@ const handleSave = async (data: any) => {
             auth: requestToSave.value.auth,
             inheritAuth: requestToSave.value.inheritAuth,
             mockConfig: requestToSave.value.mockConfig,
+            socketConfig: requestToSave.value.socketConfig,
             preScript: requestToSave.value.preScript,
             postScript: requestToSave.value.postScript,
             pathVariables: requestToSave.value.pathVariables,
@@ -2906,6 +2930,7 @@ const handleSave = async (data: any) => {
         method: 'PUT',
         body: {
           name: data.name,
+          protocol: requestToSave.value.protocol || 'http',
           method: requestToSave.value.method,
           url: requestToSave.value.url,
           headers: requestToSave.value.headers,
@@ -2913,6 +2938,7 @@ const handleSave = async (data: any) => {
           auth: requestToSave.value.auth,
           inheritAuth: requestToSave.value.inheritAuth,
           mockConfig: requestToSave.value.mockConfig,
+          socketConfig: requestToSave.value.socketConfig,
           preScript: requestToSave.value.preScript,
           postScript: requestToSave.value.postScript,
           pathVariables: requestToSave.value.pathVariables,
@@ -4241,6 +4267,14 @@ onDeactivated(() => {
                 <line x1="9" y1="15" x2="15" y2="15"></line>
               </svg>
               New Request Tab
+            </button>
+            <button v-if="canEditWorkspace" class="btn btn-secondary" @click="handleNewTab('websocket')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                <path d="M8 12h8"></path>
+                <path d="M12 8v8"></path>
+              </svg>
+              New WebSocket Tab
             </button>
           </div>
         </div>

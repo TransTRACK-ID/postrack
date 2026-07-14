@@ -2,10 +2,12 @@ import { db } from '../../../../db';
 import { savedRequests, folders, collections, projects, workspaceShares } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { validateShareToken } from '../../../../utils/permissions';
-import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables } from '../../../../db/schema/savedRequest';
+import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables, RequestProtocol, SocketConfig } from '../../../../db/schema/savedRequest';
+import { resolveRequestProtocol, validateRequestMethod, validateRequestUrl } from '../../../../utils/request-protocol';
 
 interface UpdateRequestBody {
   name?: string;
+  protocol?: RequestProtocol;
   method?: HttpMethod;
   url?: string;
   headers?: RequestHeaders;
@@ -14,9 +16,8 @@ interface UpdateRequestBody {
   pathVariables?: RequestPathVariables;
   queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
   order?: number;
+  socketConfig?: SocketConfig;
 }
-
-const validMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export default defineEventHandler(async (event) => {
   const token = getRouterParam(event, 'token');
@@ -146,9 +147,12 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const effectiveProtocol = resolveRequestProtocol(body.protocol, existing[0].protocol);
+
     // Prepare update data
     const updateData: Partial<{
       name: string;
+      protocol: RequestProtocol;
       method: HttpMethod;
       url: string;
       headers: RequestHeaders | null;
@@ -157,10 +161,18 @@ export default defineEventHandler(async (event) => {
       pathVariables: RequestPathVariables | null;
       queryParams: string | null;
       order: number;
+      socketConfig: SocketConfig;
       updatedAt: Date;
     }> = {
       updatedAt: new Date()
     };
+
+    if (body.protocol !== undefined) {
+      updateData.protocol = effectiveProtocol;
+      if (effectiveProtocol === 'websocket') {
+        updateData.method = 'WS';
+      }
+    }
 
     // Validate and set name
     if (body.name !== undefined) {
@@ -190,44 +202,14 @@ export default defineEventHandler(async (event) => {
       updateData.name = trimmedName;
     }
 
-    // Validate and set method
     if (body.method !== undefined) {
-      if (typeof body.method !== 'string') {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'HTTP method must be a string'
-        });
-      }
-
-      const method = body.method.toUpperCase() as HttpMethod;
-      if (!validMethods.includes(method)) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Invalid HTTP method. Must be one of: ${validMethods.join(', ')}`
-        });
-      }
-
-      updateData.method = method;
+      updateData.method = validateRequestMethod(effectiveProtocol, body.method);
     }
 
-    // Validate and set URL
     if (body.url !== undefined) {
-      if (typeof body.url !== 'string') {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'URL must be a string'
-        });
-      }
-
-      const trimmedUrl = body.url.trim();
-      if (trimmedUrl.length === 0) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'URL cannot be empty'
-        });
-      }
-
-      updateData.url = trimmedUrl;
+      updateData.url = validateRequestUrl(effectiveProtocol, body.url);
+    } else if (body.protocol === 'websocket' && existing[0].url) {
+      validateRequestUrl('websocket', existing[0].url);
     }
 
     // Set headers (can be null or object)
@@ -253,6 +235,10 @@ export default defineEventHandler(async (event) => {
     // Set queryParams (can be null or array)
     if (body.queryParams !== undefined) {
       updateData.queryParams = body.queryParams ? JSON.stringify(body.queryParams) : null;
+    }
+
+    if (body.socketConfig !== undefined) {
+      updateData.socketConfig = body.socketConfig;
     }
 
     // Validate and set order

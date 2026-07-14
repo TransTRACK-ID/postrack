@@ -6,7 +6,21 @@ import { collections } from './collection';
 /**
  * Supported HTTP methods for saved requests
  */
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | 'WS';
+
+/**
+ * Request protocol type — HTTP REST or native WebSocket
+ */
+export type RequestProtocol = 'http' | 'websocket';
+
+/**
+ * WebSocket-specific persisted configuration
+ */
+export type SocketConfig = {
+  subprotocols?: string[];
+  initialMessage?: string;
+  messageFormat?: 'text' | 'json';
+} | null;
 
 /**
  * Type definitions for JSON fields
@@ -82,8 +96,10 @@ export const savedRequests = pgTable('saved_requests', {
   collectionId: text('collection_id')
     .references(() => collections.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  protocol: text('protocol').notNull().default('http').$type<RequestProtocol>(),
   method: text('method').notNull().$type<HttpMethod>(),
   url: text('url').notNull(),
+  socketConfig: text('socket_config').$type<SocketConfig>(),
   headers: text('headers').$type<RequestHeaders>(),
   body: text('body').$type<RequestBody>(),
   auth: text('auth').$type<RequestAuth>(),

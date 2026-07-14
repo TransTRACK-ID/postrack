@@ -16,6 +16,7 @@ interface HttpRequest {
   id: string;
   folderId: string;
   name: string;
+  protocol?: 'http' | 'websocket';
   method: string;
   url: string;
   headers: Record<string, string> | null;
@@ -24,6 +25,11 @@ interface HttpRequest {
     type: string;
     inherit?: boolean;
     credentials?: Record<string, string>;
+  } | null;
+  socketConfig?: {
+    subprotocols?: string[];
+    initialMessage?: string;
+    messageFormat?: 'text' | 'json';
   } | null;
   pathVariables?: Record<string, { value: string; description?: string }> | null;
   queryParams?: Array<{ key: string; value: string; enabled: boolean; note?: string }>;
@@ -453,6 +459,7 @@ const executeSharedSave = async (request: HttpRequest) => {
       credentials: 'include',
         body: {
         name: request.name,
+        protocol: request.protocol || 'http',
         method: request.method,
         url: request.url,
         headers: request.headers,
@@ -462,6 +469,7 @@ const executeSharedSave = async (request: HttpRequest) => {
         queryParams: request.queryParams,
         inheritAuth: request.inheritAuth,
         mockConfig: request.mockConfig,
+        socketConfig: request.socketConfig,
         preScript: request.preScript,
         postScript: request.postScript
       }

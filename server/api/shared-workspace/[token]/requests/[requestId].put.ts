@@ -2,10 +2,12 @@ import { db } from '../../../../db';
 import { savedRequests, folders, collections, projects } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { validateShareToken } from '../../../../utils/permissions';
-import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables, MockConfig } from '../../../../db/schema/savedRequest';
+import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables, MockConfig, RequestProtocol, SocketConfig } from '../../../../db/schema/savedRequest';
+import { resolveRequestProtocol, validateRequestMethod, validateRequestUrl } from '../../../../utils/request-protocol';
 
 interface UpdateRequestBody {
   name?: string;
+  protocol?: RequestProtocol;
   method?: HttpMethod;
   url?: string;
   headers?: RequestHeaders | null;
@@ -17,6 +19,7 @@ interface UpdateRequestBody {
   mockConfig?: MockConfig;
   preScript?: string;
   postScript?: string;
+  socketConfig?: SocketConfig;
 }
 
 export default defineEventHandler(async (event) => {
@@ -147,14 +150,27 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const effectiveProtocol = resolveRequestProtocol(body.protocol, existingRequest[0].protocol);
+
     // Update the request
     const updateData: Record<string, unknown> = {
       updatedAt: new Date()
     };
 
+    if (body.protocol !== undefined) {
+      updateData.protocol = effectiveProtocol;
+      if (effectiveProtocol === 'websocket') {
+        updateData.method = 'WS';
+      }
+    }
+
     if (body.name !== undefined) updateData.name = body.name;
-    if (body.method !== undefined) updateData.method = body.method;
-    if (body.url !== undefined) updateData.url = body.url;
+    if (body.method !== undefined) updateData.method = validateRequestMethod(effectiveProtocol, body.method);
+    if (body.url !== undefined) {
+      updateData.url = validateRequestUrl(effectiveProtocol, body.url);
+    } else if (body.protocol === 'websocket' && existingRequest[0].url) {
+      validateRequestUrl('websocket', existingRequest[0].url);
+    }
     if (body.headers !== undefined) updateData.headers = body.headers;
     if (body.body !== undefined) updateData.body = body.body;
     if (body.auth !== undefined) updateData.auth = body.auth;
@@ -164,6 +180,7 @@ export default defineEventHandler(async (event) => {
     if (body.mockConfig !== undefined) updateData.mockConfig = body.mockConfig;
     if (body.preScript !== undefined) updateData.preScript = body.preScript;
     if (body.postScript !== undefined) updateData.postScript = body.postScript;
+    if (body.socketConfig !== undefined) updateData.socketConfig = body.socketConfig;
 
     const updatedRequest = await db
       .update(savedRequests)
