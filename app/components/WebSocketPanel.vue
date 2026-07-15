@@ -6,6 +6,7 @@ import type { SocketConfig } from '../../server/db/schema/savedRequest';
 
 const props = defineProps<{
   url: string;
+  headers?: Record<string, string>;
   socketConfig: SocketConfig;
   environmentId?: string;
   authQueryParams?: Record<string, string>;
@@ -89,6 +90,7 @@ const connectionStatusClass = computed(() => {
 
 const canSend = computed(() => isConnected.value && messageInput.value.trim().length > 0);
 const canConnect = computed(() => Boolean(props.url?.trim()) && !isConnecting.value);
+const usesHeaderProxy = computed(() => Boolean(props.headers && Object.keys(props.headers).length > 0));
 
 const connectButtonLabel = computed(() => {
   if (isConnecting.value) return 'Connecting';
@@ -114,6 +116,7 @@ async function handleConnectToggle() {
 
   await connect({
     url: props.url,
+    headers: props.headers,
     subprotocols,
     initialMessage: initialMessage.value,
     environmentId: props.environmentId,
@@ -177,6 +180,14 @@ function handleKeydown(event: KeyboardEvent) {
         :title="lastError"
       >
         {{ lastError }}
+      </span>
+
+      <span
+        v-if="usesHeaderProxy"
+        class="text-[11px] text-text-muted"
+        title="Custom headers (including Bearer auth) are sent through the Postrack WebSocket proxy"
+      >
+        Proxy
       </span>
 
       <button

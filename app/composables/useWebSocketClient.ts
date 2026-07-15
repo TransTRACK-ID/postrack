@@ -1,12 +1,14 @@
 /**
  * WebSocket Client Composable
  *
- * Handles native WebSocket connections from the browser with env variable
- * substitution, auth via query params, and message logging.
+ * Handles WebSocket connections from the browser with env variable
+ * substitution, auth via query params, optional server proxy for custom
+ * headers, and message logging.
  */
 
 import { ref, computed } from 'vue';
 import { substituteVariables } from '~/composables/useClientRequest';
+import type { WebSocketProxyServerMessage } from '../../server/utils/websocket-proxy';
 
 export type WebSocketConnectionState =
   | 'idle'
@@ -37,16 +39,19 @@ export interface WebSocketConnectResult {
   };
   resolvedUrl?: string;
   variableWarnings?: string[];
+  usedProxy?: boolean;
 }
 
 export interface WebSocketClientOptions {
   url: string;
+  headers?: Record<string, string>;
   subprotocols?: string[];
   initialMessage?: string;
   environmentId?: string;
   authQueryParams?: Record<string, string>;
   preScript?: string;
   signal?: AbortSignal;
+  forceProxy?: boolean;
 }
 
 let messageCounter = 0;
@@ -54,6 +59,20 @@ let messageCounter = 0;
 function createMessageId(): string {
   messageCounter += 1;
   return `ws-msg-${Date.now()}-${messageCounter}`;
+}
+
+export function getProxyWebSocketUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'ws://localhost:3000/_ws/proxy';
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/_ws/proxy`;
+}
+
+function shouldUseProxy(headers?: Record<string, string>, forceProxy?: boolean): boolean {
+  if (forceProxy) return true;
+  return Boolean(headers && Object.keys(headers).length > 0);
 }
 
 function appendQueryParams(url: string, params: Record<string, string>): string {
@@ -97,13 +116,13 @@ async function executePreScript(
   environmentId: string
 ): Promise<{
   success: boolean;
-  modifiedContext?: { url?: string };
+  modifiedContext?: { url?: string; headers?: Record<string, string> };
   errors: string[];
 }> {
   try {
     const result = await $fetch<{
       success: boolean;
-      modifiedContext?: { url?: string };
+      modifiedContext?: { url?: string; headers?: Record<string, string> };
       errors: string[];
     }>('/api/scripts/execute', {
       method: 'POST',
@@ -125,12 +144,38 @@ async function executePreScript(
   }
 }
 
+function resolveHeaders(
+  headers: Record<string, string> | undefined,
+  variables: Record<string, string>
+): Record<string, string> {
+  if (!headers) return {};
+
+  return Object.entries(headers).reduce((acc, [key, value]) => {
+    if (!key.trim()) return acc;
+    acc[key] = substituteVariables(value, variables);
+    return acc;
+  }, {} as Record<string, string>);
+}
+
+function parseProxyServerMessage(raw: string): WebSocketProxyServerMessage | null {
+  try {
+    const parsed = JSON.parse(raw) as WebSocketProxyServerMessage;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function useWebSocketClient() {
   const connectionState = ref<WebSocketConnectionState>('idle');
   const messages = ref<WebSocketMessage[]>([]);
   const lastError = ref<string | null>(null);
   const connectTiming = ref<WebSocketConnectResult['timing'] | null>(null);
   const resolvedUrl = ref<string | null>(null);
+  const usedProxy = ref(false);
 
   let socket: WebSocket | null = null;
   let abortController: AbortController | null = null;
@@ -174,6 +219,7 @@ export function useWebSocketClient() {
     lastError.value = null;
     connectTiming.value = null;
     resolvedUrl.value = null;
+    usedProxy.value = false;
 
     abortController = new AbortController();
     if (options.signal) {
@@ -184,7 +230,9 @@ export function useWebSocketClient() {
 
     try {
       let url = options.url.trim();
+      let headers = { ...(options.headers || {}) };
       const variableWarnings: string[] = [];
+      let variables: Record<string, string> = {};
 
       if (!url) {
         throw new Error('WebSocket URL is required');
@@ -195,8 +243,9 @@ export function useWebSocketClient() {
       }
 
       if (options.environmentId) {
-        const variables = await fetchEnvironmentVariables(options.environmentId);
+        variables = await fetchEnvironmentVariables(options.environmentId);
         url = substituteVariables(url, variables);
+        headers = resolveHeaders(headers, variables);
 
         const unresolvedPattern = /(\{\{|%7B%7B)([^{}%]+)(\}\}|%7D%7D)/g;
         let match;
@@ -212,7 +261,7 @@ export function useWebSocketClient() {
       if (options.preScript && options.environmentId) {
         const preResult = await executePreScript(
           options.preScript,
-          { url, method: 'WS', headers: {}, body: null },
+          { url, method: 'WS', headers, body: null },
           options.environmentId
         );
 
@@ -223,12 +272,140 @@ export function useWebSocketClient() {
         if (preResult.success && preResult.modifiedContext?.url) {
           url = preResult.modifiedContext.url;
         }
+
+        if (preResult.success && preResult.modifiedContext?.headers) {
+          headers = {
+            ...headers,
+            ...preResult.modifiedContext.headers
+          };
+        }
       }
 
       resolvedUrl.value = url;
+      const viaProxy = shouldUseProxy(headers, options.forceProxy);
+      usedProxy.value = viaProxy;
 
       await new Promise<void>((resolve, reject) => {
         try {
+          if (viaProxy) {
+            const proxyUrl = getProxyWebSocketUrl();
+            socket = new WebSocket(proxyUrl);
+            let upstreamConnected = false;
+
+            socket.onopen = () => {
+              socket?.send(JSON.stringify({
+                type: 'connect',
+                url,
+                headers,
+                subprotocols: options.subprotocols || []
+              }));
+            };
+
+            socket.onmessage = (event: MessageEvent) => {
+              if (typeof event.data !== 'string') return;
+
+              const proxyMessage = parseProxyServerMessage(event.data);
+              if (!proxyMessage) {
+                messages.value.push({
+                  id: createMessageId(),
+                  direction: 'received',
+                  type: 'text',
+                  payload: event.data,
+                  timestamp: Date.now()
+                });
+                return;
+              }
+
+              if (proxyMessage.type === 'connected') {
+                upstreamConnected = true;
+                connectionState.value = 'connected';
+                addSystemMessage(`Connected to ${url} (via proxy)`);
+
+                if (options.initialMessage?.trim()) {
+                  socket?.send(JSON.stringify({
+                    type: 'send',
+                    payload: options.initialMessage
+                  }));
+                  messages.value.push({
+                    id: createMessageId(),
+                    direction: 'sent',
+                    type: 'text',
+                    payload: options.initialMessage,
+                    timestamp: Date.now()
+                  });
+                }
+
+                resolve();
+                return;
+              }
+
+              if (proxyMessage.type === 'error') {
+                const errorMessage = proxyMessage.message || 'WebSocket proxy error';
+                lastError.value = errorMessage;
+                connectionState.value = 'error';
+                addSystemMessage(errorMessage);
+                if (!upstreamConnected) {
+                  reject(new Error(errorMessage));
+                }
+                return;
+              }
+
+              if (proxyMessage.type === 'message') {
+                messages.value.push({
+                  id: createMessageId(),
+                  direction: 'received',
+                  type: 'text',
+                  payload: proxyMessage.payload,
+                  timestamp: Date.now()
+                });
+                return;
+              }
+
+              if (proxyMessage.type === 'close') {
+                if (connectionState.value === 'connected' || connectionState.value === 'connecting') {
+                  connectionState.value = 'closed';
+                }
+                addSystemMessage(
+                  `Disconnected (code: ${proxyMessage.code}${proxyMessage.reason ? `, reason: ${proxyMessage.reason}` : ''})`
+                );
+                socket = null;
+              }
+            };
+
+            socket.onerror = () => {
+              const errorMessage = 'WebSocket proxy connection error';
+              lastError.value = errorMessage;
+              connectionState.value = 'error';
+              addSystemMessage(errorMessage);
+              if (!upstreamConnected) {
+                reject(new Error(errorMessage));
+              }
+            };
+
+            socket.onclose = (event: CloseEvent) => {
+              if (!upstreamConnected) {
+                const errorMessage = event.reason || 'WebSocket proxy connection closed before upstream connected';
+                lastError.value = errorMessage;
+                connectionState.value = 'error';
+                addSystemMessage(`Connection failed: ${errorMessage}`);
+                reject(new Error(errorMessage));
+                return;
+              }
+
+              if (connectionState.value === 'connected' || connectionState.value === 'connecting') {
+                connectionState.value = 'closed';
+              }
+              if (event.code !== 1000) {
+                addSystemMessage(
+                  `Disconnected (code: ${event.code}${event.reason ? `, reason: ${event.reason}` : ''})`
+                );
+              }
+              socket = null;
+            };
+
+            return;
+          }
+
           socket = options.subprotocols?.length
             ? new WebSocket(url, options.subprotocols)
             : new WebSocket(url);
@@ -322,7 +499,8 @@ export function useWebSocketClient() {
         state: connectionState.value,
         timing,
         resolvedUrl: url,
-        variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined
+        variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
+        usedProxy: viaProxy
       };
     } catch (error: unknown) {
       const endTime = Date.now();
@@ -343,7 +521,8 @@ export function useWebSocketClient() {
         state: connectionState.value,
         error: message,
         timing,
-        resolvedUrl: resolvedUrl.value || undefined
+        resolvedUrl: resolvedUrl.value || undefined,
+        usedProxy: usedProxy.value
       };
     }
   }
@@ -353,7 +532,7 @@ export function useWebSocketClient() {
       return { success: false, error: 'Not connected' };
     }
 
-    let payload = message;
+    const payload = message;
 
     if (format === 'json') {
       try {
@@ -364,7 +543,12 @@ export function useWebSocketClient() {
     }
 
     try {
-      socket.send(payload);
+      if (usedProxy.value) {
+        socket.send(JSON.stringify({ type: 'send', payload }));
+      } else {
+        socket.send(payload);
+      }
+
       messages.value.push({
         id: createMessageId(),
         direction: 'sent',
@@ -385,6 +569,7 @@ export function useWebSocketClient() {
     lastError,
     connectTiming,
     resolvedUrl,
+    usedProxy,
     isConnected,
     isConnecting,
     connect,

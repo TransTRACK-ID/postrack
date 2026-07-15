@@ -4854,6 +4854,7 @@ defineExpose({
           <WebSocketPanel
             class="h-full min-h-0"
             :url="form.url"
+            :headers="{ ...buildHeadersRecord(), ..._buildAuthHeaders() }"
             :socket-config="socketConfig"
             :environment-id="environmentId"
             :auth-query-params="_buildAuthQueryParams()"

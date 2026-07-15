@@ -44,13 +44,15 @@
     "perfect-debounce": "^2.0.0",
     "pg": "^8.18.0",
     "uuid": "^13.0.0",
-    "vue": "latest"
+    "vue": "latest",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "drizzle-kit": "^0.30.1",
     "tsx": "^4.19.2",
     "vitest": "^3.0.0",
     "jsdom": "^26.0.0",
+    "@types/ws": "^8.18.1",
     "@vue/test-utils": "^2.4.0"
   }
 }

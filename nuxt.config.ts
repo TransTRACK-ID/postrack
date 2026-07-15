@@ -31,6 +31,9 @@ export default defineNuxtConfig({
     }
   },
   nitro: {
+    experimental: {
+      websocket: true
+    },
     storage: {
       // File storage is now deprecated - all data stored in SQLite
       // Keeping minimal config for any future storage needs
