@@ -2691,6 +2691,10 @@ const getJsonPreviewHtml = () => {
 <head>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      overflow: auto;
+    }
     body {
       font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, Monaco, monospace;
       font-size: 13px;
@@ -3000,13 +3004,6 @@ const handleKeydown = (e: KeyboardEvent) => {
     e.preventDefault();
     openResponseSearch();
   }
-};
-
-// Handle mousedown on preview container to manage focus
-const handlePreviewMousedown = () => {
-  // When user interacts with preview, we keep focus on parent window
-  // so keyboard shortcuts continue to work
-  window.focus();
 };
 
 const buildCurrentRequestState = () => ({
@@ -5251,23 +5248,18 @@ defineExpose({
                     </div>
                     <div
                       ref="previewContainerRef"
-                      class="flex-1 overflow-hidden rounded border border-border-default bg-bg-tertiary relative"
-                      @mousedown="handlePreviewMousedown"
+                      class="flex-1 min-h-0 overflow-hidden rounded border border-border-default bg-bg-tertiary relative"
                     >
                       <iframe
                         v-if="isHtmlResponse()"
                         :srcdoc="getResponseText()"
                         class="w-full h-full border-none"
                         sandbox="allow-same-origin"
-                        tabindex="-1"
-                        inert
                       ></iframe>
                       <iframe
                         v-else-if="isJsonResponse()"
                         :srcdoc="getJsonPreviewHtml()"
                         class="w-full h-full border-none"
-                        tabindex="-1"
-                        inert
                       ></iframe>
                       <div v-else class="w-full h-full flex items-center justify-center text-text-muted text-xs">
                         Preview not available for this content type
