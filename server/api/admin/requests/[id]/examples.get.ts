@@ -9,6 +9,8 @@ interface ExampleResponse {
   statusCode: number;
   headers: Record<string, string> | null;
   body: Record<string, unknown> | string | null;
+  requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
+  requestBody: Record<string, unknown> | string | null;
   isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -53,6 +55,8 @@ export default defineEventHandler(async (event) => {
       statusCode: example.statusCode,
       headers: example.headers,
       body: example.body,
+      requestQueryParams: example.requestQueryParams,
+      requestBody: example.requestBody,
       isDefault: example.isDefault,
       createdAt: example.createdAt,
       updatedAt: example.updatedAt

@@ -7,6 +7,8 @@ interface CreateExampleBody {
   statusCode: number;
   headers?: Record<string, string>;
   body?: Record<string, unknown> | string;
+  requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>;
+  requestBody?: Record<string, unknown> | string;
   isDefault?: boolean;
 }
 
@@ -92,6 +94,8 @@ export default defineEventHandler(async (event) => {
         statusCode: body.statusCode,
         headers: body.headers || null,
         body: body.body || null,
+        requestQueryParams: body.requestQueryParams || null,
+        requestBody: body.requestBody || null,
         isDefault: body.isDefault || false
       })
       .returning())[0];
@@ -103,6 +107,8 @@ export default defineEventHandler(async (event) => {
       statusCode: newExample.statusCode,
       headers: newExample.headers,
       body: newExample.body,
+      requestQueryParams: newExample.requestQueryParams,
+      requestBody: newExample.requestBody,
       isDefault: newExample.isDefault,
       createdAt: newExample.createdAt,
       updatedAt: newExample.updatedAt

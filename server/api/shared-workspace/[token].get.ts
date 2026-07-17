@@ -9,6 +9,8 @@ interface RequestExampleItem {
   statusCode: number;
   headers: Record<string, string> | null;
   body: Record<string, unknown> | string | null;
+  requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
+  requestBody: Record<string, unknown> | string | null;
   isDefault: boolean;
 }
 
@@ -260,7 +262,9 @@ export default defineEventHandler(async (event) => {
     const allExamples = allExamplesRaw.map(ex => ({
       ...ex,
       headers: parseJsonField<Record<string, string>>(ex.headers),
-      body: parseJsonField<Record<string, unknown> | string>(ex.body)
+      body: parseJsonField<Record<string, unknown> | string>(ex.body),
+      requestQueryParams: parseJsonField<Array<{ key: string; value: string; enabled?: boolean }>>(ex.requestQueryParams),
+      requestBody: parseJsonField<Record<string, unknown> | string>(ex.requestBody)
     }));
 
     // Parse JSON fields from text columns and associate examples with requests
@@ -273,6 +277,8 @@ export default defineEventHandler(async (event) => {
           statusCode: ex.statusCode,
           headers: ex.headers,
           body: ex.body,
+          requestQueryParams: ex.requestQueryParams,
+          requestBody: ex.requestBody,
           isDefault: ex.isDefault
         }));
       return {

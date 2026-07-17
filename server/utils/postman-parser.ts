@@ -206,6 +206,8 @@ export interface ParsedPostmanResponseExample {
   statusText?: string;
   headers: RequestHeaders;
   body: string | Record<string, unknown> | null;
+  requestQueryParams?: Array<{ key: string; value: string; enabled: boolean }> | null;
+  requestBody?: RequestBody;
   responseTime?: number;
 }
 
@@ -642,6 +644,48 @@ function buildPersistedBody(
   return parsedBody;
 }
 
+function parseOriginalRequestSnapshot(originalRequest?: PostmanRequest): {
+  requestQueryParams: Array<{ key: string; value: string; enabled: boolean }> | null;
+  requestBody: RequestBody;
+} {
+  if (!originalRequest) {
+    return { requestQueryParams: null, requestBody: null };
+  }
+
+  const requestQueryParams: Array<{ key: string; value: string; enabled: boolean }> = [];
+  const urlObj = typeof originalRequest.url === 'object' ? originalRequest.url : null;
+  if (urlObj?.query && Array.isArray(urlObj.query)) {
+    for (const param of urlObj.query) {
+      if (param.key) {
+        requestQueryParams.push({
+          key: param.key,
+          value: param.value || '',
+          enabled: !param.disabled
+        });
+      }
+    }
+  }
+
+  const headers: RequestHeaders = {};
+  if (Array.isArray(originalRequest.header)) {
+    for (const header of originalRequest.header) {
+      if (header.key && !header.disabled) {
+        headers[header.key] = header.value || '';
+      }
+    }
+  }
+
+  const body = parsePostmanBody(originalRequest.body);
+  const bodyMode = normalizeBodyMode(originalRequest.body?.mode);
+  const formDataParams = parsePostmanBodyParams(originalRequest.body);
+  const requestBody = buildPersistedBody(bodyMode, body, formDataParams, headers);
+
+  return {
+    requestQueryParams: requestQueryParams.length > 0 ? requestQueryParams : null,
+    requestBody: requestBody ?? null
+  };
+}
+
 /**
  * Parse a Postman request
  */
@@ -781,12 +825,16 @@ function parsePostmanRequest(
         }
       }
 
+      const { requestQueryParams, requestBody } = parseOriginalRequestSnapshot(response.originalRequest);
+
       responseExamples.push({
         name: response.name || `Response ${response.code || 200}`,
         statusCode: response.code || 200,
         statusText: response.status,
         headers: exampleHeaders,
         body: parsedBody,
+        requestQueryParams,
+        requestBody,
         responseTime: response.responseTime
       });
     }

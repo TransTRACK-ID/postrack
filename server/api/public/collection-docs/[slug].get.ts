@@ -9,6 +9,8 @@ interface ExampleResponse {
   description: string;
   headers: Record<string, string> | null;
   body: any;
+  requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }> | null;
+  requestBody?: any;
 }
 
 interface PublicEndpoint {
@@ -47,6 +49,8 @@ interface PublicEndpoint {
       name: string;
       headers?: Record<string, string>;
       body?: any;
+      requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>;
+      requestBody?: any;
     }>;
   }>;
   headers: Record<string, string> | null;
@@ -189,7 +193,7 @@ function extractBodyContent(bodyField: unknown): { bodyContent: string | Record<
 function buildResponsesFromExamples(
   examples: ExampleResponse[],
   method: string
-): Record<string, { description: string; examples?: Array<{ name: string; headers?: Record<string, string>; body?: any }> }> {
+): Record<string, { description: string; examples?: Array<{ name: string; headers?: Record<string, string>; body?: any; requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>; requestBody?: any }> }> {
   // Group examples by status code
   const byStatus: Record<string, ExampleResponse[]> = {};
   examples.forEach(ex => {
@@ -198,7 +202,7 @@ function buildResponsesFromExamples(
     byStatus[key].push(ex);
   });
 
-  const responses: Record<string, { description: string; examples?: Array<{ name: string; headers?: Record<string, string>; body?: any }> }> = {};
+  const responses: Record<string, { description: string; examples?: Array<{ name: string; headers?: Record<string, string>; body?: any; requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>; requestBody?: any }> }> = {};
 
   // Build each status code entry with real examples
   for (const [statusCode, exs] of Object.entries(byStatus)) {
@@ -219,7 +223,9 @@ function buildResponsesFromExamples(
       examples: exs.map(ex => ({
         name: ex.name,
         headers: ex.headers || undefined,
-        body: ex.body
+        body: ex.body,
+        requestQueryParams: ex.requestQueryParams || undefined,
+        requestBody: ex.requestBody ?? undefined
       }))
     };
   }
@@ -277,7 +283,9 @@ function createPublicEndpoint(
       name: ex.name,
       description: ex.name,
       headers: parseJsonField<Record<string, string>>(ex.headers),
-      body: parseJsonField<any>(ex.body)
+      body: parseJsonField<any>(ex.body),
+      requestQueryParams: parseJsonField<Array<{ key: string; value: string; enabled?: boolean }>>(ex.requestQueryParams),
+      requestBody: parseJsonField<any>(ex.requestBody)
     }));
 
   // Parse URL to extract path and query parameters

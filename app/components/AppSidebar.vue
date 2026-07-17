@@ -50,6 +50,8 @@ interface HttpRequest {
     statusCode: number;
     headers: Record<string, string> | null;
     body: Record<string, unknown> | string | null;
+    requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
+    requestBody: Record<string, unknown> | string | null;
     isDefault: boolean;
   }>;
 }
@@ -1349,6 +1351,18 @@ const generateFolderPrompt = (folder: FolderWithRequestsAndChildren): string => 
       const defaultLabel = example.isDefault ? ' (Default)' : '';
       let result = '**Example ' + (index + 1) + defaultLabel + ': ' + example.name + '**\n';
       result += '**Status Code**: ' + example.statusCode + '\n\n';
+      if (example.requestQueryParams && example.requestQueryParams.length > 0) {
+        result += '**Request Query Params**:\n';
+        result += '```json\n';
+        result += JSON.stringify(example.requestQueryParams, null, 2) + '\n';
+        result += '```\n\n';
+      }
+      if (example.requestBody) {
+        result += '**Request Body**:\n';
+        result += '```json\n';
+        result += formatBody(example.requestBody) + '\n';
+        result += '```\n\n';
+      }
       result += '**Response Headers**:\n';
       result += maskSensitiveHeaders(example.headers) + '\n\n';
       result += '**Response Body**:\n';

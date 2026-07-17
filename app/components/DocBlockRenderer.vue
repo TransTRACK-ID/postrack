@@ -43,6 +43,8 @@ interface PublicEndpoint {
       name: string;
       headers?: Record<string, string>;
       body?: any;
+      requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>;
+      requestBody?: any;
     }>;
   }>;
   headers: Record<string, string> | null;

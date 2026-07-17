@@ -488,6 +488,8 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
             statusCode: example.statusCode,
             headers: sanitizeHeaders(example.headers),
             body: sanitizeBody(example.body),
+            requestQueryParams: sanitizeBody(example.requestQueryParams),
+            requestBody: sanitizeBody(example.requestBody),
             isDefault: i === 0 // First example is default
           });
           count++;

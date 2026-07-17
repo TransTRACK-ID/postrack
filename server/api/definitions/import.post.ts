@@ -167,6 +167,8 @@ function extractExamplesFromResponses(responses: any): Array<{
   statusCode: number;
   headers?: Record<string, string>;
   body?: Record<string, unknown> | string;
+  requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }> | null;
+  requestBody?: Record<string, unknown> | string | null;
   isDefault: boolean;
 }> {
   const examples: Array<{
@@ -174,6 +176,8 @@ function extractExamplesFromResponses(responses: any): Array<{
     statusCode: number;
     headers?: Record<string, string>;
     body?: Record<string, unknown> | string;
+    requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }> | null;
+    requestBody?: Record<string, unknown> | string | null;
     isDefault: boolean;
   }> = [];
 
@@ -200,6 +204,8 @@ function extractExamplesFromResponses(responses: any): Array<{
             statusCode: statusNum,
             headers: contentType ? { 'Content-Type': contentType } : undefined,
             body: example.value,
+            requestQueryParams: example['x-requestQueryParams'] || null,
+            requestBody: example['x-requestBody'] || null,
             isDefault: isFirst
           });
           isFirst = false;
@@ -207,11 +213,14 @@ function extractExamplesFromResponses(responses: any): Array<{
       }
       // Handle single example
       else if (contentObj.example) {
+        const singleExample = contentObj.example as any;
         examples.push({
           name: `Response ${statusCode}`,
           statusCode: statusNum,
           headers: contentType ? { 'Content-Type': contentType } : undefined,
-          body: contentObj.example,
+          body: singleExample.value ?? singleExample,
+          requestQueryParams: singleExample['x-requestQueryParams'] || null,
+          requestBody: singleExample['x-requestBody'] || null,
           isDefault: true
         });
       }
@@ -921,6 +930,8 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
             statusCode: example.statusCode,
             headers: example.headers,
             body: example.body,
+            requestQueryParams: example.requestQueryParams || null,
+            requestBody: example.requestBody || null,
             isDefault: example.isDefault
           });
           importedExamples++;
@@ -1003,6 +1014,8 @@ export default defineEventHandler(async (event): Promise<ImportSuccessResponse |
             statusCode: example.statusCode,
             headers: example.headers,
             body: example.body,
+            requestQueryParams: example.requestQueryParams || null,
+            requestBody: example.requestBody || null,
             isDefault: example.isDefault
           });
           importedExamples++;

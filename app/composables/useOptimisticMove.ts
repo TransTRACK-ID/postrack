@@ -26,6 +26,8 @@ interface HttpRequest {
     statusCode: number;
     headers: Record<string, string> | null;
     body: Record<string, unknown> | string | null;
+    requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
+    requestBody: Record<string, unknown> | string | null;
     isDefault: boolean;
   }>;
 }

@@ -7,6 +7,8 @@ interface UpdateExampleBody {
   statusCode?: number;
   headers?: Record<string, string>;
   body?: Record<string, unknown> | string;
+  requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }> | null;
+  requestBody?: Record<string, unknown> | string | null;
   isDefault?: boolean;
 }
 
@@ -123,6 +125,8 @@ export default defineEventHandler(async (event) => {
       statusCode: number;
       headers: Record<string, string> | null;
       body: Record<string, unknown> | string | null;
+      requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
+      requestBody: Record<string, unknown> | string | null;
       isDefault: boolean;
       updatedAt: Date;
     }> = {
@@ -145,6 +149,14 @@ export default defineEventHandler(async (event) => {
       updateData.body = body.body;
     }
 
+    if (body.requestQueryParams !== undefined) {
+      updateData.requestQueryParams = body.requestQueryParams;
+    }
+
+    if (body.requestBody !== undefined) {
+      updateData.requestBody = body.requestBody;
+    }
+
     if (body.isDefault !== undefined) {
       updateData.isDefault = body.isDefault;
     }
@@ -163,6 +175,8 @@ export default defineEventHandler(async (event) => {
       statusCode: updatedExample.statusCode,
       headers: updatedExample.headers,
       body: updatedExample.body,
+      requestQueryParams: updatedExample.requestQueryParams,
+      requestBody: updatedExample.requestBody,
       isDefault: updatedExample.isDefault,
       createdAt: updatedExample.createdAt,
       updatedAt: updatedExample.updatedAt

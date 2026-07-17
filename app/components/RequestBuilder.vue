@@ -2567,6 +2567,7 @@ const saveResponseAsExample = async () => {
   
   try {
     const res = response.value;
+    const requestSnapshot = buildRequestSnapshotForExample();
     
     // Prepare headers - filter out non-serializable headers
     const headersToSave: Record<string, string> = {};
@@ -2607,6 +2608,8 @@ const saveResponseAsExample = async () => {
         statusCode: res.status,
         headers: Object.keys(headersToSave).length > 0 ? headersToSave : null,
         body: bodyToSave,
+        requestQueryParams: requestSnapshot.requestQueryParams,
+        requestBody: requestSnapshot.requestBody,
         isDefault: saveExampleIsDefault.value
       }
     });
@@ -2626,21 +2629,39 @@ const saveResponseAsExample = async () => {
   }
 };
 
+const buildRequestSnapshotForExample = () => {
+  const params = queryParams.value
+    .filter(p => p.key)
+    .map(p => ({ key: p.key, value: p.value, enabled: p.enabled }));
+
+  return {
+    requestQueryParams: params.length > 0 ? params : null,
+    requestBody: buildBodyForSave()
+  };
+};
+
 const getResponsePreview = () => {
   if (!response.value || !('success' in response.value) || !response.value.success) {
     return '';
   }
   
   const res = response.value;
+  const requestSnapshot = buildRequestSnapshotForExample();
   const preview: Record<string, unknown> = {
-    status: res.status,
-    statusText: res.statusText
+    request: {
+      queryParams: requestSnapshot.requestQueryParams,
+      body: requestSnapshot.requestBody
+    },
+    response: {
+      status: res.status,
+      statusText: res.statusText
+    }
   };
   
   // Add headers preview (limited)
   if (res.headers && Object.keys(res.headers).length > 0) {
     const headerCount = Object.keys(res.headers).length;
-    preview.headers = headerCount > 5 
+    (preview.response as Record<string, unknown>).headers = headerCount > 5 
       ? `${headerCount} headers (will be saved)` 
       : res.headers;
   }
@@ -2649,16 +2670,16 @@ const getResponsePreview = () => {
   if (res.body !== null && res.body !== undefined) {
     if (typeof res.body === 'object') {
       if (res.body._binary) {
-        preview.body = `[Binary data: ${res.body.size || 0} bytes]`;
+        (preview.response as Record<string, unknown>).body = `[Binary data: ${res.body.size || 0} bytes]`;
       } else {
         const bodyStr = JSON.stringify(res.body);
         // Truncate string representation for preview (not parseable JSON, just for display)
-        preview.body = bodyStr.length > 200 
+        (preview.response as Record<string, unknown>).body = bodyStr.length > 200 
           ? bodyStr.substring(0, 200) + '... (truncated)'
           : res.body;
       }
     } else if (typeof res.body === 'string') {
-      preview.body = res.body.length > 200 
+      (preview.response as Record<string, unknown>).body = res.body.length > 200 
         ? res.body.substring(0, 200) + '...'
         : res.body;
     }
@@ -5647,7 +5668,7 @@ defineExpose({
                   <div class="bg-bg-tertiary rounded-md border border-border-default p-3">
                     <pre class="text-xs font-mono text-text-secondary overflow-x-auto max-h-48">{{ getResponsePreview() }}</pre>
                   </div>
-                  <p class="text-xs text-text-muted mt-1">This is what will be saved as the example</p>
+                  <p class="text-xs text-text-muted mt-1">Request and response data that will be saved</p>
                 </div>
               </div>
             </div>

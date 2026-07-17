@@ -8,6 +8,8 @@ interface RequestExample {
   statusCode: number;
   headers: Record<string, string> | null;
   body: Record<string, unknown> | string | null;
+  requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
+  requestBody: Record<string, unknown> | string | null;
   isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +36,8 @@ const formName = ref('');
 const formStatusCode = ref(200);
 const formHeaders = ref('');
 const formBody = ref('');
+const formRequestQueryParams = ref('');
+const formRequestBody = ref('');
 const formIsDefault = ref(false);
 
 const statusCodeOptions = [
@@ -73,6 +77,8 @@ const resetForm = () => {
   formStatusCode.value = 200;
   formHeaders.value = '';
   formBody.value = '';
+  formRequestQueryParams.value = '';
+  formRequestBody.value = '';
   formIsDefault.value = false;
 };
 
@@ -87,6 +93,12 @@ const openEditModal = (example: RequestExample) => {
   formStatusCode.value = example.statusCode;
   formHeaders.value = example.headers ? JSON.stringify(example.headers, null, 2) : '';
   formBody.value = typeof example.body === 'string' ? example.body : JSON.stringify(example.body, null, 2);
+  formRequestQueryParams.value = example.requestQueryParams?.length
+    ? JSON.stringify(example.requestQueryParams, null, 2)
+    : '';
+  formRequestBody.value = example.requestBody
+    ? (typeof example.requestBody === 'string' ? example.requestBody : JSON.stringify(example.requestBody, null, 2))
+    : '';
   formIsDefault.value = example.isDefault;
   showEditModal.value = true;
 };
@@ -96,6 +108,22 @@ const closeModals = () => {
   showEditModal.value = false;
   editingExample.value = null;
   resetForm();
+};
+
+const parseOptionalJsonField = (
+  value: string,
+  fieldName: string,
+  allowStringFallback = false
+): Record<string, unknown> | string | Array<Record<string, unknown>> | null => {
+  if (!value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    if (allowStringFallback) {
+      return value;
+    }
+    throw new Error(`Invalid JSON format for ${fieldName}`);
+  }
 };
 
 const createExample = async () => {
@@ -110,23 +138,22 @@ const createExample = async () => {
   try {
     let parsedHeaders = null;
     if (formHeaders.value.trim()) {
-      try {
-        parsedHeaders = JSON.parse(formHeaders.value);
-      } catch {
-        error.value = 'Invalid JSON format for headers';
-        isLoading.value = false;
-        return;
-      }
+      parsedHeaders = parseOptionalJsonField(formHeaders.value, 'response headers') as Record<string, string>;
     }
-    
+
     let parsedBody = null;
     if (formBody.value.trim()) {
-      try {
-        parsedBody = JSON.parse(formBody.value);
-      } catch {
-        // If not valid JSON, use as string
-        parsedBody = formBody.value;
-      }
+      parsedBody = parseOptionalJsonField(formBody.value, 'response body', true);
+    }
+
+    let parsedRequestQueryParams = null;
+    if (formRequestQueryParams.value.trim()) {
+      parsedRequestQueryParams = parseOptionalJsonField(formRequestQueryParams.value, 'request query params') as Array<{ key: string; value: string; enabled?: boolean }>;
+    }
+
+    let parsedRequestBody = null;
+    if (formRequestBody.value.trim()) {
+      parsedRequestBody = parseOptionalJsonField(formRequestBody.value, 'request body', true);
     }
     
     await $fetch(`/api/admin/requests/${props.requestId}/examples`, {
@@ -136,6 +163,8 @@ const createExample = async () => {
         statusCode: formStatusCode.value,
         headers: parsedHeaders,
         body: parsedBody,
+        requestQueryParams: parsedRequestQueryParams,
+        requestBody: parsedRequestBody,
         isDefault: formIsDefault.value
       }
     });
@@ -161,23 +190,22 @@ const updateExample = async () => {
   try {
     let parsedHeaders = null;
     if (formHeaders.value.trim()) {
-      try {
-        parsedHeaders = JSON.parse(formHeaders.value);
-      } catch {
-        error.value = 'Invalid JSON format for headers';
-        isLoading.value = false;
-        return;
-      }
+      parsedHeaders = parseOptionalJsonField(formHeaders.value, 'response headers') as Record<string, string>;
     }
-    
+
     let parsedBody = null;
     if (formBody.value.trim()) {
-      try {
-        parsedBody = JSON.parse(formBody.value);
-      } catch {
-        // If not valid JSON, use as string
-        parsedBody = formBody.value;
-      }
+      parsedBody = parseOptionalJsonField(formBody.value, 'response body', true);
+    }
+
+    let parsedRequestQueryParams = null;
+    if (formRequestQueryParams.value.trim()) {
+      parsedRequestQueryParams = parseOptionalJsonField(formRequestQueryParams.value, 'request query params') as Array<{ key: string; value: string; enabled?: boolean }>;
+    }
+
+    let parsedRequestBody = null;
+    if (formRequestBody.value.trim()) {
+      parsedRequestBody = parseOptionalJsonField(formRequestBody.value, 'request body', true);
     }
     
     await $fetch(`/api/admin/requests/${props.requestId}/examples/${editingExample.value.id}`, {
@@ -187,6 +215,8 @@ const updateExample = async () => {
         statusCode: formStatusCode.value,
         headers: parsedHeaders,
         body: parsedBody,
+        requestQueryParams: parsedRequestQueryParams,
+        requestBody: parsedRequestBody,
         isDefault: formIsDefault.value
       }
     });
@@ -354,6 +384,18 @@ onMounted(() => {
           </div>
         </div>
         
+        <!-- Request query params preview -->
+        <div v-if="example.requestQueryParams?.length" class="mt-2">
+          <div class="text-xs text-text-muted mb-1">Request Query Params</div>
+          <pre class="p-3 bg-bg-tertiary rounded-md text-xs font-mono text-text-secondary overflow-x-auto max-h-24 overflow-y-auto">{{ JSON.stringify(example.requestQueryParams, null, 2) }}</pre>
+        </div>
+
+        <!-- Request body preview -->
+        <div v-if="example.requestBody" class="mt-2">
+          <div class="text-xs text-text-muted mb-1">Request Body</div>
+          <pre class="p-3 bg-bg-tertiary rounded-md text-xs font-mono text-text-secondary overflow-x-auto max-h-32 overflow-y-auto">{{ formatExampleBody(example.requestBody) }}</pre>
+        </div>
+
         <!-- Response body preview -->
         <div v-if="example.body" class="mt-2">
           <div class="text-xs text-text-muted mb-1">Response Body</div>
@@ -424,6 +466,30 @@ onMounted(() => {
                 placeholder='{"message": "Success", "data": {}}'
                 class="w-full px-3 py-2 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-orange resize-none"
               ></textarea>
+            </div>
+
+            <div class="border-t border-border-default pt-4">
+              <div class="text-sm font-medium text-text-primary mb-2">Captured Request Snapshot</div>
+
+              <div>
+                <label class="block text-sm font-medium text-text-secondary mb-1">Request Query Params (JSON)</label>
+                <textarea
+                  v-model="formRequestQueryParams"
+                  rows="3"
+                  placeholder='[{"key": "page", "value": "1", "enabled": true}]'
+                  class="w-full px-3 py-2 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-orange resize-none"
+                ></textarea>
+              </div>
+
+              <div class="mt-3">
+                <label class="block text-sm font-medium text-text-secondary mb-1">Request Body (JSON)</label>
+                <textarea
+                  v-model="formRequestBody"
+                  rows="5"
+                  placeholder='{"email": "user@example.com"}'
+                  class="w-full px-3 py-2 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-orange resize-none"
+                ></textarea>
+              </div>
             </div>
             
             <div class="flex items-center gap-2">
@@ -512,6 +578,30 @@ onMounted(() => {
                 placeholder='{"message": "Success", "data": {}}'
                 class="w-full px-3 py-2 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-orange resize-none"
               ></textarea>
+            </div>
+
+            <div class="border-t border-border-default pt-4">
+              <div class="text-sm font-medium text-text-primary mb-2">Captured Request Snapshot</div>
+
+              <div>
+                <label class="block text-sm font-medium text-text-secondary mb-1">Request Query Params (JSON)</label>
+                <textarea
+                  v-model="formRequestQueryParams"
+                  rows="3"
+                  placeholder='[{"key": "page", "value": "1", "enabled": true}]'
+                  class="w-full px-3 py-2 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-orange resize-none"
+                ></textarea>
+              </div>
+
+              <div class="mt-3">
+                <label class="block text-sm font-medium text-text-secondary mb-1">Request Body (JSON)</label>
+                <textarea
+                  v-model="formRequestBody"
+                  rows="5"
+                  placeholder='{"email": "user@example.com"}'
+                  class="w-full px-3 py-2 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-orange resize-none"
+                ></textarea>
+              </div>
             </div>
             
             <div class="flex items-center gap-2">

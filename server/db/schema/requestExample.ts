@@ -7,6 +7,15 @@ import { savedRequests } from './savedRequest';
 export type ExampleHeaders = Record<string, string>;
 export type ExampleBody = Record<string, unknown> | string | null;
 
+export type ExampleQueryParam = {
+  key: string;
+  value: string;
+  enabled?: boolean;
+};
+
+export type ExampleRequestQueryParams = ExampleQueryParam[];
+export type ExampleRequestBody = Record<string, unknown> | string | null;
+
 /**
  * Request examples for storing multiple response examples per request
  * Supports multiple examples per status code (e.g., "Success - Valid User", "Success - Admin User")
@@ -20,6 +29,8 @@ export const requestExamples = pgTable('request_examples', {
   statusCode: integer('status_code').notNull(),
   headers: text('headers').$type<ExampleHeaders>(),
   body: text('body').$type<ExampleBody>(),
+  requestQueryParams: text('request_query_params').$type<ExampleRequestQueryParams>(),
+  requestBody: text('request_body').$type<ExampleRequestBody>(),
   isDefault: boolean('is_default').notNull().default(false), // Which example to use as primary
   createdAt: timestamp('created_at')
     .notNull()

@@ -84,6 +84,8 @@ async function copyRequests(sourceFolderId: string, targetFolderId: string, user
         statusCode: example.statusCode,
         headers: example.headers,
         body: example.body,
+        requestQueryParams: example.requestQueryParams,
+        requestBody: example.requestBody,
         isDefault: example.isDefault
       });
     }

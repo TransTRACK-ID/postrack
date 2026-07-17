@@ -300,10 +300,17 @@ export default defineEventHandler(async (event) => {
         // Build examples object for multiple examples
         const examplesObj: Record<string, any> = {};
         for (const example of examples) {
-          examplesObj[example.name] = {
+          const exampleValue: Record<string, any> = {
             value: example.body,
             summary: example.name
           };
+          if (example.requestQueryParams) {
+            exampleValue['x-requestQueryParams'] = example.requestQueryParams;
+          }
+          if (example.requestBody) {
+            exampleValue['x-requestBody'] = example.requestBody;
+          }
+          examplesObj[example.name] = exampleValue;
         }
 
         content['application/json'] = {

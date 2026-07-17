@@ -16,6 +16,8 @@ interface EndpointResponse {
     name: string;
     headers?: Record<string, string>;
     body?: any;
+    requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>;
+    requestBody?: any;
   }>;
 }
 
@@ -23,6 +25,8 @@ interface EndpointExample {
   name: string;
   headers?: Record<string, string>;
   body?: any;
+  requestQueryParams?: Array<{ key: string; value: string; enabled?: boolean }>;
+  requestBody?: any;
 }
 
 interface PublicEndpoint {
@@ -316,6 +320,16 @@ const renderMarkdown = (content: string): string => {
                     <span class="text-[10px] text-text-muted">{{ headerValue }}</span>
                   </div>
                 </div>
+              </div>
+
+              <div v-if="example.requestQueryParams && example.requestQueryParams.length > 0" class="px-3 py-2 border-b border-border-subtle">
+                <div class="text-[10px] font-medium text-text-primary mb-1">Request Query Params</div>
+                <pre class="text-[11px] text-text-secondary bg-bg-input p-2 rounded overflow-x-auto"><code>{{ JSON.stringify(example.requestQueryParams, null, 2) }}</code></pre>
+              </div>
+
+              <div v-if="example.requestBody !== undefined && example.requestBody !== null" class="px-3 py-2 border-b border-border-subtle">
+                <div class="text-[10px] font-medium text-text-primary mb-1">Request Body</div>
+                <pre class="text-[11px] text-text-secondary bg-bg-input p-2 rounded overflow-x-auto"><code>{{ typeof example.requestBody === 'string' ? example.requestBody : JSON.stringify(example.requestBody, null, 2) }}</code></pre>
               </div>
 
               <div v-if="example.body !== undefined && example.body !== null" class="p-3">
