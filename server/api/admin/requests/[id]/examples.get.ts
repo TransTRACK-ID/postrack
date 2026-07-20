@@ -1,6 +1,7 @@
 import { db } from '../../../../db';
 import { requestExamples, savedRequests } from '../../../../db/schema';
 import { eq, and } from 'drizzle-orm';
+import { formatRequestExampleResponse } from '../../../../utils/request-example-response';
 
 interface ExampleResponse {
   id: string;
@@ -48,19 +49,7 @@ export default defineEventHandler(async (event) => {
       .where(eq(requestExamples.requestId, requestId))
       .orderBy(requestExamples.statusCode);
 
-    return examples.map(example => ({
-      id: example.id,
-      requestId: example.requestId,
-      name: example.name,
-      statusCode: example.statusCode,
-      headers: example.headers,
-      body: example.body,
-      requestQueryParams: example.requestQueryParams,
-      requestBody: example.requestBody,
-      isDefault: example.isDefault,
-      createdAt: example.createdAt,
-      updatedAt: example.updatedAt
-    }));
+    return examples.map(formatRequestExampleResponse);
 
   } catch (error: any) {
     if (error.statusCode) {

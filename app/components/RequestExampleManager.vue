@@ -87,18 +87,26 @@ const openCreateModal = () => {
   showCreateModal.value = true;
 };
 
+const parseForForm = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+      return value;
+    }
+  }
+  return JSON.stringify(value, null, 2);
+};
+
 const openEditModal = (example: RequestExample) => {
   editingExample.value = example;
   formName.value = example.name;
   formStatusCode.value = example.statusCode;
-  formHeaders.value = example.headers ? JSON.stringify(example.headers, null, 2) : '';
-  formBody.value = typeof example.body === 'string' ? example.body : JSON.stringify(example.body, null, 2);
-  formRequestQueryParams.value = example.requestQueryParams?.length
-    ? JSON.stringify(example.requestQueryParams, null, 2)
-    : '';
-  formRequestBody.value = example.requestBody
-    ? (typeof example.requestBody === 'string' ? example.requestBody : JSON.stringify(example.requestBody, null, 2))
-    : '';
+  formHeaders.value = parseForForm(example.headers);
+  formBody.value = parseForForm(example.body);
+  formRequestQueryParams.value = parseForForm(example.requestQueryParams);
+  formRequestBody.value = parseForForm(example.requestBody);
   formIsDefault.value = example.isDefault;
   showEditModal.value = true;
 };
@@ -256,9 +264,9 @@ const getStatusColor = (statusCode: number): string => {
   return 'text-text-secondary';
 };
 
-// Helper function to format example body properly
-const formatExampleBody = (body: Record<string, unknown> | string | null): string => {
-  if (!body) return '';
+// Helper function to format example JSON fields properly
+const formatExampleBody = (body: Record<string, unknown> | string | Array<unknown> | null): string => {
+  if (body === null || body === undefined) return '';
   
   // If it's already a string, check if it's valid JSON
   if (typeof body === 'string') {
@@ -276,8 +284,16 @@ const formatExampleBody = (body: Record<string, unknown> | string | null): strin
     }
   }
   
-  // If it's an object, stringify it
+  // If it's an object or array, stringify it
   return JSON.stringify(body, null, 2);
+};
+
+const hasExampleHeaders = (headers: RequestExample['headers']): boolean => {
+  return !!headers && typeof headers === 'object' && !Array.isArray(headers) && Object.keys(headers).length > 0;
+};
+
+const hasExampleQueryParams = (params: RequestExample['requestQueryParams']): boolean => {
+  return Array.isArray(params) && params.length > 0;
 };
 
 watch(() => props.requestId, () => {
@@ -385,9 +401,9 @@ onMounted(() => {
         </div>
         
         <!-- Request query params preview -->
-        <div v-if="example.requestQueryParams?.length" class="mt-2">
+        <div v-if="hasExampleQueryParams(example.requestQueryParams)" class="mt-2">
           <div class="text-xs text-text-muted mb-1">Request Query Params</div>
-          <pre class="p-3 bg-bg-tertiary rounded-md text-xs font-mono text-text-secondary overflow-x-auto max-h-24 overflow-y-auto">{{ JSON.stringify(example.requestQueryParams, null, 2) }}</pre>
+          <pre class="p-3 bg-bg-tertiary rounded-md text-xs font-mono text-text-secondary overflow-x-auto max-h-24 overflow-y-auto">{{ formatExampleBody(example.requestQueryParams) }}</pre>
         </div>
 
         <!-- Request body preview -->
@@ -403,9 +419,9 @@ onMounted(() => {
         </div>
         
         <!-- Response headers preview -->
-        <div v-if="example.headers && Object.keys(example.headers).length > 0" class="mt-2">
+        <div v-if="hasExampleHeaders(example.headers)" class="mt-2">
           <div class="text-xs text-text-muted mb-1">Response Headers</div>
-          <pre class="p-3 bg-bg-tertiary rounded-md text-xs font-mono text-text-secondary overflow-x-auto max-h-20 overflow-y-auto">{{ JSON.stringify(example.headers, null, 2) }}</pre>
+          <pre class="p-3 bg-bg-tertiary rounded-md text-xs font-mono text-text-secondary overflow-x-auto max-h-20 overflow-y-auto">{{ formatExampleBody(example.headers) }}</pre>
         </div>
       </div>
     </div>

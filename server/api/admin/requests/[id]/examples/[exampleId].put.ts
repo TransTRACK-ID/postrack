@@ -1,6 +1,7 @@
 import { db } from '../../../../../db';
 import { requestExamples, savedRequests } from '../../../../../db/schema';
 import { eq, and } from 'drizzle-orm';
+import { formatRequestExampleResponse, normalizeRequestExampleInput } from '../../../../../utils/request-example-response';
 
 interface UpdateExampleBody {
   name?: string;
@@ -142,19 +143,19 @@ export default defineEventHandler(async (event) => {
     }
 
     if (body.headers !== undefined) {
-      updateData.headers = body.headers;
+      updateData.headers = normalizeRequestExampleInput({ headers: body.headers }).headers;
     }
 
     if (body.body !== undefined) {
-      updateData.body = body.body;
+      updateData.body = normalizeRequestExampleInput({ body: body.body }).body;
     }
 
     if (body.requestQueryParams !== undefined) {
-      updateData.requestQueryParams = body.requestQueryParams;
+      updateData.requestQueryParams = normalizeRequestExampleInput({ requestQueryParams: body.requestQueryParams }).requestQueryParams;
     }
 
     if (body.requestBody !== undefined) {
-      updateData.requestBody = body.requestBody;
+      updateData.requestBody = normalizeRequestExampleInput({ requestBody: body.requestBody }).requestBody;
     }
 
     if (body.isDefault !== undefined) {
@@ -168,19 +169,7 @@ export default defineEventHandler(async (event) => {
       .where(eq(requestExamples.id, exampleId))
       .returning())[0];
 
-    return {
-      id: updatedExample.id,
-      requestId: updatedExample.requestId,
-      name: updatedExample.name,
-      statusCode: updatedExample.statusCode,
-      headers: updatedExample.headers,
-      body: updatedExample.body,
-      requestQueryParams: updatedExample.requestQueryParams,
-      requestBody: updatedExample.requestBody,
-      isDefault: updatedExample.isDefault,
-      createdAt: updatedExample.createdAt,
-      updatedAt: updatedExample.updatedAt
-    };
+    return formatRequestExampleResponse(updatedExample);
 
   } catch (error: any) {
     if (error.statusCode) {
