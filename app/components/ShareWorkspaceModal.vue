@@ -17,6 +17,8 @@ interface ShareInfo {
   isExpired: boolean;
   folderId?: string | null;
   folderName?: string | null;
+  collectionId?: string | null;
+  collectionName?: string | null;
 }
 
 interface MemberInfo {
@@ -30,7 +32,7 @@ interface MemberInfo {
   acceptedAt: string | null;
   revokedAt: string | null;
   isCurrentUser: boolean;
-  isOriginalOwner: boolean;
+  isOriginalOwner?: boolean;
 }
 
 interface Props {
@@ -40,6 +42,8 @@ interface Props {
   folderId?: string;
   folderName?: string;
   folderIsSharedBase?: boolean;
+  collectionId?: string;
+  collectionName?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -48,7 +52,16 @@ const props = withDefaults(defineProps<Props>(), {
   workspaceName: '',
   folderId: '',
   folderName: '',
-  folderIsSharedBase: false
+  folderIsSharedBase: false,
+  collectionId: '',
+  collectionName: ''
+});
+
+const isCollectionMode = computed(() => !!props.collectionId);
+const modalTitle = computed(() => {
+  if (props.collectionName) return 'Share Collection';
+  if (props.folderName) return 'Share Folder';
+  return 'Share Workspace';
 });
 
 const emit = defineEmits<{
@@ -98,7 +111,10 @@ const fetchShares = async () => {
   error.value = '';
   
   try {
-    const response = await $fetch<ShareInfo[]>(`/api/admin/workspaces/${props.workspaceId}/shares`);
+    const sharesUrl = isCollectionMode.value
+      ? `/api/admin/workspaces/${props.workspaceId}/shares?collectionId=${props.collectionId}`
+      : `/api/admin/workspaces/${props.workspaceId}/shares`;
+    const response = await $fetch<ShareInfo[]>(sharesUrl);
     shares.value = response;
   } catch (e: any) {
     error.value = e.data?.message || e.message || 'Failed to fetch shares';
@@ -109,13 +125,19 @@ const fetchShares = async () => {
 };
 
 const fetchMembers = async () => {
-  if (!props.workspaceId) return;
+  if (isCollectionMode.value) {
+    if (!props.collectionId) return;
+  } else if (!props.workspaceId) {
+    return;
+  }
   
   isLoadingMembers.value = true;
   error.value = '';
   
   try {
-    const response = await $fetch<{ members: MemberInfo[]; isOwner: boolean }>(`/api/admin/workspaces/${props.workspaceId}/members`);
+    const response = isCollectionMode.value
+      ? await $fetch<{ members: MemberInfo[]; isOwner: boolean }>(`/api/admin/collections/${props.collectionId}/members`)
+      : await $fetch<{ members: MemberInfo[]; isOwner: boolean }>(`/api/admin/workspaces/${props.workspaceId}/members`);
     members.value = response.members;
     isOwner.value = response.isOwner;
   } catch (e: any) {
@@ -145,6 +167,10 @@ const createShare = async () => {
     if (props.folderId) {
       body.folderId = props.folderId;
     }
+
+    if (props.collectionId) {
+      body.collectionId = props.collectionId;
+    }
     
     await $fetch(`/api/admin/workspaces/${props.workspaceId}/shares`, {
       method: 'POST',
@@ -168,20 +194,34 @@ const createShare = async () => {
 };
 
 const inviteMember = async () => {
-  if (!props.workspaceId) return;
+  if (isCollectionMode.value) {
+    if (!props.collectionId) return;
+  } else if (!props.workspaceId) {
+    return;
+  }
   
   isInvitingMember.value = true;
   error.value = '';
   successMessage.value = '';
   
   try {
-    await $fetch(`/api/admin/workspaces/${props.workspaceId}/members`, {
-      method: 'POST',
-      body: {
-        email: newMemberForm.value.email,
-        permission: newMemberForm.value.permission
-      }
-    });
+    if (isCollectionMode.value) {
+      await $fetch(`/api/admin/collections/${props.collectionId}/members`, {
+        method: 'POST',
+        body: {
+          email: newMemberForm.value.email,
+          permission: newMemberForm.value.permission === 'owner' ? 'view' : newMemberForm.value.permission
+        }
+      });
+    } else {
+      await $fetch(`/api/admin/workspaces/${props.workspaceId}/members`, {
+        method: 'POST',
+        body: {
+          email: newMemberForm.value.email,
+          permission: newMemberForm.value.permission
+        }
+      });
+    }
     
     successMessage.value = 'Invitation sent successfully!';
     await fetchMembers();
@@ -221,16 +261,26 @@ const revokeShare = async (token: string) => {
 };
 
 const removeMember = async (memberId: string) => {
-  if (!confirm('Are you sure you want to remove this member? They will lose access to this workspace immediately.')) {
+  const confirmMessage = isCollectionMode.value
+    ? 'Are you sure you want to remove this member? They will lose access to this collection immediately.'
+    : 'Are you sure you want to remove this member? They will lose access to this workspace immediately.';
+
+  if (!confirm(confirmMessage)) {
     return;
   }
   
   error.value = '';
   
   try {
-    await $fetch(`/api/admin/workspaces/${props.workspaceId}/members/${memberId}`, {
-      method: 'DELETE'
-    });
+    if (isCollectionMode.value) {
+      await $fetch(`/api/admin/collections/${props.collectionId}/members/${memberId}`, {
+        method: 'DELETE'
+      });
+    } else {
+      await $fetch(`/api/admin/workspaces/${props.workspaceId}/members/${memberId}`, {
+        method: 'DELETE'
+      });
+    }
     
     successMessage.value = 'Member removed successfully!';
     await fetchMembers();
@@ -245,12 +295,21 @@ const updateMemberPermission = async (memberId: string, newPermission: 'view' | 
   error.value = '';
   
   try {
-    await $fetch(`/api/admin/workspaces/${props.workspaceId}/members/${memberId}`, {
-      method: 'PUT',
-      body: {
-        permission: newPermission
-      }
-    });
+    if (isCollectionMode.value) {
+      await $fetch(`/api/admin/collections/${props.collectionId}/members/${memberId}`, {
+        method: 'PUT',
+        body: {
+          permission: newPermission === 'owner' ? 'view' : newPermission
+        }
+      });
+    } else {
+      await $fetch(`/api/admin/workspaces/${props.workspaceId}/members/${memberId}`, {
+        method: 'PUT',
+        body: {
+          permission: newPermission
+        }
+      });
+    }
     
     successMessage.value = 'Permission updated successfully!';
     await fetchMembers();
@@ -318,10 +377,17 @@ watch(() => props.workspaceId, (newVal) => {
     fetchMembers();
   }
 });
+
+watch(() => props.collectionId, (newVal) => {
+  if (props.show && newVal) {
+    fetchShares();
+    fetchMembers();
+  }
+});
 </script>
 
 <template>
-  <Modal :show="show" :title="folderName ? 'Share Folder' : 'Share Workspace'" size="lg" @close="handleClose">
+  <Modal :show="show" :title="modalTitle" size="lg" @close="handleClose">
     <div class="space-y-6">
       <!-- Workspace Info -->
       <div class="flex items-center gap-3 p-3 bg-bg-tertiary rounded-lg">
@@ -333,10 +399,12 @@ watch(() => props.workspaceId, (newVal) => {
         <div>
           <p class="text-sm font-semibold text-text-primary m-0">
             {{ workspaceName }}
-            <span v-if="folderName" class="text-accent-blue"> → {{ folderName }}</span>
+            <span v-if="collectionName" class="text-accent-blue"> → {{ collectionName }}</span>
+            <span v-else-if="folderName" class="text-accent-blue"> → {{ folderName }}</span>
           </p>
           <p class="text-xs text-text-muted m-0">
-            <span v-if="folderName">Share this folder with other registered users</span>
+            <span v-if="collectionName">Share this collection with other registered users</span>
+            <span v-else-if="folderName">Share this folder with other registered users</span>
             <span v-else>Share this workspace with other registered users</span>
           </p>
           <p
@@ -487,6 +555,10 @@ watch(() => props.workspaceId, (newVal) => {
                       Folder: {{ share.folderName }}
                     </span>
 
+                    <span v-if="share.collectionName" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-green/15 text-accent-green">
+                      Collection: {{ share.collectionName }}
+                    </span>
+
                     <span v-if="!share.isActive" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-red/15 text-accent-red">
                       Revoked
                     </span>
@@ -576,7 +648,7 @@ watch(() => props.workspaceId, (newVal) => {
               >
                 <option value="view">Viewer</option>
                 <option value="edit">Editor</option>
-                <option value="owner">Owner</option>
+                <option v-if="!isCollectionMode" value="owner">Owner</option>
               </select>
             </div>
           </div>
@@ -611,12 +683,16 @@ watch(() => props.workspaceId, (newVal) => {
         </div>
 
         <div v-else class="p-4 bg-bg-secondary/50 border border-border-default/50 rounded-lg">
-          <p class="text-sm text-text-muted m-0 text-center">Only the workspace owner can invite new members.</p>
+          <p class="text-sm text-text-muted m-0 text-center">
+            {{ isCollectionMode ? 'Only the workspace owner can invite collection members.' : 'Only the workspace owner can invite new members.' }}
+          </p>
         </div>
 
         <!-- Members List -->
         <div>
-          <h3 class="text-sm font-semibold text-text-primary mb-3 m-0">Workspace Members</h3>
+          <h3 class="text-sm font-semibold text-text-primary mb-3 m-0">
+            {{ isCollectionMode ? 'Collection Members' : 'Workspace Members' }}
+          </h3>
           
           <div v-if="isLoadingMembers" class="flex items-center justify-center py-8 text-text-muted text-sm">
             Loading members...
@@ -630,7 +706,9 @@ watch(() => props.workspaceId, (newVal) => {
               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
             <p class="text-sm text-text-muted m-0">No members yet</p>
-            <p v-if="isOwner" class="text-xs text-text-muted m-0">Invite members to give them direct access to this workspace</p>
+            <p v-if="isOwner" class="text-xs text-text-muted m-0">
+              {{ isCollectionMode ? 'Invite members to give them direct access to this collection' : 'Invite members to give them direct access to this workspace' }}
+            </p>
           </div>
           
           <div v-else class="space-y-2">
@@ -680,7 +758,7 @@ watch(() => props.workspaceId, (newVal) => {
                   >
                     <option value="view">Viewer</option>
                     <option value="edit">Editor</option>
-                    <option value="owner">Owner</option>
+                    <option v-if="!isCollectionMode" value="owner">Owner</option>
                   </select>
                   
                   <!-- Remove Button -->

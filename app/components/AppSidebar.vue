@@ -165,6 +165,7 @@ const emit = defineEmits<{
   renameWorkspace: [workspace: { id: string; name: string }];
   shareWorkspace: [workspace: { id: string; name: string }];
   shareFolder: [folder: any];
+  shareCollection: [collection: any];
   toggleDocsBase: [folder: any];
   renameProject: [project: { id: string; name: string }];
   deleteProject: [project: { id: string; name: string }];
@@ -1148,6 +1149,8 @@ const handleContextAction = (action: string) => {
         emit('renameCollection', data);
       } else if (action === 'publish-docs') {
         emit('publishCollectionDocs', data);
+      } else if (action === 'share-collection') {
+        emit('shareCollection', data);
       } else if (action === 'delete-collection') {
         emit('deleteCollection', data);
       }
@@ -2192,6 +2195,19 @@ defineExpose({
                 Publish API Documentation
                 <span v-if="contextMenu.data?.isPublic" class="inline-block w-2 h-2 rounded-full bg-accent-green"></span>
               </span>
+            </button>
+            <button
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+              @click.stop="handleContextAction('share-collection')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+              </svg>
+              Share Collection
             </button>
             <div v-if="canEdit" class="border-t border-border-default my-1"></div>
             <button

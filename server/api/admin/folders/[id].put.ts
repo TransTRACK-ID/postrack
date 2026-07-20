@@ -2,6 +2,7 @@ import { db } from '../../../db';
 import { folders } from '../../../db/schema';
 import { eq, and, isNull, ne } from 'drizzle-orm';
 import { cache, CacheKeys } from '../../../utils/cache';
+import { canEditCollection, isWorkspaceOwnerViaMember, getCollectionWorkspaceId } from '../../../utils/permissions';
 
 interface UpdateFolderBody {
   name?: string;
@@ -32,11 +33,19 @@ function wouldCreateCircularReference(
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id');
+  const user = event.context.user;
 
   if (!id) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Folder ID is required'
+    });
+  }
+
+  if (!user?.id) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized'
     });
   }
 
@@ -63,6 +72,24 @@ export default defineEventHandler(async (event) => {
         statusCode: 404,
         statusMessage: 'Folder not found'
       });
+    }
+
+    const canEdit = await canEditCollection(user.id, existing.collectionId, user.email);
+    if (!canEdit) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'You do not have permission to edit this folder'
+      });
+    }
+
+    if (body.isSharedBase !== undefined) {
+      const workspaceId = await getCollectionWorkspaceId(existing.collectionId);
+      if (!workspaceId || !(await isWorkspaceOwnerViaMember(user.id, workspaceId))) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'Only workspace owners can manage customer docs base settings'
+        });
+      }
     }
 
     // Get all folders in the collection (for validation)

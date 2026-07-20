@@ -1,7 +1,8 @@
 import { db } from '../../db';
 import { workspaces, projects, collections, folders, savedRequests } from '../../db/schema';
 import { eq, desc, asc, inArray, or } from 'drizzle-orm';
-import { getAccessibleWorkspaceIds, getWorkspacePermissionsBatch } from '../../utils/permissions';
+import { getAccessibleWorkspaceIds, getWorkspacePermissionsBatch, getCollectionOnlyWorkspaceIds } from '../../utils/permissions';
+import { filterWorkspaceTreeForCollectionOnlyAccess } from '../../utils/treeCollectionFilter';
 import { cache, CacheKeys } from '../../utils/cache';
 
 interface RequestItem {
@@ -199,6 +200,7 @@ export default defineEventHandler(async (event) => {
 
     const workspaceIds = allWorkspaces.map(w => w.id);
     const permissionMap = await getWorkspacePermissionsBatch(user.id, workspaceIds);
+    const collectionOnlyMap = await getCollectionOnlyWorkspaceIds(user.id, user.email);
 
     const workspacesWithProjects: WorkspaceWithProjects[] = allWorkspaces.map((workspace) => {
       const workspaceProjects = sortProjectsByOrder(
@@ -207,7 +209,7 @@ export default defineEventHandler(async (event) => {
       const isOwner = workspace.ownerId === user.id || workspace.ownerId === null || workspace.ownerId === 'unknown' || workspace.ownerId === '';
       const permission = isOwner ? 'owner' : (permissionMap.get(workspace.id) || null);
 
-      return {
+      return filterWorkspaceTreeForCollectionOnlyAccess({
         id: workspace.id,
         name: workspace.name,
         projects: workspaceProjects.map(project => {
@@ -259,8 +261,8 @@ export default defineEventHandler(async (event) => {
         isOwner,
         isShared: !isOwner,
         permission
-      };
-    });
+      }, collectionOnlyMap.get(workspace.id));
+    }).filter((workspace) => workspace.projects.length > 0);
 
     cache.set(cacheKey, workspacesWithProjects, ttl);
     

@@ -4,6 +4,7 @@ export * from './workspaceAccess';
 export * from './workspaceMember';
 export * from './project';
 export * from './collection';
+export * from './collectionMember';
 export * from './folder';
 export * from './savedRequest';
 export * from './requestExample';

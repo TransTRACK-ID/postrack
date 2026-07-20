@@ -103,6 +103,7 @@ interface SharedWorkspace {
   permission: 'view' | 'edit';
   isShared: boolean;
   folderName?: string | null;
+  collectionName?: string | null;
 }
 
 const workspace = ref<SharedWorkspace | null>(null);
@@ -546,7 +547,8 @@ const goBack = () => {
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
           <span class="text-sm font-semibold text-text-primary">{{ workspace?.name || 'Shared Workspace' }}</span>
-          <span v-if="workspace?.folderName" class="text-xs text-text-muted">→ {{ workspace.folderName }}</span>
+          <span v-if="workspace?.collectionName" class="text-xs text-text-muted">→ {{ workspace.collectionName }}</span>
+          <span v-else-if="workspace?.folderName" class="text-xs text-text-muted">→ {{ workspace.folderName }}</span>
         </div>
 
         <!-- Permission Badge -->
@@ -559,7 +561,11 @@ const goBack = () => {
           {{ workspace?.permission === 'edit' ? 'Editor' : 'Viewer' }}
         </span>
 
-        <span v-if="workspace?.folderName" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-purple/15 text-accent-purple">
+        <span v-if="workspace?.collectionName" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-green/15 text-accent-green">
+          Collection View
+        </span>
+
+        <span v-else-if="workspace?.folderName" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-purple/15 text-accent-purple">
           Folder View
         </span>
         <span v-else class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-accent-purple/15 text-accent-purple">

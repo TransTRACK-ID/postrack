@@ -8,6 +8,7 @@ interface CreateShareBody {
   permission: SharePermission;
   expiresInDays?: number;
   folderId?: string;
+  collectionId?: string;
 }
 
 export default defineEventHandler(async (event) => {
@@ -55,23 +56,32 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<CreateShareBody>(event);
 
   // Check if user can manage shares (only owner for workspace-level shares)
-  // For scoped folder shares, any workspace member can create them
+  // For scoped folder/collection shares, any workspace member can create them
   const isScopedFolderShare = !!body.folderId;
+  const isScopedCollectionShare = !!body.collectionId;
+  const isScopedShare = isScopedFolderShare || isScopedCollectionShare;
   const canManage = await canManageShares(user.id, workspaceId);
   const hasAccess = await canAccessWorkspace(user.id, workspaceId, user.email);
   const userIsSuperAdmin = isSuperAdmin(user.email);
 
-  if (!canManage && !userIsSuperAdmin && !isScopedFolderShare) {
+  if (!canManage && !userIsSuperAdmin && !isScopedShare) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Only workspace owners can create workspace-level share links'
     });
   }
 
-  if (!canManage && !userIsSuperAdmin && isScopedFolderShare && !hasAccess) {
+  if (!canManage && !userIsSuperAdmin && isScopedShare && !hasAccess) {
     throw createError({
       statusCode: 403,
       statusMessage: 'You do not have access to this workspace'
+    });
+  }
+
+  if (body.folderId && body.collectionId) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Cannot scope a share to both a folder and a collection'
     });
   }
 
@@ -116,6 +126,28 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  if (body.collectionId) {
+    const collection = await db
+      .select()
+      .from(collections)
+      .where(eq(collections.id, body.collectionId))
+      .limit(1);
+
+    if (!collection.length) {
+      throw createError({ statusCode: 404, statusMessage: 'Collection not found' });
+    }
+
+    const project = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, collection[0].projectId))
+      .limit(1);
+
+    if (!project.length || project[0].workspaceId !== workspaceId) {
+      throw createError({ statusCode: 403, statusMessage: 'Collection does not belong to this workspace' });
+    }
+  }
+
   // Calculate expiration date if provided
   let expiresAt: Date | null = null;
   if (body.expiresInDays && body.expiresInDays > 0) {
@@ -133,6 +165,7 @@ export default defineEventHandler(async (event) => {
       .values({
         workspaceId,
         folderId: body.folderId || null,
+        collectionId: body.collectionId || null,
         shareToken,
         permission: body.permission,
         createdBy: user.id,

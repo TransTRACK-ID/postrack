@@ -1,7 +1,8 @@
 import { db } from '../../db';
 import { workspaces, projects, collections, folders, savedRequests, requestExamples } from '../../db/schema';
 import { eq, desc, asc, inArray, or } from 'drizzle-orm';
-import { getAccessibleWorkspaceIds, getWorkspacePermissionsBatch } from '../../utils/permissions';
+import { getAccessibleWorkspaceIds, getWorkspacePermissionsBatch, getCollectionOnlyWorkspaceIds } from '../../utils/permissions';
+import { filterWorkspaceTreeForCollectionOnlyAccess } from '../../utils/treeCollectionFilter';
 import { cache, CacheKeys } from '../../utils/cache';
 
 interface RequestExampleItem {
@@ -283,6 +284,7 @@ export default defineEventHandler(async (event) => {
     // Build workspace tree with permission info (using batch query to avoid N+1)
     const workspaceIds = allWorkspaces.map(w => w.id);
     const permissionMap = await getWorkspacePermissionsBatch(user.id, workspaceIds);
+    const collectionOnlyMap = await getCollectionOnlyWorkspaceIds(user.id, user.email);
 
     const workspacesWithProjects: WorkspaceWithProjects[] = allWorkspaces.map((workspace) => {
       const workspaceProjects = sortProjectsByOrder(
@@ -292,7 +294,7 @@ export default defineEventHandler(async (event) => {
       const isOwner = workspace.ownerId === user.id || workspace.ownerId === null || workspace.ownerId === 'unknown' || workspace.ownerId === '';
       const permission = isOwner ? 'owner' : (permissionMap.get(workspace.id) || null);
 
-      return {
+      return filterWorkspaceTreeForCollectionOnlyAccess({
         ...workspace,
         projects: workspaceProjects.map(project => {
           const projectCollections = allCollections.filter(c => c.projectId === project.id);
@@ -333,8 +335,8 @@ export default defineEventHandler(async (event) => {
         isOwner,
         isShared: !isOwner,
         permission
-      };
-    });
+      }, collectionOnlyMap.get(workspace.id));
+    }).filter((workspace) => workspace.projects.length > 0);
 
     // Cache for 30 seconds (adjust based on your needs)
     cache.set(cacheKey, workspacesWithProjects, 30000);

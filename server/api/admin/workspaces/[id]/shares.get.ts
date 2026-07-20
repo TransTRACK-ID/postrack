@@ -1,7 +1,7 @@
 import { db } from '../../../../db';
-import { workspaces, workspaceShares, workspaceAccess, folders } from '../../../../db/schema';
-import { eq, desc, sql, inArray } from 'drizzle-orm';
-import { canManageShares, isSuperAdmin } from '../../../../utils/permissions';
+import { workspaces, workspaceShares, workspaceAccess, folders, collections } from '../../../../db/schema';
+import { eq, desc, sql, inArray, and } from 'drizzle-orm';
+import { canManageShares, isSuperAdmin, canAccessCollection } from '../../../../utils/permissions';
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id');
@@ -48,7 +48,18 @@ export default defineEventHandler(async (event) => {
   // Check if user can manage shares (only owner or super admin)
   const canManage = await canManageShares(user.id, workspaceId);
   const userIsSuperAdmin = isSuperAdmin(user.email);
-  if (!canManage && !userIsSuperAdmin) {
+  const query = getQuery(event);
+  const collectionId = typeof query.collectionId === 'string' ? query.collectionId : undefined;
+
+  if (collectionId) {
+    const canAccess = await canAccessCollection(user.id, collectionId, user.email);
+    if (!canAccess && !canManage && !userIsSuperAdmin) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'You do not have access to this collection'
+      });
+    }
+  } else if (!canManage && !userIsSuperAdmin) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Only workspace owners can view share links'
@@ -72,11 +83,21 @@ export default defineEventHandler(async (event) => {
         createdAt: workspaceShares.createdAt,
         updatedAt: workspaceShares.updatedAt,
         folderId: workspaceShares.folderId,
-        folderName: folders.name
+        folderName: folders.name,
+        collectionId: workspaceShares.collectionId,
+        collectionName: collections.name
       })
       .from(workspaceShares)
       .leftJoin(folders, eq(workspaceShares.folderId, folders.id))
-      .where(eq(workspaceShares.workspaceId, workspaceId))
+      .leftJoin(collections, eq(workspaceShares.collectionId, collections.id))
+      .where(
+        collectionId
+          ? and(
+              eq(workspaceShares.workspaceId, workspaceId),
+              eq(workspaceShares.collectionId, collectionId)
+            )
+          : eq(workspaceShares.workspaceId, workspaceId)
+      )
       .orderBy(desc(workspaceShares.createdAt));
 
     if (shares.length === 0) {

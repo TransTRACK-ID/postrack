@@ -43,8 +43,9 @@ export default defineEventHandler(async (event) => {
     const userIsSuperAdmin = isSuperAdmin(user.email);
     const isCreator = shareRecord.createdBy === user.id;
     const isScopedFolderShare = !!shareRecord.folderId;
+    const isScopedCollectionShare = !!shareRecord.collectionId;
 
-    if (!canManage && !userIsSuperAdmin && !(isScopedFolderShare && isCreator)) {
+    if (!canManage && !userIsSuperAdmin && !(isScopedFolderShare && isCreator) && !(isScopedCollectionShare && isCreator)) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Only workspace owner can revoke share links'

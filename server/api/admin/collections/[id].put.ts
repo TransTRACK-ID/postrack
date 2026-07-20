@@ -3,6 +3,7 @@ import { collections, folders } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { cache } from '../../../utils/cache';
 import { findSharedBaseFolder } from '../../../utils/sharedBaseFolder';
+import { canEditCollection } from '../../../utils/permissions';
 
 interface UpdateCollectionBody {
   name?: string;
@@ -17,11 +18,27 @@ interface UpdateCollectionBody {
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id');
+  const user = event.context.user;
 
   if (!id) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Collection ID is required'
+    });
+  }
+
+  if (!user?.id) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized'
+    });
+  }
+
+  const canEdit = await canEditCollection(user.id, id, user.email);
+  if (!canEdit) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'You do not have permission to edit this collection'
     });
   }
 

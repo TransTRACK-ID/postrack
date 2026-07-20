@@ -2,6 +2,7 @@ import { db } from '../../../db';
 import { folders } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { cache, CacheKeys } from '../../../utils/cache';
+import { canEditCollection } from '../../../utils/permissions';
 
 // Helper function to count all descendant folders
 function countDescendants(allFolders: typeof folders.$inferSelect[], parentId: string): number {
@@ -15,11 +16,19 @@ function countDescendants(allFolders: typeof folders.$inferSelect[], parentId: s
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id');
+  const user = event.context.user;
 
   if (!id) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Folder ID is required'
+    });
+  }
+
+  if (!user?.id) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized'
     });
   }
 
@@ -35,6 +44,14 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 404,
         statusMessage: 'Folder not found'
+      });
+    }
+
+    const canEdit = await canEditCollection(user.id, existing.collectionId, user.email);
+    if (!canEdit) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'You do not have permission to delete this folder'
       });
     }
 

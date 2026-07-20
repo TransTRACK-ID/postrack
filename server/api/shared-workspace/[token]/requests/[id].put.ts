@@ -2,6 +2,7 @@ import { db } from '../../../../db';
 import { savedRequests, folders, collections, projects, workspaceShares } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { validateShareToken } from '../../../../utils/permissions';
+import { getCollectionFolderIds } from '../../../../utils/sharedCollection';
 import type { HttpMethod, RequestHeaders, RequestBody, RequestAuth, RequestPathVariables, RequestProtocol, SocketConfig } from '../../../../db/schema/savedRequest';
 import { resolveRequestProtocol, validateRequestMethod, validateRequestUrl } from '../../../../utils/request-protocol';
 
@@ -143,6 +144,21 @@ export default defineEventHandler(async (event) => {
         throw createError({
           statusCode: 403,
           statusMessage: 'Request is outside the shared scope'
+        });
+      }
+    }
+
+    if (validation.collectionId) {
+      const allFoldersList = await db.select().from(folders);
+      const allowedFolderIds = getCollectionFolderIds(validation.collectionId, allFoldersList);
+      const requestInCollection =
+        existing[0].collectionId === validation.collectionId ||
+        (!!existing[0].folderId && allowedFolderIds.includes(existing[0].folderId));
+
+      if (!requestInCollection) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'Request is outside the shared collection scope'
         });
       }
     }

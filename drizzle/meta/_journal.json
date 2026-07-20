@@ -190,6 +190,13 @@
       "when": 1784278997827,
       "tag": "0028_steep_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784519136908,
+      "tag": "0029_opposite_jack_flag",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@ import { db } from '../../../../db';
 import { collections, folders } from '../../../../db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { cache, CacheKeys } from '../../../../utils/cache';
+import { canEditCollection } from '../../../../utils/permissions';
 
 interface CreateFolderBody {
   name: string;
@@ -11,11 +12,27 @@ interface CreateFolderBody {
 
 export default defineEventHandler(async (event) => {
   const collectionId = getRouterParam(event, 'id');
+  const user = event.context.user;
 
   if (!collectionId) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Collection ID is required'
+    });
+  }
+
+  if (!user?.id) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized'
+    });
+  }
+
+  const canEdit = await canEditCollection(user.id, collectionId, user.email);
+  if (!canEdit) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'You do not have permission to edit this collection'
     });
   }
 
