@@ -648,6 +648,8 @@ const saveExampleIsDefault = ref(false);
 const saveExampleLoading = ref(false);
 const saveExampleError = ref<string | null>(null);
 const saveExampleSuccess = ref(false);
+const examplesRefreshToken = ref(0);
+const exampleManagerRef = ref<{ refresh: () => Promise<void> } | null>(null);
 
 // Mock configuration state
 const mockConfig = ref<import('../../server/db/schema/savedRequest').MockConfig | null>(null);
@@ -2615,6 +2617,8 @@ const saveResponseAsExample = async () => {
     });
     
     saveExampleSuccess.value = true;
+    examplesRefreshToken.value += 1;
+    await exampleManagerRef.value?.refresh();
     
     // Close modal after a short delay
     setTimeout(() => {
@@ -2630,9 +2634,17 @@ const saveResponseAsExample = async () => {
 };
 
 const buildRequestSnapshotForExample = () => {
-  const params = queryParams.value
+  let params = queryParams.value
     .filter(p => p.key)
     .map(p => ({ key: p.key, value: p.value, enabled: p.enabled }));
+
+  if (params.length === 0 && form.value.url.includes('?')) {
+    params = parseUrlQuery(form.value.url).map(p => ({
+      key: p.key,
+      value: p.value,
+      enabled: p.enabled
+    }));
+  }
 
   return {
     requestQueryParams: params.length > 0 ? params : null,
@@ -4862,7 +4874,12 @@ defineExpose({
 
         <!-- Examples Tab -->
         <div v-else-if="activeTab === 'examples'" :class="tabPanelClass">
-          <RequestExampleManager :request-id="props.request.id" :read-only="readOnly" />
+          <RequestExampleManager
+            ref="exampleManagerRef"
+            :request-id="props.request.id"
+            :read-only="readOnly"
+            :refresh-token="examplesRefreshToken"
+          />
         </div>
 
         <div

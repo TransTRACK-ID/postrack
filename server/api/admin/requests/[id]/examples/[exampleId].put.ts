@@ -1,7 +1,7 @@
 import { db } from '../../../../../db';
 import { requestExamples, savedRequests } from '../../../../../db/schema';
 import { eq, and } from 'drizzle-orm';
-import { formatRequestExampleResponse, normalizeRequestExampleInput } from '../../../../../utils/request-example-response';
+import { formatRequestExampleResponse, serializeRequestExampleInput } from '../../../../../utils/request-example-response';
 
 interface UpdateExampleBody {
   name?: string;
@@ -124,10 +124,10 @@ export default defineEventHandler(async (event) => {
     const updateData: Partial<{
       name: string;
       statusCode: number;
-      headers: Record<string, string> | null;
-      body: Record<string, unknown> | string | null;
-      requestQueryParams: Array<{ key: string; value: string; enabled?: boolean }> | null;
-      requestBody: Record<string, unknown> | string | null;
+      headers: string | null;
+      body: string | null;
+      requestQueryParams: string | null;
+      requestBody: string | null;
       isDefault: boolean;
       updatedAt: Date;
     }> = {
@@ -143,19 +143,19 @@ export default defineEventHandler(async (event) => {
     }
 
     if (body.headers !== undefined) {
-      updateData.headers = normalizeRequestExampleInput({ headers: body.headers }).headers;
+      updateData.headers = serializeRequestExampleInput({ headers: body.headers }).headers;
     }
 
     if (body.body !== undefined) {
-      updateData.body = normalizeRequestExampleInput({ body: body.body }).body;
+      updateData.body = serializeRequestExampleInput({ body: body.body }).body;
     }
 
     if (body.requestQueryParams !== undefined) {
-      updateData.requestQueryParams = normalizeRequestExampleInput({ requestQueryParams: body.requestQueryParams }).requestQueryParams;
+      updateData.requestQueryParams = serializeRequestExampleInput({ requestQueryParams: body.requestQueryParams }).requestQueryParams;
     }
 
     if (body.requestBody !== undefined) {
-      updateData.requestBody = normalizeRequestExampleInput({ requestBody: body.requestBody }).requestBody;
+      updateData.requestBody = serializeRequestExampleInput({ requestBody: body.requestBody }).requestBody;
     }
 
     if (body.isDefault !== undefined) {

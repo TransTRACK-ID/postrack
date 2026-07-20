@@ -1,7 +1,7 @@
 import { db } from '../../../../db';
 import { requestExamples, savedRequests } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
-import { formatRequestExampleResponse, normalizeRequestExampleInput } from '../../../../utils/request-example-response';
+import { formatRequestExampleResponse, serializeRequestExampleInput } from '../../../../utils/request-example-response';
 
 interface CreateExampleBody {
   name: string;
@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    const normalizedFields = normalizeRequestExampleInput({
+    const serializedFields = serializeRequestExampleInput({
       headers: body.headers,
       body: body.body,
       requestQueryParams: body.requestQueryParams,
@@ -100,10 +100,10 @@ export default defineEventHandler(async (event) => {
         requestId,
         name: body.name.trim(),
         statusCode: body.statusCode,
-        headers: normalizedFields.headers,
-        body: normalizedFields.body,
-        requestQueryParams: normalizedFields.requestQueryParams,
-        requestBody: normalizedFields.requestBody,
+        headers: serializedFields.headers,
+        body: serializedFields.body,
+        requestQueryParams: serializedFields.requestQueryParams,
+        requestBody: serializedFields.requestBody,
         isDefault: body.isDefault || false
       })
       .returning())[0];

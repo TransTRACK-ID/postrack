@@ -18,6 +18,7 @@ interface RequestExample {
 interface Props {
   requestId: string;
   readOnly?: boolean;
+  refreshToken?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -300,10 +301,20 @@ watch(() => props.requestId, () => {
   fetchExamples();
 }, { immediate: true });
 
+watch(() => props.refreshToken, () => {
+  if (props.requestId) {
+    fetchExamples();
+  }
+});
+
 onMounted(() => {
   if (props.requestId) {
     fetchExamples();
   }
+});
+
+defineExpose({
+  refresh: fetchExamples
 });
 </script>
 

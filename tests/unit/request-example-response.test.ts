@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatRequestExampleResponse, normalizeRequestExampleInput } from '../../server/utils/request-example-response';
+import {
+  formatRequestExampleResponse,
+  normalizeRequestExampleInput,
+  serializeRequestExampleInput
+} from '../../server/utils/request-example-response';
 
 describe('request-example-response', () => {
   it('parses stored JSON text fields when formatting example responses', () => {
@@ -31,5 +35,16 @@ describe('request-example-response', () => {
 
     expect(normalized.headers).toEqual({ 'content-type': 'application/json' });
     expect(normalized.requestQueryParams).toEqual([{ key: 'ABC', value: 'OK', enabled: true }]);
+  });
+
+  it('serializes array query params to JSON text for database storage', () => {
+    const serialized = serializeRequestExampleInput({
+      requestQueryParams: [{ key: 'ABC', value: 'OK', enabled: true }],
+      headers: { 'content-type': 'application/json' }
+    });
+
+    expect(serialized.requestQueryParams).toBe('[{"key":"ABC","value":"OK","enabled":true}]');
+    expect(serialized.headers).toBe('{"content-type":"application/json"}');
+    expect(JSON.parse(serialized.requestQueryParams!)).toEqual([{ key: 'ABC', value: 'OK', enabled: true }]);
   });
 });
