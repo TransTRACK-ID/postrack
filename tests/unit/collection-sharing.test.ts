@@ -69,10 +69,26 @@ describe('treeCollectionFilter', () => {
     expect(filtered.projects[0].collectionCount).toBe(1)
   })
 
-  it('removes projects with no accessible collections', () => {
-    const filtered = filterWorkspaceTreeForCollectionOnlyAccess(workspace, ['collection-missing'])
-    expect(filtered.projects).toHaveLength(0)
-    expect(filtered.projectCount).toBe(0)
+  it('filters multiple collections independently per workspace', () => {
+    const multi = {
+      id: 'workspace-1',
+      name: 'Workspace',
+      projects: [
+        {
+          id: 'project-1',
+          collections: [
+            { id: 'collection-1', name: 'Shared' },
+            { id: 'collection-2', name: 'Private' },
+            { id: 'collection-3', name: 'Also private' }
+          ],
+          collectionCount: 3
+        }
+      ],
+      projectCount: 1
+    }
+
+    const filtered = filterWorkspaceTreeForCollectionOnlyAccess(multi, ['collection-1'])
+    expect(filtered.projects[0].collections.map((c) => c.id)).toEqual(['collection-1'])
   })
 })
 

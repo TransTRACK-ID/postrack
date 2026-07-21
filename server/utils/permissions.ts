@@ -1,10 +1,11 @@
 import { db } from '../db';
 import { workspaces, workspaceShares, workspaceAccess, workspaceMembers, collectionMembers, collections, projects } from '../db/schema';
-import { eq, and, or, gt, isNull, inArray } from 'drizzle-orm';
+import { eq, and, or, gt, isNull, isNotNull, inArray } from 'drizzle-orm';
 import type { SharePermission } from '../db/schema/workspaceShare';
 import type { MemberPermission } from '../db/schema/workspaceMember';
 import type { CollectionMemberPermission } from '../db/schema/collectionMember';
 import { getUserEmailOrFallback } from './userMapping';
+import { cache, CacheKeys } from './cache';
 
 /**
  * Check if the given email is a Super Admin
@@ -456,15 +457,135 @@ export async function getAccessibleCollectionIds(
 }
 
 /**
+ * Workspaces where the user has full (unscoped) access: owner, workspace member,
+ * or workspace-level share. Collection/folder scoped shares do not count.
+ */
+async function getFullWorkspaceAccessWorkspaceIds(
+  userId: string,
+  workspaceIds: string[],
+  userEmail?: string
+): Promise<Set<string>> {
+  const fullAccess = new Set<string>();
+  if (workspaceIds.length === 0) {
+    return fullAccess;
+  }
+
+  const now = new Date();
+
+  const workspaceOwners = await db
+    .select({ id: workspaces.id, ownerId: workspaces.ownerId })
+    .from(workspaces)
+    .where(inArray(workspaces.id, workspaceIds));
+
+  for (const workspace of workspaceOwners) {
+    const isLegacyOwner =
+      workspace.ownerId === null || workspace.ownerId === 'unknown' || workspace.ownerId === '';
+    if (workspace.ownerId === userId || isLegacyOwner) {
+      fullAccess.add(workspace.id);
+    }
+  }
+
+  const memberAccess = await db
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.status, 'accepted'),
+        inArray(workspaceMembers.workspaceId, workspaceIds)
+      )
+    );
+
+  for (const member of memberAccess) {
+    fullAccess.add(member.workspaceId);
+  }
+
+  if (userEmail) {
+    const normalizedEmail = userEmail.toLowerCase().trim();
+    const pendingInvitations = await db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.email, normalizedEmail),
+          eq(workspaceMembers.status, 'pending'),
+          inArray(workspaceMembers.workspaceId, workspaceIds)
+        )
+      );
+
+    for (const invitation of pendingInvitations) {
+      fullAccess.add(invitation.workspaceId);
+    }
+  }
+
+  const workspaceLevelShares = await db
+    .select({ workspaceId: workspaceShares.workspaceId })
+    .from(workspaceAccess)
+    .innerJoin(workspaceShares, eq(workspaceAccess.shareId, workspaceShares.id))
+    .where(
+      and(
+        eq(workspaceAccess.userId, userId),
+        inArray(workspaceShares.workspaceId, workspaceIds),
+        eq(workspaceShares.isActive, true),
+        isNull(workspaceShares.collectionId),
+        isNull(workspaceShares.folderId),
+        or(isNull(workspaceShares.expiresAt), gt(workspaceShares.expiresAt, now))
+      )
+    );
+
+  for (const share of workspaceLevelShares) {
+    fullAccess.add(share.workspaceId);
+  }
+
+  return fullAccess;
+}
+
+/**
  * Get workspace IDs where user has collection-only access (no full workspace permission)
  */
 export async function getCollectionOnlyWorkspaceIds(
   userId: string,
   userEmail?: string
 ): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  const now = new Date();
+
+  const addCollection = (workspaceId: string, collectionId: string) => {
+    const existing = result.get(workspaceId) ?? [];
+    if (!existing.includes(collectionId)) {
+      existing.push(collectionId);
+      result.set(workspaceId, existing);
+    }
+  };
+
   const accessibleCollectionIds = await getAccessibleCollectionIds(userId, userEmail);
-  if (accessibleCollectionIds.length === 0) {
-    return new Map();
+
+  const collectionShareRows = await db
+    .select({
+      workspaceId: workspaceShares.workspaceId,
+      collectionId: workspaceShares.collectionId
+    })
+    .from(workspaceAccess)
+    .innerJoin(workspaceShares, eq(workspaceAccess.shareId, workspaceShares.id))
+    .where(
+      and(
+        eq(workspaceAccess.userId, userId),
+        eq(workspaceShares.isActive, true),
+        isNotNull(workspaceShares.collectionId),
+        or(isNull(workspaceShares.expiresAt), gt(workspaceShares.expiresAt, now))
+      )
+    );
+
+  const scopedCollectionIds = [
+    ...accessibleCollectionIds,
+    ...collectionShareRows
+      .map((row) => row.collectionId)
+      .filter((id): id is string => Boolean(id))
+  ];
+
+  const uniqueCollectionIds = [...new Set(scopedCollectionIds)];
+  if (uniqueCollectionIds.length === 0) {
+    return result;
   }
 
   const collectionRows = await db
@@ -474,20 +595,22 @@ export async function getCollectionOnlyWorkspaceIds(
     })
     .from(collections)
     .innerJoin(projects, eq(collections.projectId, projects.id))
-    .where(inArray(collections.id, accessibleCollectionIds));
+    .where(inArray(collections.id, uniqueCollectionIds));
 
-  const workspaceIds = [...new Set(collectionRows.map((row) => row.workspaceId))];
-  const workspacePermissionMap = await getWorkspacePermissionsBatch(userId, workspaceIds);
+  const workspaceIds = [
+    ...new Set([
+      ...collectionRows.map((row) => row.workspaceId),
+      ...collectionShareRows.map((row) => row.workspaceId)
+    ])
+  ];
 
-  const result = new Map<string, string[]>();
+  const fullAccessWorkspaceIds = await getFullWorkspaceAccessWorkspaceIds(userId, workspaceIds, userEmail);
+
   for (const row of collectionRows) {
-    if (workspacePermissionMap.has(row.workspaceId)) {
+    if (fullAccessWorkspaceIds.has(row.workspaceId)) {
       continue;
     }
-
-    const existing = result.get(row.workspaceId) ?? [];
-    existing.push(row.collectionId);
-    result.set(row.workspaceId, existing);
+    addCollection(row.workspaceId, row.collectionId);
   }
 
   return result;
@@ -611,7 +734,9 @@ export async function getWorkspacePermissionsBatch(
         workspaceId: workspaceShares.workspaceId,
         permission: workspaceAccess.permission,
         shareIsActive: workspaceShares.isActive,
-        shareExpiresAt: workspaceShares.expiresAt
+        shareExpiresAt: workspaceShares.expiresAt,
+        collectionId: workspaceShares.collectionId,
+        folderId: workspaceShares.folderId
       })
       .from(workspaceAccess)
       .innerJoin(workspaceShares, eq(workspaceAccess.shareId, workspaceShares.id))
@@ -626,6 +751,7 @@ export async function getWorkspacePermissionsBatch(
     for (const access of sharedAccess) {
       if (!access.shareIsActive) continue;
       if (access.shareExpiresAt && access.shareExpiresAt < now) continue;
+      if (access.collectionId || access.folderId) continue;
       if (!permissionMap.has(access.workspaceId)) {
         permissionMap.set(access.workspaceId, access.permission as PermissionLevel);
       }
@@ -780,6 +906,7 @@ export async function recordSharedAccess(shareId: string, userId: string, permis
     .limit(1);
 
   if (!shareRecord.length) {
+    invalidateUserTreeCache(userId);
     return;
   }
 
@@ -811,6 +938,7 @@ export async function recordSharedAccess(shareId: string, userId: string, permis
         });
     }
 
+    invalidateUserTreeCache(userId);
     return;
   }
 
@@ -839,6 +967,13 @@ export async function recordSharedAccess(shareId: string, userId: string, permis
         acceptedAt: now
       });
   }
+
+  invalidateUserTreeCache(userId);
+}
+
+function invalidateUserTreeCache(userId: string): void {
+  cache.delete(CacheKeys.workspaceTree(userId));
+  cache.delete(CacheKeys.workspaceTreeLight(userId));
 }
 
 /**
