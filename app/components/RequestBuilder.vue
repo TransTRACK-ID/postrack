@@ -537,6 +537,10 @@ const toggleResponseCollapse = () => {
 // Check if response has content or is currently loading
 const hasResponse = computed(() => response.value !== null || isLoading.value);
 
+const isResponsePanelVisible = computed(
+  () => hasResponse.value && !isResponseCollapsed.value && response.value !== null
+);
+
 watch([isResponseCollapsed, hasResponse], () => {
   nextTick(updateContainerHeight);
 });
@@ -2939,7 +2943,7 @@ const updateSearchMatches = async (resetToFirstMatch = true) => {
 
   if (
     !searchQuery.value.trim() ||
-    activeTab.value !== 'response' ||
+    !isResponsePanelVisible.value ||
     responseViewType.value !== 'pretty' ||
     !responseContentRef.value
   ) {
@@ -3015,7 +3019,7 @@ watch(searchQuery, () => {
   updateSearchMatches(true);
 });
 
-watch([responseViewType, activeTab], () => {
+watch([responseViewType, isResponsePanelVisible], () => {
   updateSearchMatches(true);
 });
 
@@ -3033,7 +3037,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   } else if ((e.metaKey || e.ctrlKey) && (e.shiftKey && e.key === 'S')) {
     e.preventDefault();
     openSaveAsDialog();
-  } else if ((e.metaKey || e.ctrlKey) && e.key === 'f' && activeTab.value === 'response') {
+  } else if ((e.metaKey || e.ctrlKey) && e.key === 'f' && isResponsePanelVisible.value) {
     e.preventDefault();
     openResponseSearch();
   }
