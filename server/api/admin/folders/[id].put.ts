@@ -266,7 +266,6 @@ export default defineEventHandler(async (event) => {
       .returning())[0];
 
     // Invalidate cache for the user
-    const user = event.context.user;
     if (user?.id) {
       cache.delete(CacheKeys.workspaceTree(user.id));
       cache.deletePattern('tree:');
