@@ -2511,7 +2511,8 @@ const getBinaryData = () => {
     contentType,
     contentDisposition: getResponseHeader('content-disposition'),
     bodyFilename: typeof body.filename === 'string' ? body.filename : null,
-    headers: response.value.headers
+    headers: response.value.headers,
+    requestUrl: response.value.resolvedValues?.url || form.value.url
   });
 
   return {

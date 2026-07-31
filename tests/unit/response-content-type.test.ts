@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  extractDownloadFilenameFromHeaders,
   getExtensionForContentType,
   getFilenameFromContentDisposition,
   isBinaryResponseContentType,
@@ -68,6 +69,18 @@ describe('response-content-type', () => {
     expect(getFilenameFromContentDisposition("attachment; filename*=UTF-8''report%20file.xlsx")).toBe('report file.xlsx');
     expect(getFilenameFromContentDisposition('attachment;filename=export.xlsx')).toBe('export.xlsx');
     expect(getFilenameFromContentDisposition('attachment; filename="postrack.xlsx"; filename*=UTF-8\'\'api-report.xlsx')).toBe('api-report.xlsx');
+    expect(getFilenameFromContentDisposition('attachment; fileName="devices-report.xlsx"')).toBe('devices-report.xlsx');
+    expect(getFilenameFromContentDisposition('attachment; filename=report%20devices.xlsx')).toBe('report devices.xlsx');
+  });
+
+  it('extracts filenames from response headers and custom filename headers', () => {
+    expect(extractDownloadFilenameFromHeaders({
+      'content-disposition': 'attachment; filename="api-report.xlsx"'
+    })).toBe('api-report.xlsx');
+
+    expect(extractDownloadFilenameFromHeaders({
+      'X-Filename': 'api-report.xlsx'
+    })).toBe('api-report.xlsx');
   });
 
   it('prefers upstream filename over postrack fallback when resolving downloads', () => {
@@ -85,5 +98,10 @@ describe('response-content-type', () => {
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       headers: { 'X-Filename': 'api-report.xlsx' }
     })).toBe('api-report.xlsx');
+
+    expect(resolveDownloadFilename({
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      requestUrl: 'https://api.example.com/api/v1/report-devices/excel'
+    })).toBe('excel.xlsx');
   });
 });

@@ -17,8 +17,7 @@ import {
   isBinaryResponseContentType,
   isJsonResponseContentType,
   isTextResponseContentType,
-  getFilenameFromContentDisposition,
-  getHeaderValueCaseInsensitive,
+  extractDownloadFilenameFromHeaders,
   sanitizeDownloadFilename
 } from '~/utils/response-content-type';
 
@@ -280,12 +279,7 @@ async function handleBinaryResponse(response: Response): Promise<any> {
   });
 
   const contentType = response.headers.get('content-type') || blob.type || 'application/octet-stream';
-  const upstreamFilename = getFilenameFromContentDisposition(response.headers.get('content-disposition') || undefined)
-    || getHeaderValueCaseInsensitive(responseHeaders, 'x-filename')
-    || getHeaderValueCaseInsensitive(responseHeaders, 'x-file-name')
-    || getHeaderValueCaseInsensitive(responseHeaders, 'x-suggested-filename')
-    || getHeaderValueCaseInsensitive(responseHeaders, 'file-name')
-    || null;
+  const upstreamFilename = extractDownloadFilenameFromHeaders(responseHeaders);
 
   return {
     _binary: true,

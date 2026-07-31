@@ -111,38 +111,149 @@ export function getExtensionForContentType(contentType: string): string {
   return MIME_EXTENSION_MAP[normalized] || 'bin';
 }
 
-export function getFilenameFromContentDisposition(contentDisposition: string | undefined): string | null {
-  if (!contentDisposition) {
-    return null;
+function decodeRfc2047Value(value: string): string {
+  const encodedWordMatch = value.match(/^=\?([^?]+)\?([BQbq])\?([^?]*)\?=$/);
+  if (!encodedWordMatch) {
+    return value;
   }
 
-  const extendedMatch = contentDisposition.match(/filename\*\s*=\s*([^;]+)/i);
-  if (extendedMatch?.[1]) {
-    const value = extendedMatch[1].trim().replace(/^"(.*)"$/, '$1');
-    const rfc5987Match = value.match(/^([^']*)'[^']*'(.*)$/);
-    if (rfc5987Match?.[2]) {
-      try {
-        return decodeURIComponent(rfc5987Match[2]);
-      } catch {
-        return rfc5987Match[2];
-      }
-    }
+  const encoding = encodedWordMatch[2].toUpperCase();
+  const encodedText = encodedWordMatch[3];
 
+  if (encoding === 'B') {
     try {
-      return decodeURIComponent(value);
+      return Buffer.from(encodedText, 'base64').toString('utf8');
     } catch {
       return value;
     }
   }
 
-  const quotedMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"/i);
-  if (quotedMatch?.[1]) {
-    return quotedMatch[1];
+  if (encoding === 'Q') {
+    return encodedText
+      .replace(/_/g, ' ')
+      .replace(/=([0-9A-F]{2})/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
   }
 
-  const unquotedMatch = contentDisposition.match(/filename\s*=\s*([^;\s]+)/i);
-  if (unquotedMatch?.[1]) {
-    return unquotedMatch[1].trim();
+  return value;
+}
+
+function decodeFilenameValue(value: string): string {
+  const trimmed = value.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) {
+    return '';
+  }
+
+  const rfc2047Decoded = decodeRfc2047Value(trimmed);
+  if (rfc2047Decoded !== trimmed) {
+    return rfc2047Decoded;
+  }
+
+  if (/%[0-9A-F]{2}/i.test(trimmed)) {
+    try {
+      return decodeURIComponent(trimmed);
+    } catch {
+      return trimmed;
+    }
+  }
+
+  return trimmed;
+}
+
+function decodeExtendedFilenameValue(value: string): string {
+  const trimmed = value.trim().replace(/^["']|["']$/g, '');
+  const rfc5987Match = trimmed.match(/^([^']*)'[^']*'(.*)$/);
+  const encodedValue = rfc5987Match?.[2] || trimmed;
+
+  try {
+    return decodeURIComponent(encodedValue);
+  } catch {
+    return encodedValue;
+  }
+}
+
+export function parseContentDispositionParameters(contentDisposition: string): Map<string, string> {
+  const params = new Map<string, string>();
+  let index = 0;
+
+  while (index < contentDisposition.length && contentDisposition[index] !== ';') {
+    index++;
+  }
+
+  while (index < contentDisposition.length) {
+    index++;
+    while (index < contentDisposition.length && /\s/.test(contentDisposition[index])) {
+      index++;
+    }
+
+    const keyStart = index;
+    while (index < contentDisposition.length && contentDisposition[index] !== '=' && contentDisposition[index] !== ';') {
+      index++;
+    }
+
+    const key = contentDisposition.slice(keyStart, index).trim().toLowerCase();
+    if (!key || index >= contentDisposition.length || contentDisposition[index] !== '=') {
+      continue;
+    }
+
+    index++;
+    while (index < contentDisposition.length && /\s/.test(contentDisposition[index])) {
+      index++;
+    }
+
+    let value = '';
+    if (contentDisposition[index] === '"') {
+      index++;
+      while (index < contentDisposition.length) {
+        const char = contentDisposition[index];
+        if (char === '\\' && index + 1 < contentDisposition.length) {
+          value += contentDisposition[index + 1];
+          index += 2;
+          continue;
+        }
+        if (char === '"') {
+          index++;
+          break;
+        }
+        value += char;
+        index++;
+      }
+    } else {
+      while (index < contentDisposition.length && contentDisposition[index] !== ';') {
+        value += contentDisposition[index];
+        index++;
+      }
+      value = value.trim();
+    }
+
+    params.set(key, value);
+  }
+
+  return params;
+}
+
+export function getFilenameFromContentDisposition(contentDisposition: string | undefined): string | null {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const params = parseContentDispositionParameters(contentDisposition);
+
+  for (const [key, value] of params.entries()) {
+    if (key === 'filename*' && value) {
+      const decoded = decodeExtendedFilenameValue(value);
+      if (decoded) {
+        return decoded;
+      }
+    }
+  }
+
+  for (const [key, value] of params.entries()) {
+    if ((key === 'filename' || key === 'name') && value) {
+      const decoded = decodeFilenameValue(value);
+      if (decoded) {
+        return decoded;
+      }
+    }
   }
 
   return null;
@@ -168,33 +279,93 @@ export function getHeaderValueCaseInsensitive(
 }
 
 const DOWNLOAD_FILENAME_HEADER_CANDIDATES = [
+  'content-disposition',
   'x-filename',
   'x-file-name',
   'x-suggested-filename',
-  'file-name'
+  'x-download-filename',
+  'download-filename',
+  'file-name',
+  'filename'
 ];
+
+export function extractDownloadFilenameFromHeaders(
+  headers: Record<string, string> | undefined
+): string | null {
+  if (!headers) {
+    return null;
+  }
+
+  for (const headerName of DOWNLOAD_FILENAME_HEADER_CANDIDATES) {
+    const value = getHeaderValueCaseInsensitive(headers, headerName);
+    if (!value) {
+      continue;
+    }
+
+    if (headerName === 'content-disposition' || value.includes('filename')) {
+      const fromDisposition = getFilenameFromContentDisposition(value);
+      if (fromDisposition) {
+        return fromDisposition;
+      }
+    }
+
+    if (headerName !== 'content-disposition') {
+      const decoded = decodeFilenameValue(value);
+      if (decoded) {
+        return decoded;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function inferFilenameFromUrl(url: string, contentType = ''): string | null {
+  try {
+    const stripped = url.split('?')[0]?.split('#')[0] || '';
+    const segments = stripped.split('/').filter(Boolean);
+    const lastSegment = segments[segments.length - 1];
+    if (!lastSegment || lastSegment.includes('{{') || lastSegment.includes('}}')) {
+      return null;
+    }
+
+    const extension = getExtensionForContentType(contentType);
+    const sanitized = sanitizeDownloadFilename(decodeURIComponent(lastSegment));
+    if (/\.[a-z0-9]{2,8}$/i.test(sanitized)) {
+      return sanitized;
+    }
+
+    return `${sanitized}.${extension}`;
+  } catch {
+    return null;
+  }
+}
 
 export function resolveDownloadFilename(options: {
   contentType?: string;
   contentDisposition?: string;
   bodyFilename?: string | null;
   headers?: Record<string, string>;
+  requestUrl?: string;
 }): string {
   if (options.bodyFilename?.trim()) {
     return sanitizeDownloadFilename(options.bodyFilename.trim());
   }
 
-  const disposition = options.contentDisposition
-    || getHeaderValueCaseInsensitive(options.headers, 'content-disposition');
-  const fromDisposition = getFilenameFromContentDisposition(disposition);
-  if (fromDisposition) {
-    return sanitizeDownloadFilename(fromDisposition);
+  const headersWithDisposition = { ...(options.headers || {}) };
+  if (options.contentDisposition && !getHeaderValueCaseInsensitive(headersWithDisposition, 'content-disposition')) {
+    headersWithDisposition['content-disposition'] = options.contentDisposition;
   }
 
-  for (const headerName of DOWNLOAD_FILENAME_HEADER_CANDIDATES) {
-    const value = getHeaderValueCaseInsensitive(options.headers, headerName);
-    if (value) {
-      return sanitizeDownloadFilename(value);
+  const fromHeaders = extractDownloadFilenameFromHeaders(headersWithDisposition);
+  if (fromHeaders) {
+    return sanitizeDownloadFilename(fromHeaders);
+  }
+
+  if (options.requestUrl) {
+    const fromUrl = inferFilenameFromUrl(options.requestUrl, options.contentType || '');
+    if (fromUrl) {
+      return fromUrl;
     }
   }
 

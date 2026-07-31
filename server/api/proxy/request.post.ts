@@ -24,8 +24,7 @@ import {
   isBinaryResponseContentType,
   isJsonResponseContentType,
   isTextResponseContentType,
-  getFilenameFromContentDisposition,
-  getHeaderValueCaseInsensitive,
+  extractDownloadFilenameFromHeaders,
   sanitizeDownloadFilename
 } from '../../../app/utils/response-content-type';
 
@@ -712,12 +711,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       } else if (isBinaryResponseContentType(contentType)) {
         const arrayBuffer = await response.arrayBuffer();
         const base64 = Buffer.from(arrayBuffer).toString('base64');
-        const upstreamFilename = getFilenameFromContentDisposition(response.headers.get('content-disposition') || undefined)
-          || getHeaderValueCaseInsensitive(responseHeaders, 'x-filename')
-          || getHeaderValueCaseInsensitive(responseHeaders, 'x-file-name')
-          || getHeaderValueCaseInsensitive(responseHeaders, 'x-suggested-filename')
-          || getHeaderValueCaseInsensitive(responseHeaders, 'file-name')
-          || null;
+        const upstreamFilename = extractDownloadFilenameFromHeaders(responseHeaders);
         responseBody = {
           _binary: true,
           encoding: 'base64',
