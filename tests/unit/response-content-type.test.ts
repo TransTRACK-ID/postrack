@@ -4,7 +4,8 @@ import {
   getFilenameFromContentDisposition,
   isBinaryResponseContentType,
   isJsonResponseContentType,
-  isTextResponseContentType
+  isTextResponseContentType,
+  isXmlResponseContentType
 } from '../../app/utils/response-content-type';
 
 describe('response-content-type', () => {
@@ -28,6 +29,19 @@ describe('response-content-type', () => {
     expect(isBinaryResponseContentType('application/problem+json')).toBe(false);
     expect(isBinaryResponseContentType('application/vnd.api+json')).toBe(false);
     expect(isBinaryResponseContentType('application/soap+xml')).toBe(false);
+  });
+
+  it('does not treat office openxml spreadsheets as XML', () => {
+    const xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    expect(isXmlResponseContentType(xlsx)).toBe(false);
+    expect(isBinaryResponseContentType(xlsx)).toBe(true);
+    expect(isJsonResponseContentType(xlsx)).toBe(false);
+  });
+
+  it('still treats real XML content types as XML', () => {
+    expect(isXmlResponseContentType('application/xml')).toBe(true);
+    expect(isXmlResponseContentType('text/xml')).toBe(true);
+    expect(isXmlResponseContentType('application/soap+xml')).toBe(true);
   });
 
   it('classifies common media families', () => {

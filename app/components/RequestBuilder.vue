@@ -23,7 +23,8 @@ import {
   getExtensionForContentType,
   getFilenameFromContentDisposition,
   isBinaryResponseContentType,
-  isJsonResponseContentType
+  isJsonResponseContentType,
+  isXmlResponseContentType
 } from '~/utils/response-content-type'
 
 // Metadata keys for body format persistence
@@ -2451,12 +2452,17 @@ const hasUnsavedChanges = computed(() => {
   return protocolChanged || socketConfigChanged || urlChanged || methodChanged || headersChanged || bodyChanged || authChanged || inheritAuthChanged || mockConfigChanged || preScriptChanged || postScriptChanged || pathVarsChanged || paramNotesChanged;
 });
 
-const getContentType = () => {
-  if (response.value && 'success' in response.value && response.value.headers) {
-    return response.value.headers['content-type'] || '';
+const getResponseHeader = (name: string): string => {
+  if (!response.value || !('success' in response.value) || !response.value.headers) {
+    return '';
   }
-  return '';
+
+  const target = name.toLowerCase();
+  const entry = Object.entries(response.value.headers).find(([key]) => key.toLowerCase() === target);
+  return entry?.[1] || '';
 };
+
+const getContentType = () => getResponseHeader('content-type');
 
 const isJsonResponse = () => {
   if (isBinaryResponse()) return false;
@@ -2465,8 +2471,8 @@ const isJsonResponse = () => {
 };
 
 const isXmlResponse = () => {
-  const contentType = getContentType();
-  return contentType.includes('xml') || contentType.includes('text/xml');
+  if (isBinaryResponse()) return false;
+  return isXmlResponseContentType(getContentType());
 };
 
 const isHtmlResponse = () => {
@@ -2502,24 +2508,35 @@ const getBinaryData = () => {
   }
 
   const contentType = getContentType().split(';')[0] || body.mimeType || 'application/octet-stream';
-  const contentDisposition = response.value.headers?.['content-disposition']
-    || response.value.headers?.['Content-Disposition'];
-  const filename = getFilenameFromContentDisposition(contentDisposition)
+  const filename = getFilenameFromContentDisposition(getResponseHeader('content-disposition'))
     || `download.${getExtensionForContentType(contentType)}`;
 
   return {
-    src: `data:${contentType};base64,${body.data}`,
+    data: body.data as string,
     mimeType: contentType,
     size: body.size || 0,
     filename
   };
 };
 
+const canDownloadBinaryResponse = computed(() => getBinaryData() !== null);
+
 const getImageData = () => {
   if (!isImageResponse()) {
     return null;
   }
-  return getBinaryData();
+
+  const binaryData = getBinaryData();
+  if (!binaryData) {
+    return null;
+  }
+
+  return {
+    src: `data:${binaryData.mimeType};base64,${binaryData.data}`,
+    mimeType: binaryData.mimeType,
+    size: binaryData.size,
+    filename: binaryData.filename
+  };
 };
 
 const downloadBinaryResponse = () => {
@@ -2528,12 +2545,25 @@ const downloadBinaryResponse = () => {
     return;
   }
 
-  const link = document.createElement('a');
-  link.href = binaryData.src;
-  link.download = binaryData.filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  try {
+    const binaryString = atob(binaryData.data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    const blob = new Blob([bytes], { type: binaryData.mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = binaryData.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to download binary response:', error);
+  }
 };
 
 const formatBytes = (bytes: number): string => {
@@ -2947,7 +2977,7 @@ const getHighlightedJson = computed(() => {
   if (!response.value || !('success' in response.value)) return null;
   
   const body = response.value.body;
-  if (typeof body !== 'object') return null;
+  if (typeof body !== 'object' || body?._binary) return null;
   
   return highlightJson(body);
 });
@@ -3532,6 +3562,9 @@ const sendRequest = async () => {
     }
 
     response.value = result;
+    if (result.success && result.body && typeof result.body === 'object' && result.body._binary) {
+      responseViewType.value = 'pretty';
+    }
     // Capture script logs from response
     if (result.scriptLogs && result.scriptLogs.length > 0) {
       scriptLogs.value = result.scriptLogs;
@@ -5081,6 +5114,20 @@ defineExpose({
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                   </svg>
                 </button>
+                <button
+                  v-if="canDownloadBinaryResponse"
+                  type="button"
+                  @click="downloadBinaryResponse"
+                  class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-accent-blue hover:text-accent-blue/80 border border-accent-blue/30 rounded-md transition-colors duration-fast"
+                  title="Download response file"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>Download</span>
+                </button>
                 <button 
                   @click="openSaveExampleModal"
                   class="p-1.5 text-text-muted hover:text-accent-green transition-colors duration-fast hover:scale-110 transform"
@@ -5315,6 +5362,39 @@ defineExpose({
                     />
                   </div>
 
+                  <!-- Binary File Preview -->
+                  <div v-else-if="responseViewType === 'pretty' && isBinaryResponse() && !isImageResponse()" class="h-full flex flex-col">
+                    <div class="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-border-default">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-xs text-text-muted">{{ getContentType().split(';')[0] || 'application/octet-stream' }}</span>
+                        <span v-if="getBinaryData()?.size" class="text-xs text-text-muted">({{ formatBytes(getBinaryData()!.size) }})</span>
+                      </div>
+                      <button
+                        v-if="canDownloadBinaryResponse"
+                        type="button"
+                        class="text-xs font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
+                        @click="downloadBinaryResponse"
+                      >
+                        Download {{ getBinaryData()?.filename }}
+                      </button>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center justify-center bg-bg-tertiary rounded border border-border-default p-6 text-center">
+                      <div class="text-sm text-text-primary font-medium mb-1">Binary response received</div>
+                      <div v-if="getBinaryData()?.filename" class="text-xs text-text-muted mb-4 break-all">{{ getBinaryData()?.filename }}</div>
+                      <button
+                        v-if="canDownloadBinaryResponse"
+                        type="button"
+                        class="px-3 py-1.5 text-xs font-medium rounded border border-border-default bg-bg-secondary text-text-primary hover:bg-bg-hover transition-colors"
+                        @click="downloadBinaryResponse"
+                      >
+                        Download file
+                      </button>
+                      <p v-else class="text-xs text-text-muted max-w-md">
+                        File data was not preserved in this response. Send the request again to download the file.
+                      </p>
+                    </div>
+                  </div>
+
                   <!-- XML View -->
                   <div v-else-if="responseViewType === 'pretty' && isXmlResponse()" class="space-y-1">
                     <div class="flex items-center gap-2 mb-3 pb-2 border-b border-border-default">
@@ -5375,38 +5455,18 @@ defineExpose({
                     </div>
                   </div>
 
-                  <!-- Binary File Preview -->
-                  <div v-else-if="responseViewType === 'pretty' && isBinaryResponse() && !isImageResponse()" class="h-full flex flex-col">
+                  <!-- Raw View -->
+                  <div v-else-if="responseViewType === 'raw'" class="space-y-1">
                     <div class="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-border-default">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="text-xs text-text-muted">{{ getContentType().split(';')[0] }}</span>
-                        <span v-if="getBinaryData()?.size" class="text-xs text-text-muted">({{ formatBytes(getBinaryData()!.size) }})</span>
-                      </div>
+                      <span class="text-xs text-text-muted">{{ getContentType().split(';')[0] || 'text/plain' }}</span>
                       <button
+                        v-if="canDownloadBinaryResponse"
                         type="button"
                         class="text-xs font-medium text-accent-blue hover:text-accent-blue/80 transition-colors"
                         @click="downloadBinaryResponse"
                       >
                         Download {{ getBinaryData()?.filename }}
                       </button>
-                    </div>
-                    <div class="flex-1 flex flex-col items-center justify-center bg-bg-tertiary rounded border border-border-default p-6 text-center">
-                      <div class="text-sm text-text-primary font-medium mb-1">Binary response received</div>
-                      <div class="text-xs text-text-muted mb-4 break-all">{{ getBinaryData()?.filename }}</div>
-                      <button
-                        type="button"
-                        class="px-3 py-1.5 text-xs font-medium rounded border border-border-default bg-bg-secondary text-text-primary hover:bg-bg-hover transition-colors"
-                        @click="downloadBinaryResponse"
-                      >
-                        Download file
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Raw View -->
-                  <div v-else-if="responseViewType === 'raw'" class="space-y-1">
-                    <div class="flex items-center gap-2 mb-3 pb-2 border-b border-border-default">
-                      <span class="text-xs text-text-muted">{{ getContentType().split(';')[0] }}</span>
                     </div>
                     <pre class="font-mono text-xs leading-normal bg-bg-tertiary rounded p-3 border border-border-default overflow-auto whitespace-pre-wrap break-words text-text-primary m-0">{{ getResponseText() }}</pre>
                   </div>

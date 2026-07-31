@@ -43,7 +43,27 @@ export function isTextBasedApplicationContentType(contentType: string): boolean 
 
 export function isJsonResponseContentType(contentType: string): boolean {
   const normalized = normalizeContentType(contentType);
+  if (isBinaryResponseContentType(normalized)) {
+    return false;
+  }
   return normalized.includes('json') || normalized.endsWith('+json');
+}
+
+export function isXmlResponseContentType(contentType: string): boolean {
+  const normalized = normalizeContentType(contentType);
+  if (isBinaryResponseContentType(normalized)) {
+    return false;
+  }
+  if (normalized.startsWith('text/xml')) {
+    return true;
+  }
+  if (normalized === 'application/xml') {
+    return true;
+  }
+  if (normalized.endsWith('+xml')) {
+    return true;
+  }
+  return false;
 }
 
 export function isTextResponseContentType(contentType: string): boolean {
