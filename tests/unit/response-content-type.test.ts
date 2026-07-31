@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  binaryResponseMissingFilename,
   extractDownloadFilenameFromHeaders,
   getExtensionForContentType,
   getFilenameFromContentDisposition,
@@ -71,6 +72,28 @@ describe('response-content-type', () => {
     expect(getFilenameFromContentDisposition('attachment; filename="postrack.xlsx"; filename*=UTF-8\'\'api-report.xlsx')).toBe('api-report.xlsx');
     expect(getFilenameFromContentDisposition('attachment; fileName="devices-report.xlsx"')).toBe('devices-report.xlsx');
     expect(getFilenameFromContentDisposition('attachment; filename=report%20devices.xlsx')).toBe('report devices.xlsx');
+    expect(getFilenameFromContentDisposition('attachment, filename=List_Trip_Report_31-07-2026.xlsx')).toBe('List_Trip_Report_31-07-2026.xlsx');
+    expect(getFilenameFromContentDisposition('attachment; filename="List_Trip_Report_31-07-2026.xlsx"')).toBe('List_Trip_Report_31-07-2026.xlsx');
+  });
+
+  it('detects binary responses that still need filename recovery', () => {
+    expect(binaryResponseMissingFilename({
+      _binary: true,
+      data: 'UEsFBg=='
+    }, {})).toBe(true);
+
+    expect(binaryResponseMissingFilename({
+      _binary: true,
+      data: 'UEsFBg==',
+      filename: 'List_Trip_Report_31-07-2026.xlsx'
+    }, {})).toBe(false);
+
+    expect(binaryResponseMissingFilename({
+      _binary: true,
+      data: 'UEsFBg=='
+    }, {
+      'content-disposition': 'attachment; filename="List_Trip_Report_31-07-2026.xlsx"'
+    })).toBe(false);
   });
 
   it('extracts filenames from response headers and custom filename headers', () => {
@@ -98,6 +121,12 @@ describe('response-content-type', () => {
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       headers: { 'X-Filename': 'api-report.xlsx' }
     })).toBe('api-report.xlsx');
+
+    expect(resolveDownloadFilename({
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      bodyFilename: 'List_Trip_Report_31-07-2026.xlsx',
+      requestUrl: 'https://api.example.com/api/v1/report-devices/excel'
+    })).toBe('List_Trip_Report_31-07-2026.xlsx');
 
     expect(resolveDownloadFilename({
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

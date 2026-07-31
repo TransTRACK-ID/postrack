@@ -23,7 +23,9 @@ import {
   isBinaryResponseContentType,
   isJsonResponseContentType,
   isXmlResponseContentType,
-  resolveDownloadFilename
+  resolveDownloadFilename,
+  binaryResponseMissingFilename,
+  extractDownloadFilenameFromHeaders
 } from '~/utils/response-content-type'
 
 // Metadata keys for body format persistence
@@ -3499,6 +3501,47 @@ const sendRequest = async () => {
     }
 
     let result: ProxyResponse | ProxyErrorResponse;
+    const PROXY_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
+
+    const executeProxyRequest = async () => {
+      let proxyRequestBody = requestBody;
+      if (requestBody instanceof FormData) {
+        const formEntries = Array.from(requestBody.entries());
+        const results = await Promise.all(formEntries.map(async ([key, value]) => {
+          if (value instanceof File) {
+            if (value.size > PROXY_FILE_SIZE_LIMIT) {
+              console.error(`[RequestBuilder] File "${value.name}" (${(value.size / 1024 / 1024).toFixed(1)}MB) exceeds ${PROXY_FILE_SIZE_LIMIT / 1024 / 1024}MB proxy limit — field omitted`);
+              return { key, value: '', isFile: true, fileName: value.name, fileType: 'application/octet-stream' };
+            }
+            try {
+              const base64 = await fileToBase64(value);
+              return { key, value: base64, isFile: true, fileName: value.name, fileType: value.type };
+            } catch (err) {
+              console.error(`[RequestBuilder] Failed to encode file "${value.name}":`, err);
+              return { key, value: '', isFile: true, fileName: value.name, fileType: 'application/octet-stream' };
+            }
+          }
+          return { key, value };
+        }));
+        proxyRequestBody = { __formData: true, entries: results };
+      }
+
+      return await $fetch<ProxyResponse | ProxyErrorResponse>('/api/proxy/request', {
+        method: 'POST',
+        body: {
+          url: requestUrl,
+          method: form.value.method,
+          headers: requestHeaders,
+          body: proxyRequestBody,
+          workspaceId: props.workspaceId,
+          environmentId: props.environmentId,
+          savedRequestId: props.request.id || undefined,
+          preScript: preScript.value,
+          postScript: postScript.value
+        },
+        signal: abortController.value?.signal
+      });
+    };
 
     // Always try direct browser fetch first
     const { executeClientRequest } = useClientRequest();
@@ -3517,51 +3560,37 @@ const sendRequest = async () => {
 
     // If the browser blocked the request due to CORS, automatically retry via server proxy
     if (!result.success && (result as ProxyErrorResponse).error?.code === 'CORS_ERROR') {
-      const PROXY_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
       try {
-        let proxyRequestBody = requestBody;
-        if (requestBody instanceof FormData) {
-          const formEntries = Array.from(requestBody.entries());
-          const results = await Promise.all(formEntries.map(async ([key, value]) => {
-            if (value instanceof File) {
-              if (value.size > PROXY_FILE_SIZE_LIMIT) {
-                console.error(`[RequestBuilder] File "${value.name}" (${(value.size / 1024 / 1024).toFixed(1)}MB) exceeds ${PROXY_FILE_SIZE_LIMIT / 1024 / 1024}MB proxy limit — field omitted`);
-                return { key, value: '', isFile: true, fileName: value.name, fileType: 'application/octet-stream' };
-              }
-              try {
-                const base64 = await fileToBase64(value);
-                return { key, value: base64, isFile: true, fileName: value.name, fileType: value.type };
-              } catch (err) {
-                console.error(`[RequestBuilder] Failed to encode file "${value.name}":`, err);
-                return { key, value: '', isFile: true, fileName: value.name, fileType: 'application/octet-stream' };
-              }
-            }
-            return { key, value };
-          }));
-          proxyRequestBody = { __formData: true, entries: results };
-        }
-
-        const proxyResult = await $fetch<ProxyResponse | ProxyErrorResponse>('/api/proxy/request', {
-          method: 'POST',
-          body: {
-            url: requestUrl,
-            method: form.value.method,
-            headers: requestHeaders,
-            body: proxyRequestBody,
-            workspaceId: props.workspaceId,
-            environmentId: props.environmentId,
-            savedRequestId: props.request.id || undefined,
-            preScript: preScript.value,
-            postScript: postScript.value
-          },
-          signal: abortController.value?.signal
-        });
+        const proxyResult = await executeProxyRequest();
         if (proxyResult.success) {
           result = { ...proxyResult, viaProxy: true } as ProxyResponse;
         }
         // If proxy also fails, fall through and show the original CORS error
       } catch {
         // Proxy call itself failed (network error, server error) — keep original CORS error
+      }
+    } else if (
+      result.success
+      && binaryResponseMissingFilename(result.body, result.headers)
+    ) {
+      // Browser fetch hides Content-Disposition unless the API exposes it via CORS.
+      // Re-run through the server proxy to recover the upstream filename (Postman behavior).
+      try {
+        const proxyResult = await executeProxyRequest();
+        if (proxyResult.success) {
+          const proxyFilename = typeof proxyResult.body?.filename === 'string'
+            ? proxyResult.body.filename
+            : extractDownloadFilenameFromHeaders(proxyResult.headers);
+
+          if (proxyFilename) {
+            result.headers = { ...result.headers, ...proxyResult.headers };
+            if (result.body && typeof result.body === 'object') {
+              result.body.filename = proxyFilename;
+            }
+          }
+        }
+      } catch {
+        // Keep the direct response if proxy filename recovery fails
       }
     }
 

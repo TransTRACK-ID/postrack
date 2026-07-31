@@ -171,6 +171,42 @@ function decodeExtendedFilenameValue(value: string): string {
   }
 }
 
+function normalizeContentDispositionHeader(value: string): string {
+  let normalized = value.trim();
+  normalized = normalized.replace(/^(attachment|inline)\s*,\s*(?=filename)/i, '$1; ');
+  return normalized;
+}
+
+function scanFilenameFromDispositionString(contentDisposition: string): string | null {
+  const normalized = normalizeContentDispositionHeader(contentDisposition);
+
+  const starMatch = normalized.match(/filename\*\s*=\s*([^;]+)/i);
+  if (starMatch?.[1]) {
+    const decoded = decodeExtendedFilenameValue(starMatch[1].trim());
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  const quotedMatch = normalized.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    const decoded = decodeFilenameValue(quotedMatch[1]);
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  const unquotedMatch = normalized.match(/filename\s*=\s*([^;\s",]+)/i);
+  if (unquotedMatch?.[1]) {
+    const decoded = decodeFilenameValue(unquotedMatch[1]);
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  return null;
+}
+
 export function parseContentDispositionParameters(contentDisposition: string): Map<string, string> {
   const params = new Map<string, string>();
   let index = 0;
@@ -236,7 +272,12 @@ export function getFilenameFromContentDisposition(contentDisposition: string | u
     return null;
   }
 
-  const params = parseContentDispositionParameters(contentDisposition);
+  const scanned = scanFilenameFromDispositionString(contentDisposition);
+  if (scanned) {
+    return scanned;
+  }
+
+  const params = parseContentDispositionParameters(normalizeContentDispositionHeader(contentDisposition));
 
   for (const [key, value] of params.entries()) {
     if (key === 'filename*' && value) {
@@ -317,7 +358,38 @@ export function extractDownloadFilenameFromHeaders(
     }
   }
 
+  for (const value of Object.values(headers)) {
+    if (!value.includes('filename')) {
+      continue;
+    }
+
+    const fromDisposition = getFilenameFromContentDisposition(value);
+    if (fromDisposition) {
+      return fromDisposition;
+    }
+  }
+
   return null;
+}
+
+export function binaryResponseMissingFilename(
+  body: unknown,
+  headers?: Record<string, string>
+): boolean {
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
+
+  const binaryBody = body as { _binary?: boolean; data?: string; filename?: string };
+  if (!binaryBody._binary || !binaryBody.data) {
+    return false;
+  }
+
+  if (typeof binaryBody.filename === 'string' && binaryBody.filename.trim()) {
+    return false;
+  }
+
+  return !extractDownloadFilenameFromHeaders(headers);
 }
 
 export function inferFilenameFromUrl(url: string, contentType = ''): string | null {
