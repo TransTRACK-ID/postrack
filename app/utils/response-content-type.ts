@@ -116,24 +116,87 @@ export function getFilenameFromContentDisposition(contentDisposition: string | u
     return null;
   }
 
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) {
+  const extendedMatch = contentDisposition.match(/filename\*\s*=\s*([^;]+)/i);
+  if (extendedMatch?.[1]) {
+    const value = extendedMatch[1].trim().replace(/^"(.*)"$/, '$1');
+    const rfc5987Match = value.match(/^([^']*)'[^']*'(.*)$/);
+    if (rfc5987Match?.[2]) {
+      try {
+        return decodeURIComponent(rfc5987Match[2]);
+      } catch {
+        return rfc5987Match[2];
+      }
+    }
+
     try {
-      return decodeURIComponent(utf8Match[1]);
+      return decodeURIComponent(value);
     } catch {
-      return utf8Match[1];
+      return value;
     }
   }
 
-  const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  const quotedMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"/i);
   if (quotedMatch?.[1]) {
     return quotedMatch[1];
   }
 
-  const unquotedMatch = contentDisposition.match(/filename=([^;]+)/i);
+  const unquotedMatch = contentDisposition.match(/filename\s*=\s*([^;\s]+)/i);
   if (unquotedMatch?.[1]) {
     return unquotedMatch[1].trim();
   }
 
   return null;
+}
+
+export function sanitizeDownloadFilename(filename: string): string {
+  const basename = filename.split(/[/\\]/).pop() || filename;
+  const cleaned = basename.replace(/[\x00-\x1f\x7f]/g, '').replace(/^["']|["']$/g, '').trim();
+  return cleaned || 'download';
+}
+
+export function getHeaderValueCaseInsensitive(
+  headers: Record<string, string> | undefined,
+  name: string
+): string {
+  if (!headers) {
+    return '';
+  }
+
+  const target = name.toLowerCase();
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === target);
+  return entry?.[1] || '';
+}
+
+const DOWNLOAD_FILENAME_HEADER_CANDIDATES = [
+  'x-filename',
+  'x-file-name',
+  'x-suggested-filename',
+  'file-name'
+];
+
+export function resolveDownloadFilename(options: {
+  contentType?: string;
+  contentDisposition?: string;
+  bodyFilename?: string | null;
+  headers?: Record<string, string>;
+}): string {
+  if (options.bodyFilename?.trim()) {
+    return sanitizeDownloadFilename(options.bodyFilename.trim());
+  }
+
+  const disposition = options.contentDisposition
+    || getHeaderValueCaseInsensitive(options.headers, 'content-disposition');
+  const fromDisposition = getFilenameFromContentDisposition(disposition);
+  if (fromDisposition) {
+    return sanitizeDownloadFilename(fromDisposition);
+  }
+
+  for (const headerName of DOWNLOAD_FILENAME_HEADER_CANDIDATES) {
+    const value = getHeaderValueCaseInsensitive(options.headers, headerName);
+    if (value) {
+      return sanitizeDownloadFilename(value);
+    }
+  }
+
+  return `download.${getExtensionForContentType(options.contentType || '')}`;
 }

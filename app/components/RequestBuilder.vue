@@ -20,11 +20,10 @@ import {
   useCollectionAuth,
 } from '~/utils/auth'
 import {
-  getExtensionForContentType,
-  getFilenameFromContentDisposition,
   isBinaryResponseContentType,
   isJsonResponseContentType,
-  isXmlResponseContentType
+  isXmlResponseContentType,
+  resolveDownloadFilename
 } from '~/utils/response-content-type'
 
 // Metadata keys for body format persistence
@@ -2508,8 +2507,12 @@ const getBinaryData = () => {
   }
 
   const contentType = getContentType().split(';')[0] || body.mimeType || 'application/octet-stream';
-  const filename = getFilenameFromContentDisposition(getResponseHeader('content-disposition'))
-    || `download.${getExtensionForContentType(contentType)}`;
+  const filename = resolveDownloadFilename({
+    contentType,
+    contentDisposition: getResponseHeader('content-disposition'),
+    bodyFilename: typeof body.filename === 'string' ? body.filename : null,
+    headers: response.value.headers
+  });
 
   return {
     data: body.data as string,

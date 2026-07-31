@@ -5,7 +5,8 @@ import {
   isBinaryResponseContentType,
   isJsonResponseContentType,
   isTextResponseContentType,
-  isXmlResponseContentType
+  isXmlResponseContentType,
+  resolveDownloadFilename
 } from '../../app/utils/response-content-type';
 
 describe('response-content-type', () => {
@@ -65,5 +66,24 @@ describe('response-content-type', () => {
   it('extracts filenames from content-disposition headers', () => {
     expect(getFilenameFromContentDisposition('attachment; filename="report.xlsx"')).toBe('report.xlsx');
     expect(getFilenameFromContentDisposition("attachment; filename*=UTF-8''report%20file.xlsx")).toBe('report file.xlsx');
+    expect(getFilenameFromContentDisposition('attachment;filename=export.xlsx')).toBe('export.xlsx');
+    expect(getFilenameFromContentDisposition('attachment; filename="postrack.xlsx"; filename*=UTF-8\'\'api-report.xlsx')).toBe('api-report.xlsx');
+  });
+
+  it('prefers upstream filename over postrack fallback when resolving downloads', () => {
+    expect(resolveDownloadFilename({
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      bodyFilename: 'api-report.xlsx'
+    })).toBe('api-report.xlsx');
+
+    expect(resolveDownloadFilename({
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      contentDisposition: 'attachment; filename="api-report.xlsx"'
+    })).toBe('api-report.xlsx');
+
+    expect(resolveDownloadFilename({
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      headers: { 'X-Filename': 'api-report.xlsx' }
+    })).toBe('api-report.xlsx');
   });
 });

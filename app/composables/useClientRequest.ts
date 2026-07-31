@@ -16,7 +16,10 @@ import type { ProxyResponse, ProxyErrorResponse } from '~/components/RequestBuil
 import {
   isBinaryResponseContentType,
   isJsonResponseContentType,
-  isTextResponseContentType
+  isTextResponseContentType,
+  getFilenameFromContentDisposition,
+  getHeaderValueCaseInsensitive,
+  sanitizeDownloadFilename
 } from '~/utils/response-content-type';
 
 // Magic variable generators (client-side subset of server implementation)
@@ -271,12 +274,26 @@ async function handleBinaryResponse(response: Response): Promise<any> {
   }
   const base64 = btoa(binary);
 
+  const responseHeaders: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value;
+  });
+
+  const contentType = response.headers.get('content-type') || blob.type || 'application/octet-stream';
+  const upstreamFilename = getFilenameFromContentDisposition(response.headers.get('content-disposition') || undefined)
+    || getHeaderValueCaseInsensitive(responseHeaders, 'x-filename')
+    || getHeaderValueCaseInsensitive(responseHeaders, 'x-file-name')
+    || getHeaderValueCaseInsensitive(responseHeaders, 'x-suggested-filename')
+    || getHeaderValueCaseInsensitive(responseHeaders, 'file-name')
+    || null;
+
   return {
     _binary: true,
     encoding: 'base64',
     data: base64,
     size: arrayBuffer.byteLength,
-    mimeType: blob.type || 'application/octet-stream'
+    mimeType: contentType,
+    ...(upstreamFilename ? { filename: sanitizeDownloadFilename(upstreamFilename) } : {})
   };
 }
 
