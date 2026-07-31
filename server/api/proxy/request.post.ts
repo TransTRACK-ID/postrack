@@ -20,6 +20,11 @@ import { trackServerError, setSpanTags, finishSpanWithError } from '../../utils/
 import { trackRequestExecution as trackDatadogMetrics, trackSlowRequest } from '../../utils/datadog-metrics';
 import { trackUsageEvent } from '../../services/usageTracking';
 import tracer from 'dd-trace';
+import {
+  isBinaryResponseContentType,
+  isJsonResponseContentType,
+  isTextResponseContentType
+} from '../../../app/utils/response-content-type';
 
 interface EnvironmentVariable {
   id: string;
@@ -697,11 +702,11 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
     const contentType = response.headers.get('content-type') || '';
 
     try {
-      if (contentType.includes('application/json')) {
+      if (isJsonResponseContentType(contentType)) {
         responseBody = await response.json();
-      } else if (contentType.includes('text/') || contentType.includes('application/xml') || contentType.includes('application/javascript')) {
+      } else if (isTextResponseContentType(contentType)) {
         responseBody = await response.text();
-      } else if (contentType.includes('application/octet-stream') || contentType.includes('image/') || contentType.includes('audio/') || contentType.includes('video/')) {
+      } else if (isBinaryResponseContentType(contentType)) {
         const arrayBuffer = await response.arrayBuffer();
         const base64 = Buffer.from(arrayBuffer).toString('base64');
         responseBody = {

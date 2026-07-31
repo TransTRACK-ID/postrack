@@ -13,6 +13,11 @@
  */
 
 import type { ProxyResponse, ProxyErrorResponse } from '~/components/RequestBuilder.vue';
+import {
+  isBinaryResponseContentType,
+  isJsonResponseContentType,
+  isTextResponseContentType
+} from '~/utils/response-content-type';
 
 // Magic variable generators (client-side subset of server implementation)
 const MAGIC_GENERATORS: Record<string, () => string> = {
@@ -282,21 +287,15 @@ async function parseResponse(response: Response): Promise<any> {
   const contentType = response.headers.get('content-type') || '';
 
   try {
-    if (contentType.includes('application/json')) {
+    if (isJsonResponseContentType(contentType)) {
       return await response.json();
     }
 
-    if (contentType.includes('text/') ||
-        contentType.includes('application/xml') ||
-        contentType.includes('application/javascript')) {
+    if (isTextResponseContentType(contentType)) {
       return await response.text();
     }
 
-    if (contentType.includes('image/') ||
-        contentType.includes('application/octet-stream') ||
-        contentType.includes('audio/') ||
-        contentType.includes('video/') ||
-        contentType.includes('application/pdf')) {
+    if (isBinaryResponseContentType(contentType)) {
       return await handleBinaryResponse(response);
     }
 
