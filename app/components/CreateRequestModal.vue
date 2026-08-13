@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { nextTick } from 'vue';
+
 interface Props {
   show: boolean;
   folderId?: string;
   folderName?: string;
   collectionId?: string;
   collectionName?: string;
+  initialCurlCommand?: string | null;
 }
 
 const props = defineProps<Props>();
@@ -45,9 +48,16 @@ const handleClose = () => {
   emit('close');
 };
 
-watch(() => props.show, (newVal) => {
+watch(() => props.show, async (newVal) => {
   if (newVal) {
     resetCurl();
+
+    const initialCommand = props.initialCurlCommand?.trim();
+    if (initialCommand) {
+      curlCommand.value = initialCommand;
+      await nextTick();
+      await parseCurlCommand();
+    }
   }
 });
 

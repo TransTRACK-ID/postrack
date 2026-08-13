@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import VariableInlineEditor from './VariableInlineEditor.vue';
+import { isCurlCommand, normalizeCurlCommand } from '~/utils/curl-command';
 
 interface Variable {
   id: string;
@@ -29,6 +30,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'update:modelValue': [value: string];
   'update:variable': [variable: Variable, key: string, value: string, isSecret: boolean];
+  'curl-paste': [command: string];
 }>();
 
 const editorRef = ref<HTMLElement | null>(null);
@@ -270,6 +272,8 @@ const handleFocus = () => {
 };
 
 const handlePaste = (event: ClipboardEvent) => {
+  if (props.disabled) return;
+
   event.preventDefault();
   
   const clipboardData = event.clipboardData;
@@ -299,6 +303,11 @@ const handlePaste = (event: ClipboardEvent) => {
   pasteText = pasteText.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
   
   if (!pasteText) return;
+
+  if (isCurlCommand(pasteText)) {
+    emit('curl-paste', normalizeCurlCommand(pasteText));
+    return;
+  }
   
   const selection = window.getSelection();
   if (!selection || !selection.rangeCount) {

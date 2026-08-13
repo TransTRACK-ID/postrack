@@ -1562,6 +1562,7 @@ const requestFolderId = ref<string | null>(null);
 const requestFolderName = ref<string>('');
 const requestCollectionId = ref<string | null>(null);
 const requestCollectionName = ref<string>('');
+const pendingCurlCommand = ref<string | null>(null);
 const saveDialogDefaultCollectionId = ref('');
 const saveDialogDefaultFolderId = ref('');
 
@@ -3132,7 +3133,9 @@ const openCreateRequest = (folderId?: string | null, collectionId?: string) => {
 };
 
 // For importing from cURL - shows the modal
-const openImportCurl = (folderId?: string | null, collectionId?: string) => {
+const openImportCurl = (folderId?: string | null, collectionId?: string, curlCommand?: string) => {
+  pendingCurlCommand.value = curlCommand?.trim() || null;
+
   if (folderId) {
     const hit = findCollectionByFolderId(folderId);
     const wsId = hit ? workspaceIdForCollectionId(hit.collectionId) : null;
@@ -3155,15 +3158,39 @@ const openImportCurl = (folderId?: string | null, collectionId?: string) => {
     requestCollectionName.value = collection?.name || 'Unknown Collection';
     showRequestModal.value = true;
   } else {
+    pendingCurlCommand.value = null;
     alert('Please select a folder or collection first');
   }
 };
 
-const handleCurlImported = async (result: any) => {
-  // Close the modal
+const handleImportCurlFromBuilder = (curlCommand: string) => {
+  const request = selectedRequest.value;
+  if (!request) return;
+
+  const folderId = request.folderId || null;
+  if (folderId) {
+    openImportCurl(folderId, undefined, curlCommand);
+    return;
+  }
+
+  if (activeCollectionId.value) {
+    openImportCurl(null, activeCollectionId.value, curlCommand);
+    return;
+  }
+
+  alert('Please select a folder or collection first');
+};
+
+const handleRequestModalClose = () => {
   showRequestModal.value = false;
   requestFolderId.value = null;
   requestCollectionId.value = null;
+  pendingCurlCommand.value = null;
+};
+
+const handleCurlImported = async (result: any) => {
+  // Close the modal
+  handleRequestModalClose();
   
   // Refresh workspaces to show the new request
   await refreshWorkspaces();
@@ -4575,6 +4602,7 @@ onDeactivated(() => {
                 @environment-variables-changed="handleEnvironmentVariablesChanged"
                 @open-collection-settings="handleOpenCollectionSettings"
                 @update:variable="updateVariableFromSettings"
+                @import-curl="handleImportCurlFromBuilder"
               />
             </div>
             
@@ -5419,7 +5447,8 @@ onDeactivated(() => {
       :folder-name="requestFolderName"
       :collection-id="requestCollectionId || ''"
       :collection-name="requestCollectionName"
-      @close="showRequestModal = false; requestFolderId = null; requestCollectionId = null"
+      :initial-curl-command="pendingCurlCommand"
+      @close="handleRequestModalClose"
       @imported="handleCurlImported"
     />
 

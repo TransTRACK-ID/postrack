@@ -223,7 +223,13 @@ const emit = defineEmits<{
   'update:variable': [variable: Variable, key: string, value: string, isSecret: boolean];
   // Environment variable changes applied by post/pre scripts
   environmentVariablesChanged: [environmentId: string];
+  importCurl: [command: string];
 }>();
+
+const handleCurlPaste = (command: string) => {
+  if (props.readOnly) return;
+  emit('importCurl', command);
+};
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
 const REQUEST_PROTOCOLS = ['http', 'websocket'] as const;
@@ -3866,6 +3872,7 @@ defineExpose({
             :placeholder="isWebSocket ? 'wss://api.example.com/socket' : 'https://api.example.com/endpoint'"
             class="flex-1 min-w-0 text-text-primary font-mono text-sm placeholder:text-text-muted overflow-hidden url-input-inline"
             @update:variable="(...args) => emit('update:variable', ...args)"
+            @curl-paste="handleCurlPaste"
             @keyup.enter="!isWebSocket && sendRequest()"
           />
           <button
