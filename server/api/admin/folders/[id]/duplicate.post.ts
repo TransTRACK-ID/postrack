@@ -68,7 +68,8 @@ async function copyRequests(sourceFolderId: string, targetFolderId: string, user
         paramSchema: request.paramSchema,
         queryParams: request.queryParams,
         curlExample: request.curlExample,
-        order: request.order
+        order: request.order,
+        createdBy: userId ?? null
       })
       .returning();
 
@@ -135,7 +136,8 @@ async function duplicateFolderTree(
       collectionId,
       parentFolderId: targetParentFolderId,
       name: folderName,
-      order: maxOrder + 1
+      order: maxOrder + 1,
+      createdBy: userId ?? null
     })
     .returning();
 

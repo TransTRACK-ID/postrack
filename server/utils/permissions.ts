@@ -390,6 +390,39 @@ export async function canEditCollection(
 }
 
 /**
+ * Check if user can delete a folder or request they did not necessarily create.
+ * Workspace owners and super admins may delete any resource in their workspace.
+ * Other editors may only delete resources they created.
+ */
+export async function canDeleteOwnedResource(
+  userId: string,
+  userEmail: string | undefined,
+  createdBy: string | null | undefined,
+  collectionId: string
+): Promise<boolean> {
+  if (userEmail && isSuperAdmin(userEmail)) {
+    return true;
+  }
+
+  const workspaceId = await getCollectionWorkspaceId(collectionId);
+  if (!workspaceId) {
+    return false;
+  }
+
+  const isOwner = await isWorkspaceOwnerViaMember(userId, workspaceId);
+  if (isOwner) {
+    return true;
+  }
+
+  if (createdBy && createdBy === userId) {
+    const canEdit = await canEditCollection(userId, collectionId, userEmail);
+    return canEdit;
+  }
+
+  return false;
+}
+
+/**
  * Check if user can manage collection members (workspace owners only)
  */
 export async function canManageCollectionMembers(

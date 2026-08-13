@@ -13,6 +13,7 @@ interface RequestItem {
   method: string;
   url: string;
   order: number;
+  createdBy: string | null;
 }
 
 interface FolderWithRequestsAndChildren {
@@ -176,7 +177,8 @@ export default defineEventHandler(async (event) => {
             name: savedRequests.name,
             method: savedRequests.method,
             url: savedRequests.url,
-            order: savedRequests.order
+            order: savedRequests.order,
+            createdBy: savedRequests.createdBy
           })
           .from(savedRequests)
           .where(
@@ -195,7 +197,8 @@ export default defineEventHandler(async (event) => {
       name: req.name,
       method: req.method,
       url: req.url,
-      order: req.order
+      order: req.order,
+      createdBy: req.createdBy
     }));
 
     const workspaceIds = allWorkspaces.map(w => w.id);

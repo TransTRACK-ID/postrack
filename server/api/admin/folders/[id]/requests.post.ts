@@ -24,6 +24,7 @@ interface CreateRequestBody {
 
 export default defineEventHandler(async (event) => {
   const folderId = getRouterParam(event, 'id');
+  const user = event.context.user;
 
   if (!folderId) {
     throw createError({
@@ -119,12 +120,12 @@ export default defineEventHandler(async (event) => {
         pathVariables: body.pathVariables || null,
         paramNotes: body.paramNotes || null,
         queryParams: body.queryParams ? JSON.stringify(body.queryParams) : null,
-        order
+        order,
+        createdBy: user?.id ?? null
       })
       .returning())[0];
 
     // Track analytics
-    const user = event.context.user;
     if (user?.id) {
       trackResourceAction({
         userId: user.id,

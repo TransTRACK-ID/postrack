@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-13T07:55:00.000Z",
+  "title": "Design System: Postrack",
+  "extensions": {
+    "colorMeta": {
+      "graphite-canvas": {
+        "role": "neutral",
+        "displayName": "Graphite Canvas",
+        "canonical": "oklch(22% 0.005 260)",
+        "tonalRamp": ["oklch(15% 0.005 260)", "oklch(18% 0.005 260)", "oklch(22% 0.005 260)", "oklch(26% 0.005 260)", "oklch(30% 0.005 260)", "oklch(35% 0.005 260)", "oklch(45% 0.005 260)", "oklch(92% 0.005 260)"]
+      },
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "oklch(58% 0.22 255)",
+        "tonalRamp": ["oklch(25% 0.12 255)", "oklch(35% 0.16 255)", "oklch(45% 0.19 255)", "oklch(52% 0.21 255)", "oklch(58% 0.22 255)", "oklch(68% 0.18 255)", "oklch(78% 0.12 255)", "oklch(92% 0.04 255)"]
+      },
+      "signal-orange": {
+        "role": "primary",
+        "displayName": "Signal Orange",
+        "canonical": "oklch(68% 0.19 45)",
+        "tonalRamp": ["oklch(30% 0.10 45)", "oklch(40% 0.14 45)", "oklch(50% 0.17 45)", "oklch(60% 0.19 45)", "oklch(68% 0.19 45)", "oklch(76% 0.15 45)", "oklch(85% 0.10 45)", "oklch(94% 0.04 45)"]
+      },
+      "success-green": {
+        "role": "secondary",
+        "displayName": "Success Green",
+        "canonical": "oklch(72% 0.14 145)",
+        "tonalRamp": ["oklch(28% 0.08 145)", "oklch(38% 0.10 145)", "oklch(48% 0.12 145)", "oklch(58% 0.13 145)", "oklch(68% 0.14 145)", "oklch(72% 0.14 145)", "oklch(82% 0.10 145)", "oklch(93% 0.04 145)"]
+      },
+      "danger-red": {
+        "role": "tertiary",
+        "displayName": "Danger Red",
+        "canonical": "oklch(62% 0.20 25)",
+        "tonalRamp": ["oklch(28% 0.10 25)", "oklch(38% 0.14 25)", "oklch(48% 0.17 25)", "oklch(55% 0.19 25)", "oklch(62% 0.20 25)", "oklch(72% 0.16 25)", "oklch(82% 0.10 25)", "oklch(93% 0.04 25)"]
+      },
+      "soft-white": {
+        "role": "neutral",
+        "displayName": "Soft White",
+        "canonical": "oklch(90% 0.005 260)",
+        "tonalRamp": ["oklch(15% 0.005 260)", "oklch(25% 0.005 260)", "oklch(40% 0.005 260)", "oklch(55% 0.005 260)", "oklch(70% 0.005 260)", "oklch(80% 0.005 260)", "oklch(90% 0.005 260)", "oklch(97% 0.003 260)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Modal titles and rare page-level headers." },
+      "headline": { "displayName": "Headline", "purpose": "Section headers, collection names in sidebar." },
+      "title": { "displayName": "Title", "purpose": "Subsection labels, card headers." },
+      "body": { "displayName": "Body", "purpose": "Default UI text. Cap prose at 65–75ch." },
+      "label": { "displayName": "Label", "purpose": "Form field labels, uppercase metadata keys." },
+      "mono": { "displayName": "Mono", "purpose": "Request names, URLs, code snippets." }
+    },
+    "shadows": [
+      { "name": "ambient-sm", "value": "0 1px 2px rgba(0, 0, 0, 0.3)", "purpose": "Rare dropdown elevation only." },
+      { "name": "modal-float", "value": "0 12px 48px rgba(0, 0, 0, 0.5)", "purpose": "Dialogs and confirmation overlays." },
+      { "name": "overlay-scrim", "value": "rgba(0, 0, 0, 0.7)", "purpose": "Modal backdrop with optional 2px blur." }
+    ],
+    "motion": [
+      { "name": "ease-fast", "value": "150ms ease", "purpose": "Default hover, focus, and tab transitions." },
+      { "name": "ease-normal", "value": "200ms ease", "purpose": "Modal entry, fade-in animations." },
+      { "name": "ease-drawer", "value": "250ms ease", "purpose": "Mobile sidebar slide-in/out." },
+      { "name": "ease-sheet", "value": "300ms ease", "purpose": "Mobile bottom sheet open/close." }
+    ],
+    "breakpoints": [
+      { "name": "xs", "value": "480px" },
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default commit action. Action Blue, white text, 6px radius.",
+      "html": "<button class=\"ds-btn-primary\">Send Request</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 500; color: #FFFFFF; background-color: #007AFF; border: none; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-primary:hover { background-color: #1976D2; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2); } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary actions alongside a primary. Slate surface with border.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 500; color: #E0E0E0; background-color: #2D2D2D; border: 1px solid #3D3D3D; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-secondary:hover { background-color: #3D3D3D; } .ds-btn-secondary:focus-visible { outline: none; border-color: #007AFF; box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2); }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive confirmation only. Delete folder, delete request.",
+      "html": "<button class=\"ds-btn-danger\">Delete Folder</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 500; color: #FFFFFF; background-color: #EF5350; border: none; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-danger:hover { background-color: #D32F2F; } .ds-btn-danger:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(239, 83, 80, 0.3); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Tertiary actions in toolbars and icon-adjacent controls.",
+      "html": "<button class=\"ds-btn-ghost\">Duplicate</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 500; color: #9E9E9E; background-color: transparent; border: none; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease, color 150ms ease; } .ds-btn-ghost:hover { background-color: #3D3D3D; color: #E0E0E0; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Default form field. Slate surface, blue focus ring.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"ds-url\">Request URL</label><input class=\"ds-input\" id=\"ds-url\" type=\"text\" placeholder=\"https://api.example.com/users\" /></div>",
+      "css": ".ds-label { display: block; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #9E9E9E; margin-bottom: 4px; } .ds-input { width: 100%; padding: 8px 12px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #E0E0E0; background-color: #2D2D2D; border: 1px solid #3D3D3D; border-radius: 6px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: #6E6E6E; } .ds-input:focus { border-color: #007AFF; box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2); }"
+    },
+    {
+      "name": "GET Method Badge",
+      "kind": "chip",
+      "refersTo": "badge-method",
+      "description": "HTTP method badge. 15% tint background, full-saturation text, uppercase.",
+      "html": "<span class=\"ds-badge-get\">GET</span>",
+      "css": ".ds-badge-get { display: inline-flex; align-items: center; justify-content: center; min-width: 52px; padding: 2px 8px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #73BF69; background-color: rgba(115, 191, 105, 0.15); border-radius: 4px; }"
+    },
+    {
+      "name": "POST Method Badge",
+      "kind": "chip",
+      "refersTo": "badge-method",
+      "description": "POST method variant. Amber tint.",
+      "html": "<span class=\"ds-badge-post\">POST</span>",
+      "css": ".ds-badge-post { display: inline-flex; align-items: center; justify-content: center; min-width: 52px; padding: 2px 8px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #FFCA28; background-color: rgba(255, 202, 40, 0.15); border-radius: 4px; }"
+    },
+    {
+      "name": "Sidebar Request Row",
+      "kind": "nav",
+      "refersTo": "badge-method",
+      "description": "Compact request item in the collection tree with method badge and ownership dot.",
+      "html": "<div class=\"ds-request-row\"><span class=\"ds-badge-get\">GET</span><span class=\"ds-request-name\">List Users</span><span class=\"ds-ownership-dot\" title=\"Created by you\"></span></div>",
+      "css": ".ds-request-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: background-color 150ms ease; } .ds-request-row:hover { background-color: #3D3D3D; } .ds-request-name { flex: 1; font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace; font-size: 11px; color: #9E9E9E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-request-row:hover .ds-request-name { color: #E0E0E0; } .ds-ownership-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #73BF69; flex-shrink: 0; }"
+    },
+    {
+      "name": "Active Tab",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "Request tab bar item. Orange underline marks active state.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab ds-tab-active\">Get Users</button><button class=\"ds-tab\">Create User</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 4px; border-bottom: 1px solid #3D3D3D; padding: 0 16px; } .ds-tab { padding: 8px 16px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 500; color: #9E9E9E; background: transparent; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; transition: color 150ms ease, border-color 150ms ease; } .ds-tab:hover { color: #E0E0E0; } .ds-tab-active { color: #FF6C37; border-bottom-color: #FF6C37; }"
+    },
+    {
+      "name": "Card Panel",
+      "kind": "card",
+      "refersTo": "button-secondary",
+      "description": "Isolated content panel. Charcoal background, border, no resting shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\">Response</div><div class=\"ds-card-body\">200 OK</div></div>",
+      "css": ".ds-card { background-color: #252526; border: 1px solid #3D3D3D; border-radius: 8px; overflow: hidden; } .ds-card-header { padding: 16px; border-bottom: 1px solid #3D3D3D; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 600; color: #E0E0E0; } .ds-card-body { padding: 16px; font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace; font-size: 13px; color: #9E9E9E; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Precision Workbench",
+    "overview": "Postrack is a dark, IDE-native workspace for API developers who live in the sidebar and request builder. The interface behaves like a well-tuned instrument panel: surfaces are layered in graphite tones, HTTP semantics arrive through color before copy, and orange marks the single moment of active focus. Nothing decorative competes with the task.",
+    "keyCharacteristics": [
+      "Dark-first tonal layering (bg-primary through bg-hover) instead of shadow stacks",
+      "Method and status color as the primary semantic vocabulary",
+      "Signal Orange reserved for active tabs, selection, and current focus",
+      "Action Blue for primary actions, links, and focus rings",
+      "Compact sidebar typography (11px mono for requests, 12px sans for folders)",
+      "150ms transitions on all interactive state changes",
+      "Inter for UI chrome, JetBrains Mono for URLs, code, and request names"
+    ],
+    "rules": [
+      { "name": "The Method-First Rule", "body": "HTTP method color is the fastest scan signal in the sidebar. A developer should identify GET vs POST vs DELETE by hue before reading the request name. Method badges always use 15% opacity tint backgrounds with full-saturation text.", "section": "colors" },
+      { "name": "The Orange Sparingly Rule", "body": "Signal Orange appears on active tabs, selected items, and hover accents only. If orange is on more than one focal element per viewport, the hierarchy is broken.", "section": "colors" },
+      { "name": "The One Accent Per Action Rule", "body": "A single screen region gets one primary action color. Blue for commit actions, red for destructive, green for success confirmation. Never stack competing accents on the same control group.", "section": "colors" },
+      { "name": "The Mono-For-Code Rule", "body": "Any string that could appear in a terminal, URL bar, or JSON payload uses JetBrains Mono. UI chrome labels stay in Inter.", "section": "typography" },
+      { "name": "The Flat Scale Rule", "body": "Type hierarchy uses a 1.125–1.25 ratio between steps. No fluid clamp sizing. Developer tools are viewed at consistent DPI; a sidebar headline that shrinks on resize looks broken, not responsive.", "section": "typography" },
+      { "name": "The Tonal-First Rule", "body": "Before reaching for a shadow, step up one background token (primary → secondary → tertiary → hover). If the surface still doesn't read, add a 1px border-default border. Shadows are the last resort.", "section": "elevation" },
+      { "name": "The Flat Sidebar Rule", "body": "The navigation tree is always flat. Depth in the sidebar comes from indentation, chevrons, and method color, never from card elevation or nested containers.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do communicate HTTP method and status through color and shape before text labels.",
+      "Do use tonal layering (bg-primary → bg-secondary → bg-hover) to establish hierarchy in dense panels.",
+      "Do keep sidebar rows compact and scannable: chevron + folder icon + name + count + ownership dot.",
+      "Do use 150ms ease transitions for hover, focus, and tab switches. State changes should feel snappy, never choreographed.",
+      "Do reserve Signal Orange for active selection and tab indicators.",
+      "Do use JetBrains Mono for URLs, request names, and any code-shaped content.",
+      "Do respect prefers-reduced-motion and maintain WCAG 2.1 AA contrast on all method/status badges."
+    ],
+    "donts": [
+      "Don't adopt the heavy, corporate feel of enterprise API gateways. No navy-and-gold authority palettes, no compliance-dashboard density.",
+      "Don't fall into sterile gray-on-gray exhaustion. Every neutral has a role; Muted Silver and Dim Slate exist to create readable hierarchy, not to flatten everything into one tone.",
+      "Don't use the \"everything is a card\" SaaS template look. Cards are for modals and isolated panels, not for wrapping every sidebar row or list item.",
+      "Don't use colored side-stripe borders greater than 1px on cards, list items, or callouts. Prefer full-row background tints or leading badges.",
+      "Don't use gradient text, glassmorphism as a default surface, or decorative motion that doesn't convey state.",
+      "Don't stack multiple accent colors in a single control group. One action, one color.",
+      "Don't add resting shadows to sidebar items, request rows, or nested tree containers.",
+      "Don't use modals when an inline or progressive disclosure pattern would suffice."
+    ]
+  }
+}

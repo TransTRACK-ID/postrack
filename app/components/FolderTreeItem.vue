@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import MethodBadge from '~/components/MethodBadge.vue';
+import {
+  isResourceOwnedByUser,
+  type OwnableResource,
+} from '~/utils/resource-ownership';
 
 interface HttpRequest {
   id: string;
@@ -17,6 +21,7 @@ interface HttpRequest {
   order: number;
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: string | null;
 }
 
 interface FolderTreeItemProps {
@@ -27,6 +32,7 @@ interface FolderTreeItemProps {
     name: string;
     order: number;
     isSharedBase?: boolean;
+    createdBy?: string | null;
     requests: HttpRequest[];
     children: any[];
   };
@@ -41,11 +47,17 @@ interface FolderTreeItemProps {
   } | null;
   permission?: 'owner' | 'edit' | 'view' | null;
   selectedRequestId?: string | null;
+  currentUserId?: string | null;
+  isWorkspaceOwner?: boolean;
+  isSuperAdmin?: boolean;
 }
 
 const props = withDefaults(defineProps<FolderTreeItemProps>(), {
   permission: 'owner',
-  selectedRequestId: null
+  selectedRequestId: null,
+  currentUserId: null,
+  isWorkspaceOwner: false,
+  isSuperAdmin: false
 });
 
 const emit = defineEmits<{
@@ -64,6 +76,9 @@ const emit = defineEmits<{
 // Permission checks
 const canEdit = computed(() => props.permission === 'owner' || props.permission === 'edit');
 const canDrag = computed(() => props.permission === 'owner' || props.permission === 'edit');
+
+const isOwnedByCurrentUser = (item: OwnableResource | null | undefined) =>
+  isResourceOwnedByUser(item, props.currentUserId);
 
 const isExpanded = (folderId: string) => props.expandedFolderIds.has(folderId);
 
@@ -258,6 +273,13 @@ const isBeforeRequestsDrop = computed(() =>
       <span class="flex-1 truncate">{{ folder.name }}</span>
 
       <span
+        v-if="isOwnedByCurrentUser(folder)"
+        class="w-2 h-2 rounded-full bg-accent-green flex-shrink-0"
+        title="Created by you"
+        aria-label="Created by you"
+      ></span>
+
+      <span
         v-if="folder.isSharedBase"
         class="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent-green/15 text-accent-green flex-shrink-0"
         title="Customer documentation base folder"
@@ -308,6 +330,10 @@ const isBeforeRequestsDrop = computed(() =>
             :dragging-project-id="draggingProjectId"
             :drop-target="dropTarget"
             :permission="permission"
+            :selected-request-id="selectedRequestId"
+            :current-user-id="currentUserId"
+            :is-workspace-owner="isWorkspaceOwner"
+            :is-super-admin="isSuperAdmin"
             @toggle-folder="emit('toggleFolder', $event)"
             @select-request="emit('selectRequest', $event)"
             @context-menu="(...args: any[]) => emit('contextMenu', args[0], args[1], args[2])"
@@ -338,10 +364,13 @@ const isBeforeRequestsDrop = computed(() =>
             <div class="relative mx-1.5">
               <div
                 v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
+                :data-request-id="request.id"
                 :class="[
                   'flex items-center gap-2 py-2 px-3 rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
+                  selectedRequestId === request.id ? 'bg-bg-active' : '',
                   dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10' : ''
                 ]"
+                :aria-current="selectedRequestId === request.id ? 'true' : undefined"
                 :draggable="true"
                 @dragstart="handleDragStart($event, 'request', request.id)"
                 @dragend="handleDragEnd"
@@ -357,9 +386,21 @@ const isBeforeRequestsDrop = computed(() =>
                   class="absolute left-0 right-0 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
                 ></div>
                 <MethodBadge :method="request.method" size="xs" />
-                <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="request.name">
+                <span
+                  :class="[
+                    'flex-1 text-[11px] font-mono truncate',
+                    selectedRequestId === request.id ? 'text-text-primary' : 'text-text-secondary'
+                  ]"
+                  :title="request.name"
+                >
                   {{ request.name }}
                 </span>
+                <span
+                  v-if="isOwnedByCurrentUser(request)"
+                  class="w-2 h-2 rounded-full bg-accent-green flex-shrink-0"
+                  title="Created by you"
+                  aria-label="Created by you"
+                ></span>
                 <div
                   v-if="dropTarget?.type === 'request' && dropTarget?.id === request.id && dropTarget?.position === 'after'"
                   class="absolute left-0 right-0 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"

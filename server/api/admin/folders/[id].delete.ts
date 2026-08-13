@@ -2,7 +2,7 @@ import { db } from '../../../db';
 import { folders } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { cache, CacheKeys } from '../../../utils/cache';
-import { canEditCollection } from '../../../utils/permissions';
+import { canDeleteOwnedResource } from '../../../utils/permissions';
 
 // Helper function to count all descendant folders
 function countDescendants(allFolders: typeof folders.$inferSelect[], parentId: string): number {
@@ -47,8 +47,13 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    const canEdit = await canEditCollection(user.id, existing.collectionId, user.email);
-    if (!canEdit) {
+    const canDelete = await canDeleteOwnedResource(
+      user.id,
+      user.email,
+      existing.createdBy,
+      existing.collectionId
+    );
+    if (!canDelete) {
       throw createError({
         statusCode: 403,
         statusMessage: 'You do not have permission to delete this folder'

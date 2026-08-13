@@ -10,11 +10,13 @@ export const folders = pgTable('folders', {
     .references((): any => folders.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   order: integer('order').notNull().default(0),
-  isSharedBase: boolean('is_shared_base').notNull().default(false)
+  isSharedBase: boolean('is_shared_base').notNull().default(false),
+  createdBy: text('created_by')
 }, (table) => ({
   collectionIdx: index('idx_folders_collection').on(table.collectionId),
   parentIdx: index('idx_folders_parent').on(table.parentFolderId),
-  orderIdx: index('idx_folders_order').on(table.order)
+  orderIdx: index('idx_folders_order').on(table.order),
+  createdByIdx: index('idx_folders_created_by').on(table.createdBy)
 }));
 
 export type Folder = typeof folders.$inferSelect;

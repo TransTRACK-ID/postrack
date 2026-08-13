@@ -25,6 +25,10 @@ import {
   reorderFoldersOptimistically,
   reorderProjectsOptimistically
 } from '~/composables/useOptimisticMove';
+import {
+  canDeleteOwnedResource,
+  type OwnableResource,
+} from '~/utils/resource-ownership';
 
 definePageMeta({
   layout: 'admin',
@@ -163,6 +167,7 @@ const {
   refreshDefinitions,
   definitionsRefreshTrigger,
   currentUserEmail,
+  currentUserId,
   isSuperAdmin,
   selectedWorkspaceId,
   selectedProjectId,
@@ -251,6 +256,20 @@ const canRenameWorkspaceById = (workspaceId: string | null | undefined): boolean
   return false;
 };
 const canDeleteWorkspaceById = canRenameWorkspaceById;
+
+const isWorkspaceOwnerById = (workspaceId: string | null | undefined): boolean =>
+  canRenameWorkspaceById(workspaceId);
+
+const canDeleteOwnedItem = (
+  item: OwnableResource | null | undefined,
+  workspaceId: string | null | undefined
+): boolean =>
+  canDeleteOwnedResource(
+    item,
+    currentUserId.value,
+    isWorkspaceOwnerById(workspaceId),
+    isSuperAdmin.value
+  );
 
 const REQUEST_BODY_FORMATS = ['none', 'json', 'form-data', 'urlencoded', 'raw', 'binary'] as const;
 type RequestBodyFormat = typeof REQUEST_BODY_FORMATS[number];
@@ -3701,6 +3720,9 @@ const showDeleteFolderConfirm = ref(false);
 const folderToDelete = ref<any>(null);
 
 const confirmDeleteFolder = (folder: any) => {
+    const hit = findCollectionByFolderId(folder.id);
+    const wsId = hit ? workspaceIdForCollectionId(hit.collectionId) : null;
+    if (!canDeleteOwnedItem(folder, wsId)) return;
     folderToDelete.value = folder;
     showDeleteFolderConfirm.value = true;
 };
@@ -3709,7 +3731,7 @@ const deleteFolder = async () => {
     if (!folderToDelete.value) return;
     const hit = findCollectionByFolderId(folderToDelete.value.id);
     const wsId = hit ? workspaceIdForCollectionId(hit.collectionId) : null;
-    if (wsId && !canEditWorkspaceById(wsId)) return;
+    if (!canDeleteOwnedItem(folderToDelete.value, wsId)) return;
 
     try {
         await $fetch(`/api/admin/folders/${folderToDelete.value.id}`, { method: 'DELETE' });
@@ -3785,6 +3807,8 @@ const requestToDelete = ref<any>(null);
 const isDeletingRequest = ref(false);
 
 const confirmDeleteRequest = (request: any) => {
+    const wsId = workspaceIdForRequestContext(request);
+    if (!canDeleteOwnedItem(request, wsId)) return;
     requestToDelete.value = request;
     showDeleteRequestConfirm.value = true;
 };
@@ -3792,7 +3816,7 @@ const confirmDeleteRequest = (request: any) => {
 const deleteRequest = async () => {
     if (!requestToDelete.value || isDeletingRequest.value) return;
     const wsId = workspaceIdForRequestContext(requestToDelete.value);
-    if (wsId && !canEditWorkspaceById(wsId)) return;
+    if (!canDeleteOwnedItem(requestToDelete.value, wsId)) return;
     const requestId = requestToDelete.value.id;
     isDeletingRequest.value = true;
     
@@ -4105,6 +4129,7 @@ const shellHeaderProps = computed(() => ({
 
 const shellSidebarProps = computed(() => ({
   selectedMockId: selectedMock.value?.id,
+  selectedRequestId: selectedRequest.value?.id ?? null,
   isDuplicatingRequest: isDuplicatingRequest.value,
 }));
 

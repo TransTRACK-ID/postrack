@@ -2,6 +2,11 @@
 import RequestHistoryPanel from './RequestHistoryPanel.vue';
 import ApiDefinitionsPanel from './ApiDefinitionsPanel.vue';
 import MethodBadge from '~/components/MethodBadge.vue';
+import {
+  canDeleteOwnedResource,
+  isResourceOwnedByUser,
+  type OwnableResource,
+} from '~/utils/resource-ownership';
 
 // Toast notification
 const { showToast } = useToast();
@@ -44,6 +49,7 @@ interface HttpRequest {
   order: number;
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: string | null;
   examples?: Array<{
     id: string;
     name: string;
@@ -63,6 +69,7 @@ interface FolderWithRequestsAndChildren {
   name: string;
   order: number;
   isSharedBase?: boolean;
+  createdBy?: string | null;
   requests: HttpRequest[];
   children: FolderWithRequestsAndChildren[];
 }
@@ -117,6 +124,7 @@ interface Props {
   collections: Collection[];
   mocks: Mock[];
   selectedMockId?: string | null;
+  selectedRequestId?: string | null;
   selectedCollectionId?: string | null;
   workspaces?: WorkspaceWithProjects[];
   selectedWorkspaceId?: string | null;
@@ -130,12 +138,14 @@ interface Props {
   startResize?: (e: MouseEvent) => void;
   isSuperAdmin?: boolean;
   isRefreshing?: boolean;
+  currentUserId?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   collections: () => [],
   mocks: () => [],
   selectedMockId: null,
+  selectedRequestId: null,
   selectedCollectionId: null,
   workspaces: () => [],
   selectedWorkspaceId: null,
@@ -147,7 +157,8 @@ const props = withDefaults(defineProps<Props>(), {
   isCollapsed: false,
   isResizing: false,
   isSuperAdmin: false,
-  isRefreshing: false
+  isRefreshing: false,
+  currentUserId: null
 });
 
 const emit = defineEmits<{
@@ -244,6 +255,14 @@ const canDelete = computed(() => {
   if (perm) return perm === 'owner';
   return ws.isOwner;
 });
+
+const isWorkspaceOwner = computed(() => canDelete.value);
+
+const isOwnedByCurrentUser = (item: OwnableResource | null | undefined) =>
+  isResourceOwnedByUser(item, props.currentUserId);
+
+const canDeleteItem = (item: OwnableResource | null | undefined) =>
+  canDeleteOwnedResource(item, props.currentUserId, isWorkspaceOwner.value, props.isSuperAdmin);
 
 // Search filter helpers for hierarchy (collections, folders, requests)
 const matchesSearch = (text: string, q: string): boolean => {
@@ -985,6 +1004,86 @@ interface RequestLocation {
   collection: CollectionWithFolders;
 }
 
+const findFolderPathToRequest = (
+  folders: FolderWithRequestsAndChildren[],
+  requestId: string,
+  path: string[] = []
+): string[] | null => {
+  for (const folder of folders) {
+    const currentPath = [...path, folder.id];
+
+    if (folder.requests.some((request) => request.id === requestId)) {
+      return currentPath;
+    }
+
+    const childPath = findFolderPathToRequest(folder.children, requestId, currentPath);
+    if (childPath) {
+      return childPath;
+    }
+  }
+
+  return null;
+};
+
+const expandToRequest = (requestId: string) => {
+  const workspace = currentWorkspace.value;
+  if (!workspace) return;
+
+  for (const project of workspace.projects) {
+    for (const collection of project.collections) {
+      if (collection.requests.some((request) => request.id === requestId)) {
+        expandedProjects.value.add(project.id);
+        expandedCollectionsHierarchy.value.add(collection.id);
+        return;
+      }
+
+      const folderPath = findFolderPathToRequest(collection.folders, requestId);
+      if (folderPath) {
+        expandedProjects.value.add(project.id);
+        expandedCollectionsHierarchy.value.add(collection.id);
+        folderPath.forEach((folderId) => expandedFolders.value.add(folderId));
+        return;
+      }
+    }
+  }
+};
+
+const hierarchyScrollRef = ref<HTMLElement | null>(null);
+
+const scrollToSelectedRequest = async (requestId: string | null | undefined) => {
+  if (!requestId || activeView.value !== 'hierarchy') return;
+
+  await nextTick();
+  window.setTimeout(() => {
+    const container = hierarchyScrollRef.value;
+    if (!container) return;
+
+    const selector = `[data-request-id="${CSS.escape(requestId)}"]`;
+    const element = container.querySelector(selector);
+    if (!(element instanceof HTMLElement)) return;
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    element.scrollIntoView({
+      block: 'nearest',
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+  }, 220);
+};
+
+const revealSelectedRequest = (requestId: string | null | undefined) => {
+  if (!requestId || !currentWorkspace.value) return;
+
+  if (activeView.value !== 'hierarchy') {
+    activeView.value = 'hierarchy';
+  }
+
+  expandToRequest(requestId);
+  void scrollToSelectedRequest(requestId);
+};
+
 const findRequestLocation = (requestId: string, workspace: WorkspaceWithProjects | undefined): RequestLocation | null => {
   if (!workspace) return null;
   
@@ -1501,9 +1600,28 @@ watch(activeView, (newView) => {
   emit('activeViewChange', newView);
 });
 
+watch(
+  () => props.selectedRequestId,
+  (requestId) => {
+    revealSelectedRequest(requestId);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.workspaces,
+  () => {
+    if (props.selectedRequestId) {
+      revealSelectedRequest(props.selectedRequestId);
+    }
+  },
+  { deep: true }
+);
+
 // Expose activeView for parent components
 defineExpose({
-  activeView
+  activeView,
+  revealSelectedRequest,
 });
 </script>
 
@@ -1691,7 +1809,11 @@ defineExpose({
     </div>
 
     <!-- Hierarchy View -->
-    <div v-if="activeView === 'hierarchy'" class="flex-1 min-h-0 overflow-y-auto py-2">
+    <div
+      v-if="activeView === 'hierarchy'"
+      ref="hierarchyScrollRef"
+      class="flex-1 min-h-0 overflow-y-auto py-2"
+    >
       <div v-if="currentWorkspace">
         <!-- Empty State: no projects -->
         <div v-if="currentWorkspace.projects.length === 0" class="flex flex-col items-center justify-center gap-3 py-10 px-5 text-text-muted text-center">
@@ -1855,7 +1977,11 @@ defineExpose({
                         :dragging-request-id="draggingRequestId"
                         :dragging-project-id="draggingProjectId"
                         :drop-target="dropTarget"
+                        :selected-request-id="selectedRequestId"
                         :permission="currentWorkspace?.permission || (currentWorkspace?.isOwner ? 'owner' : 'view')"
+                        :current-user-id="currentUserId"
+                        :is-workspace-owner="isWorkspaceOwner"
+                        :is-super-admin="isSuperAdmin"
                         @toggle-folder="toggleFolder"
                         @select-request="emit('selectRequest', $event)"
                         @hover-request="emit('hoverRequest', $event)"
@@ -1870,9 +1996,12 @@ defineExpose({
                       <!-- Render Request -->
                       <div
                         v-else
-                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, canEdit]"
+                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, selectedRequestId, canEdit]"
+                        :data-request-id="item.data.id"
+                        :aria-current="selectedRequestId === item.data.id ? 'true' : undefined"
                         :class="[
                           'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
+                          selectedRequestId === item.data.id ? 'bg-bg-active' : '',
                           dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10' : ''
                         ]"
                         :draggable="canEdit"
@@ -1890,9 +2019,21 @@ defineExpose({
                           class="absolute left-2 right-2 top-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
                         ></div>
                         <MethodBadge :method="item.data.method" size="xs" />
-                        <span class="flex-1 text-[11px] font-mono truncate text-text-secondary" :title="item.data.name">
+                        <span
+                          :class="[
+                            'flex-1 text-[11px] font-mono truncate',
+                            selectedRequestId === item.data.id ? 'text-text-primary' : 'text-text-secondary'
+                          ]"
+                          :title="item.data.name"
+                        >
                           {{ item.data.name }}
                         </span>
+                        <span
+                          v-if="isOwnedByCurrentUser(item.data)"
+                          class="w-2 h-2 rounded-full bg-accent-green flex-shrink-0"
+                          title="Created by you"
+                          aria-label="Created by you"
+                        ></span>
                         <div
                           v-if="dropTarget?.type === 'request' && dropTarget?.id === item.data.id && dropTarget?.position === 'after'"
                           class="absolute left-2 right-2 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
@@ -2335,7 +2476,7 @@ defineExpose({
               Rename
             </button>
             <button
-              v-if="canEdit"
+              v-if="canDeleteItem(contextMenu.data)"
               class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('delete-folder')"
             >
@@ -2368,7 +2509,7 @@ defineExpose({
               {{ contextMenuLoading === 'duplicate' ? 'Duplicating...' : 'Duplicate Request' }}
             </button>
             <button
-              v-if="canEdit"
+              v-if="canDeleteItem(contextMenu.data)"
               class="flex items-center w-full px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
               @click.stop="handleContextAction('delete-request')"
             >

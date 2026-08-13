@@ -165,7 +165,8 @@ export default defineEventHandler(async (event) => {
         collectionId,
         parentFolderId,
         name: trimmedName,
-        order
+        order,
+        createdBy: user.id
       })
       .returning();
 

@@ -114,6 +114,7 @@ export const savedRequests = pgTable('saved_requests', {
   queryParams: text('query_params').$type<QueryParam[]>(),
   curlExample: text('curl_example'),
   order: integer('order').notNull().default(0),
+  createdBy: text('created_by'),
   createdAt: timestamp('created_at')
     .notNull()
     .defaultNow(),
@@ -124,6 +125,7 @@ export const savedRequests = pgTable('saved_requests', {
   folderIdx: index('idx_requests_folder').on(table.folderId),
   collectionIdx: index('idx_requests_collection').on(table.collectionId),
   orderIdx: index('idx_requests_order').on(table.order),
+  createdByIdx: index('idx_requests_created_by').on(table.createdBy),
   folderOrCollectionCheck: check('folder_or_collection_check', 
     sql`${table.folderId} IS NOT NULL OR ${table.collectionId} IS NOT NULL`
   ),

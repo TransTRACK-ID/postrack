@@ -83,6 +83,7 @@ function createAdminShellState() {
   const isInitialLoading = computed(() => !isInitialLoadComplete.value);
 
   const currentUserEmail = computed(() => authData.value?.user?.email || null);
+  const currentUserId = computed(() => authData.value?.user?.id || null);
   const isSuperAdmin = ref(false);
 
   const checkSuperAdmin = async () => {
@@ -342,6 +343,7 @@ function createAdminShellState() {
     isResizing: isSidebarResizing.value,
     isSuperAdmin: isSuperAdmin.value,
     isRefreshing: isSidebarRefreshing.value,
+    currentUserId: currentUserId.value,
     startResize,
   }));
 
@@ -355,6 +357,7 @@ function createAdminShellState() {
     workspaces: workspaces.value || [],
     selectedWorkspaceId: selectedWorkspaceId.value,
     currentUserEmail: currentUserEmail.value,
+    currentUserId: currentUserId.value,
     canEditWorkspace: canEditWorkspace.value,
     isMockSidebarActive: isMockSidebarActive.value,
     isMobile: isMobile.value,
@@ -415,6 +418,7 @@ function createAdminShellState() {
     isSidebarRefreshing,
     refreshAdminSidebarData,
     currentUserEmail,
+    currentUserId,
     isSuperAdmin,
     selectedWorkspaceId,
     selectedProjectId,

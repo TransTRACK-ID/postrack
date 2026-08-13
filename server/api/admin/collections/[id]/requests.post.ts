@@ -155,7 +155,8 @@ export default defineEventHandler(async (event) => {
         pathVariables: body.pathVariables || null,
         paramNotes: body.paramNotes || null,
         queryParams: body.queryParams ? JSON.stringify(body.queryParams) : null,
-        order
+        order,
+        createdBy: user.id
       })
       .returning())[0];
 
