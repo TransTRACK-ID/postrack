@@ -68,7 +68,6 @@ export default defineEventHandler(async (event) => {
       .where(eq(folders.id, id));
 
     // Invalidate cache for the user
-    const user = event.context.user;
     if (user?.id) {
       cache.delete(CacheKeys.workspaceTree(user.id));
     }
