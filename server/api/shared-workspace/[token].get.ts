@@ -191,8 +191,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Record user's access to this shared workspace
-    // Also auto-converts user to workspace member
+    // Record user's access to this shared workspace (scoped by share type)
     await recordSharedAccess(shareId, user.id, permission, user.email);
 
     // Fetch the workspace

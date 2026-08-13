@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { getCollectionFolderIds, isRequestInCollection } from '../../server/utils/sharedCollection'
 import { filterWorkspaceTreeForCollectionOnlyAccess } from '../../server/utils/treeCollectionFilter'
-import type { ShareTokenValidation } from '../../server/utils/permissions'
+import { isWorkspaceLevelShare, type ShareTokenValidation } from '../../server/utils/permissions'
 
 describe('sharedCollection utilities', () => {
   const folders = [
@@ -113,5 +113,20 @@ describe('collection share contracts', () => {
     }
 
     expect(Boolean(invalidBody.folderId && invalidBody.collectionId)).toBe(true)
+  })
+})
+
+describe('isWorkspaceLevelShare', () => {
+  it('treats shares without folder or collection scope as workspace-level', () => {
+    expect(isWorkspaceLevelShare({ folderId: null, collectionId: null })).toBe(true)
+    expect(isWorkspaceLevelShare({})).toBe(true)
+  })
+
+  it('rejects collection-scoped shares from workspace-level access', () => {
+    expect(isWorkspaceLevelShare({ collectionId: 'collection-1', folderId: null })).toBe(false)
+  })
+
+  it('rejects folder-scoped shares from workspace-level access', () => {
+    expect(isWorkspaceLevelShare({ folderId: 'folder-1', collectionId: null })).toBe(false)
   })
 })

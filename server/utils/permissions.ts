@@ -47,6 +47,17 @@ export interface ShareTokenValidation {
 }
 
 /**
+ * Workspace-level shares grant full workspace access.
+ * Collection/folder scoped shares must stay limited to their scope.
+ */
+export function isWorkspaceLevelShare(share: {
+  collectionId?: string | null;
+  folderId?: string | null;
+}): boolean {
+  return !share.collectionId && !share.folderId;
+}
+
+/**
  * Check if user is the owner of a workspace
  */
 export async function isWorkspaceOwner(userId: string, workspaceId: string): Promise<boolean> {
@@ -240,6 +251,45 @@ export async function hasCollectionMemberAccess(
 }
 
 /**
+ * Check collection-scoped share link access for a user.
+ */
+async function getCollectionShareAccess(
+  userId: string,
+  collectionId: string
+): Promise<CollectionPermissionLevel> {
+  const now = new Date();
+
+  const accessRecord = await db
+    .select({
+      permission: workspaceAccess.permission,
+      shareIsActive: workspaceShares.isActive,
+      shareExpiresAt: workspaceShares.expiresAt
+    })
+    .from(workspaceAccess)
+    .innerJoin(workspaceShares, eq(workspaceAccess.shareId, workspaceShares.id))
+    .where(
+      and(
+        eq(workspaceAccess.userId, userId),
+        eq(workspaceShares.collectionId, collectionId),
+        eq(workspaceShares.isActive, true),
+        or(
+          isNull(workspaceShares.expiresAt),
+          gt(workspaceShares.expiresAt, now)
+        )
+      )
+    )
+    .limit(1);
+
+  if (!accessRecord.length) return null;
+
+  const record = accessRecord[0];
+  if (!record.shareIsActive) return null;
+  if (record.shareExpiresAt && record.shareExpiresAt < now) return null;
+
+  return record.permission as CollectionPermissionLevel;
+}
+
+/**
  * Get user's permission level for a collection
  */
 export async function getCollectionPermission(
@@ -263,6 +313,11 @@ export async function getCollectionPermission(
     if (memberPermission) {
       return memberPermission;
     }
+  }
+
+  const collectionShareAccess = await getCollectionShareAccess(userId, collectionId);
+  if (collectionShareAccess) {
+    return collectionShareAccess;
   }
 
   return null;
@@ -660,7 +715,9 @@ export async function hasSharedAccess(userId: string, workspaceId: string): Prom
     .select({
       permission: workspaceAccess.permission,
       shareIsActive: workspaceShares.isActive,
-      shareExpiresAt: workspaceShares.expiresAt
+      shareExpiresAt: workspaceShares.expiresAt,
+      collectionId: workspaceShares.collectionId,
+      folderId: workspaceShares.folderId
     })
     .from(workspaceAccess)
     .innerJoin(workspaceShares, eq(workspaceAccess.shareId, workspaceShares.id))
@@ -668,7 +725,9 @@ export async function hasSharedAccess(userId: string, workspaceId: string): Prom
       and(
         eq(workspaceAccess.userId, userId),
         eq(workspaceShares.workspaceId, workspaceId),
-        eq(workspaceShares.isActive, true)
+        eq(workspaceShares.isActive, true),
+        isNull(workspaceShares.collectionId),
+        isNull(workspaceShares.folderId)
       )
     )
     .limit(1);
@@ -890,8 +949,10 @@ export async function validateShareToken(token: string, userId?: string): Promis
 }
 
 /**
- * Record or update user's access to a shared workspace
- * Also auto-converts shared access to formal workspace membership
+ * Record or update user's access to a shared workspace.
+ * Workspace-level shares may auto-convert to workspace membership.
+ * Collection shares convert to collection membership only.
+ * Folder shares stay token-scoped (workspaceAccess record only).
  */
 export async function recordSharedAccess(shareId: string, userId: string, permission: SharePermission, userEmail?: string): Promise<void> {
   const now = new Date();
@@ -932,7 +993,8 @@ export async function recordSharedAccess(shareId: string, userId: string, permis
     .select({
       workspaceId: workspaceShares.workspaceId,
       createdBy: workspaceShares.createdBy,
-      collectionId: workspaceShares.collectionId
+      collectionId: workspaceShares.collectionId,
+      folderId: workspaceShares.folderId
     })
     .from(workspaceShares)
     .where(eq(workspaceShares.id, shareId))
@@ -943,7 +1005,12 @@ export async function recordSharedAccess(shareId: string, userId: string, permis
     return;
   }
 
-  const { workspaceId, createdBy, collectionId } = shareRecord[0];
+  const { workspaceId, createdBy, collectionId, folderId } = shareRecord[0];
+
+  if (folderId) {
+    invalidateUserTreeCache(userId);
+    return;
+  }
 
   if (collectionId) {
     const existingCollectionMember = await db
@@ -1044,6 +1111,8 @@ export async function getAccessibleWorkspaceIds(userId: string, userEmail?: stri
       and(
         eq(workspaceAccess.userId, userId),
         eq(workspaceShares.isActive, true),
+        isNull(workspaceShares.collectionId),
+        isNull(workspaceShares.folderId),
         or(
           isNull(workspaceShares.expiresAt),
           gt(workspaceShares.expiresAt, now)
