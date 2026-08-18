@@ -19,6 +19,9 @@ import { getMagicVariableValue } from '../../utils/magic-variables';
 import { trackServerError, setSpanTags, finishSpanWithError } from '../../utils/error-tracking';
 import { trackRequestExecution as trackDatadogMetrics, trackSlowRequest } from '../../utils/datadog-metrics';
 import { trackUsageEvent } from '../../services/usageTracking';
+import { validateShareToken } from '../../utils/permissions';
+import { isEnvironmentAllowedForShare } from '../../utils/shareEnvironmentAccess';
+import { getShareAllowedEnvironmentIds } from '../../utils/getShareAllowedEnvironmentIds';
 import tracer from 'dd-trace';
 import {
   isBinaryResponseContentType,
@@ -49,6 +52,7 @@ interface ProxyRequestBody {
   timeout?: number;
   workspaceId?: string;
   environmentId?: string;
+  shareToken?: string;
   savedRequestId?: string;
   pathVariables?: PathVariable[];
   /** Optional unsaved pre-request script (takes precedence over saved request script). */
@@ -164,6 +168,31 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       Math.max(body.timeout || DEFAULT_TIMEOUT, 1000),
       MAX_TIMEOUT
     );
+
+    if (body.shareToken && body.environmentId) {
+      const user = event.context.user;
+      const validation = await validateShareToken(body.shareToken, user?.id);
+      if (!validation.valid || !validation.shareId) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: validation.error || 'Invalid share link'
+        });
+      }
+
+      const allowedIds = validation.environmentAccess === 'allowlist'
+        ? await getShareAllowedEnvironmentIds(validation.shareId)
+        : [];
+
+      if (!isEnvironmentAllowedForShare(body.environmentId, {
+        environmentAccess: validation.environmentAccess || 'all',
+        allowedIds
+      })) {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'You do not have access to this environment'
+        });
+      }
+    }
 
     const requestHeaders: Record<string, string> = {};
     const headersToExclude = [

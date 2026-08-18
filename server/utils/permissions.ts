@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { workspaces, workspaceShares, workspaceAccess, workspaceMembers, collectionMembers, collections, projects } from '../db/schema';
 import { eq, and, or, gt, isNull, isNotNull, inArray } from 'drizzle-orm';
-import type { SharePermission } from '../db/schema/workspaceShare';
+import type { ShareEnvironmentAccess, SharePermission } from '../db/schema/workspaceShare';
 import type { MemberPermission } from '../db/schema/workspaceMember';
 import type { CollectionMemberPermission } from '../db/schema/collectionMember';
 import { getUserEmailOrFallback } from './userMapping';
@@ -43,6 +43,7 @@ export interface ShareTokenValidation {
   shareId?: string;
   folderId?: string | null;
   collectionId?: string | null;
+  environmentAccess?: ShareEnvironmentAccess;
   error?: string;
 }
 
@@ -944,7 +945,8 @@ export async function validateShareToken(token: string, userId?: string): Promis
     workspaceId: shareRecord.workspaceId,
     shareId: shareRecord.id,
     folderId: shareRecord.folderId || null,
-    collectionId: shareRecord.collectionId || null
+    collectionId: shareRecord.collectionId || null,
+    environmentAccess: (shareRecord.environmentAccess || 'all') as ShareEnvironmentAccess
   };
 }
 

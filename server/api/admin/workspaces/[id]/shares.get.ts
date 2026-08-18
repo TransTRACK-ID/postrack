@@ -1,5 +1,5 @@
 import { db } from '../../../../db';
-import { workspaces, workspaceShares, workspaceAccess, folders, collections } from '../../../../db/schema';
+import { workspaces, workspaceShares, workspaceShareEnvironments, workspaceAccess, folders, collections, environments } from '../../../../db/schema';
 import { eq, desc, sql, inArray, and } from 'drizzle-orm';
 import { canManageShares, isSuperAdmin, canAccessCollection } from '../../../../utils/permissions';
 
@@ -85,7 +85,8 @@ export default defineEventHandler(async (event) => {
         folderId: workspaceShares.folderId,
         folderName: folders.name,
         collectionId: workspaceShares.collectionId,
-        collectionName: collections.name
+        collectionName: collections.name,
+        environmentAccess: workspaceShares.environmentAccess
       })
       .from(workspaceShares)
       .leftJoin(folders, eq(workspaceShares.folderId, folders.id))
@@ -121,6 +122,23 @@ export default defineEventHandler(async (event) => {
       accessCountMap.set(row.shareId, Number(row.count));
     }
 
+    const shareEnvironments = await db
+      .select({
+        shareId: workspaceShareEnvironments.shareId,
+        environmentId: workspaceShareEnvironments.environmentId,
+        environmentName: environments.name
+      })
+      .from(workspaceShareEnvironments)
+      .innerJoin(environments, eq(workspaceShareEnvironments.environmentId, environments.id))
+      .where(inArray(workspaceShareEnvironments.shareId, shareIds));
+
+    const environmentsByShare = new Map<string, Array<{ id: string; name: string }>>();
+    for (const row of shareEnvironments) {
+      const existing = environmentsByShare.get(row.shareId) || [];
+      existing.push({ id: row.environmentId, name: row.environmentName });
+      environmentsByShare.set(row.shareId, existing);
+    }
+
     const now = new Date();
 
     // Build response with access counts
@@ -128,7 +146,8 @@ export default defineEventHandler(async (event) => {
       ...share,
       shareUrl: `${baseUrl}/shared-workspace/${share.shareToken}`,
       accessCount: accessCountMap.get(share.id) || 0,
-      isExpired: share.expiresAt ? new Date(share.expiresAt) < now : false
+      isExpired: share.expiresAt ? new Date(share.expiresAt) < now : false,
+      environments: environmentsByShare.get(share.id) || []
     }));
 
     return sharesWithAccessCount;

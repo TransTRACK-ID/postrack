@@ -3,6 +3,11 @@ import { workspaces, projects, collections, folders, savedRequests, requestExamp
 import { eq, asc, and, inArray } from 'drizzle-orm';
 import { validateShareToken, recordSharedAccess } from '../../utils/permissions';
 import { getCollectionFolderIds } from '../../utils/sharedCollection';
+import {
+  filterEnvironmentsForShare,
+  resolveActiveEnvironmentId
+} from '../../utils/shareEnvironmentAccess';
+import { getShareAllowedEnvironmentIds } from '../../utils/getShareAllowedEnvironmentIds';
 
 interface RequestExampleItem {
   id: string;
@@ -181,7 +186,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const { workspaceId, shareId, permission } = validation;
+  const { workspaceId, shareId, permission, environmentAccess } = validation;
 
   if (!workspaceId || !shareId || !permission) {
     throw createError({
@@ -193,6 +198,14 @@ export default defineEventHandler(async (event) => {
   try {
     // Record user's access to this shared workspace (scoped by share type)
     await recordSharedAccess(shareId, user.id, permission, user.email);
+
+    const allowedEnvironmentIds = environmentAccess === 'allowlist'
+      ? await getShareAllowedEnvironmentIds(shareId)
+      : [];
+    const environmentFilter = {
+      environmentAccess: environmentAccess || 'all',
+      allowedIds: allowedEnvironmentIds
+    };
 
     // Fetch the workspace
     const workspace = await db
@@ -336,8 +349,11 @@ export default defineEventHandler(async (event) => {
         projectCollections = projectCollections.filter(c => c.id === targetCollectionId);
       }
       
-      // Get environments for this project
-      const projectEnvironments = allEnvironments.filter(e => e.projectId === project.id);
+      // Get environments for this project, then apply share allowlist
+      const projectEnvironments = filterEnvironmentsForShare(
+        allEnvironments.filter(e => e.projectId === project.id),
+        environmentFilter
+      );
       const environmentsWithVariables: EnvironmentWithVariables[] = projectEnvironments.map(env => {
         const envVars = allEnvVariables.filter(v => v.environmentId === env.id);
         return {
@@ -352,8 +368,11 @@ export default defineEventHandler(async (event) => {
         };
       });
       
-      // Find active environment
       const activeEnv = projectEnvironments.find(e => e.isActive);
+      const activeEnvironmentId = resolveActiveEnvironmentId(
+        activeEnv?.id || null,
+        environmentsWithVariables
+      );
 
       return {
         ...project,
@@ -384,7 +403,7 @@ export default defineEventHandler(async (event) => {
         }),
         collectionCount: projectCollections.length,
         environments: environmentsWithVariables,
-        activeEnvironmentId: activeEnv?.id || null
+        activeEnvironmentId
       };
     }).filter(project => {
       if (targetFolderId || targetCollectionId) {

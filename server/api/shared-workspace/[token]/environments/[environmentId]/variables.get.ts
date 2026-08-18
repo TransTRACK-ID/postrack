@@ -2,6 +2,8 @@ import { db } from '../../../../../db';
 import { environments, environmentVariables, projects, workspaces } from '../../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { validateShareToken } from '../../../../../utils/permissions';
+import { isEnvironmentAllowedForShare } from '../../../../../utils/shareEnvironmentAccess';
+import { getShareAllowedEnvironmentIds } from '../../../../../utils/getShareAllowedEnvironmentIds';
 
 interface VariableResponse {
   id: string;
@@ -46,12 +48,26 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const { workspaceId } = validation;
+  const { workspaceId, shareId, environmentAccess } = validation;
 
-  if (!workspaceId) {
+  if (!workspaceId || !shareId) {
     throw createError({
       statusCode: 500,
       statusMessage: 'Invalid share configuration'
+    });
+  }
+
+  const allowedIds = environmentAccess === 'allowlist'
+    ? await getShareAllowedEnvironmentIds(shareId)
+    : [];
+
+  if (!isEnvironmentAllowedForShare(environmentId, {
+    environmentAccess: environmentAccess || 'all',
+    allowedIds
+  })) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'You do not have access to this environment'
     });
   }
 

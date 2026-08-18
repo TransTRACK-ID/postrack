@@ -1519,6 +1519,7 @@ const shareFolderName = ref('');
 const shareFolderIsSharedBase = ref(false);
 const shareCollectionId = ref('');
 const shareCollectionName = ref('');
+const shareProjectId = ref('');
 
 // Open share workspace modal
 const openShareWorkspace = (workspace: { id: string; name: string }) => {
@@ -1529,7 +1530,20 @@ const openShareWorkspace = (workspace: { id: string; name: string }) => {
   shareFolderIsSharedBase.value = false;
   shareCollectionId.value = '';
   shareCollectionName.value = '';
+  shareProjectId.value = '';
   showShareModal.value = true;
+};
+
+const findProjectIdForCollection = (collectionId: string): string => {
+  if (!workspaces.value) return '';
+  for (const workspace of workspaces.value) {
+    for (const project of workspace.projects) {
+      if (project.collections.some((collection: { id: string }) => collection.id === collectionId)) {
+        return project.id;
+      }
+    }
+  }
+  return '';
 };
 
 const openShareCollection = (collection: any) => {
@@ -1541,6 +1555,7 @@ const openShareCollection = (collection: any) => {
   shareFolderIsSharedBase.value = false;
   shareCollectionId.value = collection.id;
   shareCollectionName.value = collection.name;
+  shareProjectId.value = collection.projectId || findProjectIdForCollection(collection.id);
   showShareModal.value = true;
 };
 
@@ -1553,6 +1568,10 @@ const openShareFolder = (folder: any) => {
   shareFolderIsSharedBase.value = !!folder.isSharedBase;
   shareCollectionId.value = '';
   shareCollectionName.value = '';
+  const folderCollection = findCollectionByFolderId(folder.id);
+  shareProjectId.value = folderCollection
+    ? findProjectIdForCollection(folderCollection.collectionId)
+    : '';
   showShareModal.value = true;
 };
 
@@ -5441,6 +5460,7 @@ onDeactivated(() => {
       :folder-is-shared-base="shareFolderIsSharedBase"
       :collection-id="shareCollectionId"
       :collection-name="shareCollectionName"
+      :project-id="shareProjectId"
       @close="showShareModal = false"
       @shared="refreshWorkspaces"
     />

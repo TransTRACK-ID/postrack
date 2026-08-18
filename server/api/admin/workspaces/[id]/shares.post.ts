@@ -1,14 +1,15 @@
 import { db } from '../../../../db';
-import { workspaces, workspaceShares, folders, collections, projects } from '../../../../db/schema';
+import { workspaces, workspaceShares, workspaceShareEnvironments, folders, collections, projects, environments } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { canManageShares, canAccessWorkspace, isSuperAdmin, generateShareToken } from '../../../../utils/permissions';
-import type { SharePermission } from '../../../../db/schema/workspaceShare';
+import type { ShareEnvironmentAccess, SharePermission } from '../../../../db/schema/workspaceShare';
 
 interface CreateShareBody {
   permission: SharePermission;
   expiresInDays?: number;
   folderId?: string;
   collectionId?: string;
+  environmentIds?: string[];
 }
 
 export default defineEventHandler(async (event) => {
@@ -93,6 +94,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  let scopedProjectId: string | null = null;
+
   // If folderId provided, verify it belongs to a collection in this workspace
   if (body.folderId) {
     const folder = await db
@@ -124,6 +127,8 @@ export default defineEventHandler(async (event) => {
     if (!project.length || project[0].workspaceId !== workspaceId) {
       throw createError({ statusCode: 403, statusMessage: 'Folder does not belong to this workspace' });
     }
+
+    scopedProjectId = project[0].id;
   }
 
   if (body.collectionId) {
@@ -146,7 +151,39 @@ export default defineEventHandler(async (event) => {
     if (!project.length || project[0].workspaceId !== workspaceId) {
       throw createError({ statusCode: 403, statusMessage: 'Collection does not belong to this workspace' });
     }
+
+    scopedProjectId = project[0].id;
   }
+
+  const requestedEnvironmentIds = Array.isArray(body.environmentIds)
+    ? [...new Set(body.environmentIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+    : [];
+
+  if (!isScopedShare && requestedEnvironmentIds.length > 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'environmentIds can only be set on folder or collection shares'
+    });
+  }
+
+  if (isScopedShare && requestedEnvironmentIds.length > 0 && scopedProjectId) {
+    const projectOwned = await db
+      .select({ id: environments.id })
+      .from(environments)
+      .where(eq(environments.projectId, scopedProjectId));
+
+    const ownedIds = new Set(projectOwned.map((env) => env.id));
+    const invalidIds = requestedEnvironmentIds.filter((id) => !ownedIds.has(id));
+
+    if (invalidIds.length > 0) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'One or more environments do not belong to this folder or collection project'
+      });
+    }
+  }
+
+  const environmentAccess: ShareEnvironmentAccess = isScopedShare ? 'allowlist' : 'all';
 
   // Calculate expiration date if provided
   let expiresAt: Date | null = null;
@@ -168,11 +205,21 @@ export default defineEventHandler(async (event) => {
         collectionId: body.collectionId || null,
         shareToken,
         permission: body.permission,
+        environmentAccess,
         createdBy: user.id,
         expiresAt,
         isActive: true
       })
       .returning();
+
+    if (environmentAccess === 'allowlist' && requestedEnvironmentIds.length > 0) {
+      await db.insert(workspaceShareEnvironments).values(
+        requestedEnvironmentIds.map((environmentId) => ({
+          shareId: newShare[0].id,
+          environmentId
+        }))
+      );
+    }
 
     // Update workspace visibility to 'shared'
     await db
@@ -192,6 +239,8 @@ export default defineEventHandler(async (event) => {
       shareToken: newShare[0].shareToken,
       shareUrl: `${baseUrl}/shared-workspace/${newShare[0].shareToken}`,
       permission: newShare[0].permission,
+      environmentAccess: newShare[0].environmentAccess,
+      environmentIds: environmentAccess === 'allowlist' ? requestedEnvironmentIds : [],
       expiresAt: newShare[0].expiresAt,
       createdAt: newShare[0].createdAt
     };

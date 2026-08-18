@@ -19,6 +19,8 @@ interface ShareInfo {
   folderName?: string | null;
   collectionId?: string | null;
   collectionName?: string | null;
+  environmentAccess?: 'all' | 'allowlist';
+  environments?: Array<{ id: string; name: string }>;
 }
 
 interface MemberInfo {
@@ -44,6 +46,7 @@ interface Props {
   folderIsSharedBase?: boolean;
   collectionId?: string;
   collectionName?: string;
+  projectId?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -54,10 +57,12 @@ const props = withDefaults(defineProps<Props>(), {
   folderName: '',
   folderIsSharedBase: false,
   collectionId: '',
-  collectionName: ''
+  collectionName: '',
+  projectId: ''
 });
 
 const isCollectionMode = computed(() => !!props.collectionId);
+const isScopedShareMode = computed(() => !!props.folderId || !!props.collectionId);
 const modalTitle = computed(() => {
   if (props.collectionName) return 'Share Collection';
   if (props.folderName) return 'Share Folder';
@@ -79,8 +84,19 @@ const copiedToken = ref<string | null>(null);
 
 const newShareForm = ref({
   permission: 'view' as 'view' | 'edit',
-  expiresInDays: 0
+  expiresInDays: 0,
+  environmentIds: [] as string[]
 });
+
+interface ProjectEnvironmentOption {
+  id: string;
+  name: string;
+  isActive?: boolean;
+  isMockEnvironment?: boolean;
+}
+
+const projectEnvironments = ref<ProjectEnvironmentOption[]>([]);
+const isLoadingEnvironments = ref(false);
 
 const expirationOptions = [
   { value: 0, label: 'Never' },
@@ -171,6 +187,10 @@ const createShare = async () => {
     if (props.collectionId) {
       body.collectionId = props.collectionId;
     }
+
+    if (isScopedShareMode.value) {
+      body.environmentIds = newShareForm.value.environmentIds;
+    }
     
     await $fetch(`/api/admin/workspaces/${props.workspaceId}/shares`, {
       method: 'POST',
@@ -183,7 +203,8 @@ const createShare = async () => {
     
     newShareForm.value = {
       permission: 'view',
-      expiresInDays: 0
+      expiresInDays: 0,
+      environmentIds: []
     };
   } catch (e: any) {
     error.value = e.data?.message || e.message || 'Failed to create share link';
@@ -364,10 +385,50 @@ const handleClose = () => {
   emit('close');
 };
 
+const fetchProjectEnvironments = async () => {
+  if (!isScopedShareMode.value || !props.projectId) {
+    projectEnvironments.value = [];
+    return;
+  }
+
+  isLoadingEnvironments.value = true;
+  try {
+    const response = await $fetch<ProjectEnvironmentOption[]>(
+      `/api/admin/projects/${props.projectId}/environments`
+    );
+    projectEnvironments.value = Array.isArray(response) ? response : [];
+  } catch (e: any) {
+    console.error('Error fetching project environments:', e);
+    projectEnvironments.value = [];
+  } finally {
+    isLoadingEnvironments.value = false;
+  }
+};
+
+const toggleEnvironment = (environmentId: string) => {
+  const selected = newShareForm.value.environmentIds;
+  if (selected.includes(environmentId)) {
+    newShareForm.value.environmentIds = selected.filter((id) => id !== environmentId);
+    return;
+  }
+  newShareForm.value.environmentIds = [...selected, environmentId];
+};
+
+const formatShareEnvironments = (share: ShareInfo) => {
+  if (share.environmentAccess === 'all' || (!share.folderId && !share.collectionId)) {
+    return 'All environments';
+  }
+  if (!share.environments?.length) {
+    return 'No environments';
+  }
+  return share.environments.map((environment) => environment.name).join(', ');
+};
+
 watch(() => props.show, (newVal) => {
   if (newVal && props.workspaceId) {
     fetchShares();
     fetchMembers();
+    fetchProjectEnvironments();
   }
 });
 
@@ -382,6 +443,13 @@ watch(() => props.collectionId, (newVal) => {
   if (props.show && newVal) {
     fetchShares();
     fetchMembers();
+    fetchProjectEnvironments();
+  }
+});
+
+watch(() => props.projectId, () => {
+  if (props.show) {
+    fetchProjectEnvironments();
   }
 });
 </script>
@@ -483,6 +551,43 @@ watch(() => props.collectionId, (newVal) => {
                 </option>
               </select>
             </div>
+          </div>
+
+          <div v-if="isScopedShareMode" class="mb-4">
+            <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
+              Environments included in this link
+            </label>
+            <div
+              v-if="isLoadingEnvironments"
+              class="p-3 bg-bg-input border border-border-default rounded-md text-xs text-text-muted"
+            >
+              Loading environments...
+            </div>
+            <div
+              v-else-if="projectEnvironments.length === 0"
+              class="p-3 bg-bg-input border border-border-default rounded-md text-xs text-text-muted"
+            >
+              This project has no environments to include.
+            </div>
+            <div v-else class="space-y-1.5 p-3 bg-bg-input border border-border-default rounded-md max-h-44 overflow-y-auto">
+              <label
+                v-for="environment in projectEnvironments"
+                :key="environment.id"
+                class="flex items-center gap-2 text-sm text-text-primary cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  :checked="newShareForm.environmentIds.includes(environment.id)"
+                  class="rounded border-border-default"
+                  @change="toggleEnvironment(environment.id)"
+                />
+                <span>{{ environment.name }}</span>
+                <span v-if="environment.isMockEnvironment" class="text-[10px] uppercase text-accent-purple">Mock</span>
+              </label>
+            </div>
+            <p class="text-xs text-text-muted mt-2 mb-0">
+              Recipients will see requests but cannot resolve {{ '{{variables}}' }} unless you include an environment.
+            </p>
           </div>
 
           <div class="flex items-center gap-3 text-xs text-text-muted mb-4">
@@ -605,6 +710,7 @@ watch(() => props.collectionId, (newVal) => {
                     <span v-if="share.expiresAt">Expires {{ formatDate(share.expiresAt) }}</span>
                     <span v-else>Never expires</span>
                     <span>{{ share.accessCount }} {{ share.accessCount === 1 ? 'user' : 'users' }} accessed</span>
+                    <span v-if="share.folderId || share.collectionId">{{ formatShareEnvironments(share) }}</span>
                   </div>
                 </div>
                 

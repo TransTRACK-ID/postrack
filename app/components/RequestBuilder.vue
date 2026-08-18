@@ -3545,6 +3545,7 @@ const sendRequest = async () => {
           body: proxyRequestBody,
           workspaceId: props.workspaceId,
           environmentId: props.environmentId,
+          shareToken: props.isSharedWorkspace ? props.shareToken : undefined,
           savedRequestId: props.request.id || undefined,
           preScript: preScript.value,
           postScript: postScript.value
