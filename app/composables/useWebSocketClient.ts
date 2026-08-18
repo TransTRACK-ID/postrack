@@ -8,6 +8,7 @@
 
 import { ref, computed } from 'vue';
 import { substituteVariables } from '~/composables/useClientRequest';
+import { fetchEnvironmentVariableMap } from '~/utils/fetchEnvironmentVariables';
 import type { WebSocketProxyServerMessage } from '../../server/utils/websocket-proxy';
 
 export type WebSocketConnectionState =
@@ -48,6 +49,7 @@ export interface WebSocketClientOptions {
   subprotocols?: string[];
   initialMessage?: string;
   environmentId?: string;
+  shareToken?: string;
   authQueryParams?: Record<string, string>;
   preScript?: string;
   signal?: AbortSignal;
@@ -95,15 +97,12 @@ function appendQueryParams(url: string, params: Record<string, string>): string 
   }
 }
 
-async function fetchEnvironmentVariables(environmentId: string): Promise<Record<string, string>> {
+async function fetchEnvironmentVariables(
+  environmentId: string,
+  shareToken?: string
+): Promise<Record<string, string>> {
   try {
-    const envVars = await $fetch<Array<{ key: string; value: string }>>(
-      `/api/admin/environments/${environmentId}/variables`
-    );
-    return envVars.reduce((acc, variable) => {
-      acc[variable.key] = variable.value;
-      return acc;
-    }, {} as Record<string, string>);
+    return await fetchEnvironmentVariableMap(environmentId, { shareToken });
   } catch (error) {
     console.warn('[useWebSocketClient] Failed to fetch environment variables:', error);
     return {};
@@ -243,7 +242,7 @@ export function useWebSocketClient() {
       }
 
       if (options.environmentId) {
-        variables = await fetchEnvironmentVariables(options.environmentId);
+        variables = await fetchEnvironmentVariables(options.environmentId, options.shareToken);
         url = substituteVariables(url, variables);
         headers = resolveHeaders(headers, variables);
 

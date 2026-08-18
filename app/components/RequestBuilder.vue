@@ -12,6 +12,7 @@ import { useBulkKeyValueEdit } from '~/composables/useBulkKeyValueEdit'
 import { useUsageTracking } from '~/composables/useUsageTracking'
 import { useClientRequest, isLocalUrl } from '~/composables/useClientRequest'
 import { stripComments, validateJSONC, formatJSONC } from '~/utils/jsonc'
+import { fetchEnvironmentVariablesList } from '~/utils/fetchEnvironmentVariables'
 import {
   resolveEnvVars,
   buildAuthHeaders,
@@ -203,6 +204,7 @@ interface Props {
   initialScriptLogs?: Array<{ phase: 'pre' | 'post'; type: 'log' | 'error' | 'warn'; message: string; timestamp: number }>
   initialExpandedNodes?: string[]
   isSharedWorkspace?: boolean
+  shareToken?: string
   refreshTrigger?: number
 }
 
@@ -2308,7 +2310,9 @@ const storeTokensInEnvironment = async () => {
 const fetchEnvironmentVariables = async () => {
   if (props.environmentId) {
     try {
-      const variables = await $fetch<Variable[]>(`/api/admin/environments/${props.environmentId}/variables`);
+      const variables = await fetchEnvironmentVariablesList(props.environmentId, {
+        shareToken: props.isSharedWorkspace ? props.shareToken : undefined
+      });
       environmentVariables.value = variables;
     } catch (error) {
       console.error('Failed to fetch environment variables:', error);
@@ -3558,6 +3562,7 @@ const sendRequest = async () => {
       body: requestBody,
       workspaceId: props.workspaceId,
       environmentId: props.environmentId,
+      shareToken: props.isSharedWorkspace ? props.shareToken : undefined,
       savedRequestId: props.request.id || undefined,
       signal: abortController.value?.signal,
       preScript: preScript.value,
@@ -5019,6 +5024,7 @@ defineExpose({
             :headers="{ ...buildHeadersRecord(), ..._buildAuthHeaders() }"
             :socket-config="socketConfig"
             :environment-id="environmentId"
+            :share-token="isSharedWorkspace ? shareToken : undefined"
             :auth-query-params="_buildAuthQueryParams()"
             :pre-script="preScript"
             @socket-config-change="handleSocketConfigChange"

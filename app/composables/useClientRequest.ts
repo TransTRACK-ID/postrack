@@ -20,6 +20,7 @@ import {
   extractDownloadFilenameFromHeaders,
   sanitizeDownloadFilename
 } from '~/utils/response-content-type';
+import { fetchEnvironmentVariableMap } from '~/utils/fetchEnvironmentVariables';
 
 // Magic variable generators (client-side subset of server implementation)
 const MAGIC_GENERATORS: Record<string, () => string> = {
@@ -73,6 +74,7 @@ interface ClientRequestOptions {
   body?: any;
   workspaceId?: string;
   environmentId?: string;
+  shareToken?: string;
   savedRequestId?: string;
   pathVariables?: Array<{ key: string; value: string }>;
   timeout?: number;
@@ -473,11 +475,9 @@ export async function executeClientRequest(
 
     if (environmentId) {
       try {
-        const envVars = await $fetch<Array<{ key: string; value: string }>>(`/api/admin/environments/${environmentId}/variables`);
-        variables = envVars.reduce((acc, v) => {
-          acc[v.key] = v.value;
-          return acc;
-        }, {} as Record<string, string>);
+        variables = await fetchEnvironmentVariableMap(environmentId, {
+          shareToken: options.shareToken
+        });
 
         // Apply variable substitution
         resolvedUrl = substituteVariables(resolvedUrl, variables);

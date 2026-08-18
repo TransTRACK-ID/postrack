@@ -9,6 +9,7 @@ const props = defineProps<{
   headers?: Record<string, string>;
   socketConfig: SocketConfig;
   environmentId?: string;
+  shareToken?: string;
   authQueryParams?: Record<string, string>;
   preScript?: string;
 }>();
@@ -120,6 +121,7 @@ async function handleConnectToggle() {
     subprotocols,
     initialMessage: initialMessage.value,
     environmentId: props.environmentId,
+    shareToken: props.shareToken,
     authQueryParams: props.authQueryParams,
     preScript: props.preScript
   });

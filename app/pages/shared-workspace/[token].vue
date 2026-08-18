@@ -740,6 +740,7 @@ const goBack = () => {
               :collection-id="currentCollectionId"
               :read-only="isReadOnly"
               :is-shared-workspace="true"
+              :share-token="token"
               @save-request="handleRequestSave"
             />
           </div>
