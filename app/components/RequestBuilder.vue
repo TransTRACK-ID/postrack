@@ -3211,6 +3211,12 @@ const syncAfterSave = async (request?: HttpRequest) => {
   captureCurrentStateAsSaved();
 };
 
+const applyRequestUpdate = async (request: HttpRequest) => {
+  isFirstLoad.value = true;
+  lastLoadedRequestSnapshot.value = '';
+  await loadRequestData(request);
+};
+
 const openSaveDialog = () => {
   emit('saveRequest', buildCurrentRequestState());
 
@@ -3748,7 +3754,8 @@ defineExpose({
   hasUnsavedChanges,
   flushDraft,
   captureCurrentStateAsSaved,
-  syncAfterSave
+  syncAfterSave,
+  applyRequestUpdate
 });
 </script>
 

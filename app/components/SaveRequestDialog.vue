@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, watch } from 'vue';
+import CollectionPicker, { type CollectionPickerOption } from './CollectionPicker.vue';
 interface FolderItem {
   id: string;
   collectionId: string;
@@ -160,44 +161,26 @@ const findAllCollections = (): Array<CollectionItem & { projectName: string }> =
 
 const allCollections = computed(() => findAllCollections());
 
-interface CollectionOption {
-  type: 'project-header' | 'collection';
-  id: string;
-  name: string;
-  projectName: string;
-  workspaceName: string;
-  projectId: string;
-  collectionId?: string;
-}
+const collectionPickerOptions = computed((): CollectionPickerOption[] => {
+  const options: CollectionPickerOption[] = [];
 
-const collectionOptions = computed((): CollectionOption[] => {
-  const options: CollectionOption[] = [];
-  
-  props.workspaces.forEach(workspace => {
-    (workspace.projects || []).forEach(project => {
-      options.push({
-        type: 'project-header',
-        id: `header-${project.id}`,
-        name: project.name,
-        projectName: project.name,
-        workspaceName: workspace.name,
-        projectId: project.id
-      });
-      
-      (project.collections || []).forEach(collection => {
+  props.workspaces.forEach((workspace) => {
+    (workspace.projects || []).forEach((project) => {
+      (project.collections || []).forEach((collection) => {
         options.push({
-          type: 'collection',
           id: collection.id,
           name: collection.name,
-          projectName: `${workspace.name} / ${project.name}`,
+          workspaceId: workspace.id,
           workspaceName: workspace.name,
           projectId: project.id,
-          collectionId: collection.id
+          projectName: project.name,
+          requestCount: collection.requestCount,
+          folderCount: collection.folderCount
         });
       });
     });
   });
-  
+
   return options;
 });
 
@@ -505,33 +488,11 @@ const getFolderIndent = (level: number) => {
 
                 <!-- Existing Collection Selection (only show when not creating new) -->
                 <div v-if="!showNewCollectionUI">
-                  <div class="relative">
-                    <select
-                      v-model="form.collectionId"
-                      :disabled="showNewFolderInput && form.isNewFolder"
-                      class="w-full py-2.5 px-3 bg-bg-input border border-border-default rounded-md text-text-primary text-sm focus:outline-none focus:border-accent-blue focus:shadow-[0_0_0_2px_rgba(33,150,243,0.2)] disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2712%27%20height%3D%2712%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%239ca3af%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpolyline%20points%3D%276%209%2012%2015%2018%209%27%3E%3C/polyline%3E%3C/svg%3E')] bg-no-repeat bg-[right_12px_center] pr-10"
-                    >
-                      <option value="">Select a collection...</option>
-                      <option
-                        v-for="option in collectionOptions"
-                        :key="option.id"
-                        :value="option.type === 'collection' ? option.collectionId : ''"
-                        :disabled="option.type === 'project-header'"
-                        :class="{
-                          'font-semibold text-text-secondary bg-bg-tertiary': option.type === 'project-header',
-                          'pl-6 text-text-primary': option.type === 'collection'
-                        }"
-                      >
-                        {{ option.type === 'project-header' ? option.name : `${option.projectName} / ${option.name}` }}
-                      </option>
-                    </select>
-                    <div v-if="selectedCollectionData" class="mt-2 text-xs text-text-muted flex items-center gap-1">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                      </svg>
-                      <span>{{ selectedCollectionData.projectName }} / {{ selectedCollectionData.name }}</span>
-                    </div>
-                  </div>
+                  <CollectionPicker
+                    v-model="form.collectionId"
+                    :collections="collectionPickerOptions"
+                    :disabled="showNewFolderInput && form.isNewFolder"
+                  />
 
                   <!-- Folder Selection (only show when collection selected and not creating new folder) -->
                   <div v-if="selectedCollectionData && !form.isNewFolder" class="mt-3">
@@ -547,7 +508,7 @@ const getFolderIndent = (level: number) => {
                       <div
                         @click="form.folderId = ''"
                         class="py-2 px-3 text-sm cursor-pointer transition-colors duration-fast hover:bg-bg-hover flex items-center gap-2"
-                        :class="form.folderId === '' ? 'text-accent-blue bg-accent-blue/5' : 'text-text-secondary'"
+                        :class="form.folderId === '' ? 'text-accent-orange bg-accent-orange/10' : 'text-text-secondary'"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -562,7 +523,7 @@ const getFolderIndent = (level: number) => {
                         :style="{ paddingLeft: `${16 + getFolderIndent(folder.level)}px` }"
                         class="py-2 px-3 text-sm cursor-pointer transition-colors duration-fast hover:bg-bg-hover flex items-center gap-2"
                         :class="{
-                          'text-accent-blue bg-accent-blue/5': form.folderId === folder.id,
+                          'text-accent-orange bg-accent-orange/10': form.folderId === folder.id,
                           'text-text-secondary': form.folderId !== folder.id
                         }"
                       >

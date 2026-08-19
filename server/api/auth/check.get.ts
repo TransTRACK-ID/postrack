@@ -9,6 +9,7 @@ interface UserInfo {
   familyName: string;
   picture: string;
   idToken: string;
+  id?: string;
 }
 
 interface DecodedToken {
@@ -67,13 +68,15 @@ export default defineEventHandler((event) => {
         };
     }
 
+    const resolvedUserId = decoded.email || decoded.sub || 'unknown';
+
     const tokenExp = decoded.exp ? decoded.exp * 1000 : null;
     const isExpiringSoon = tokenExp && (tokenExp - Date.now()) < 5 * 60 * 1000;
     
     return {
         status: 'logged_in',
         storageDriver: config.nodeEnv === 'production' ? 'redis' : 'fs',
-        user: userInfo,
+        user: userInfo ? { ...userInfo, id: resolvedUserId } : null,
         authMethod: decoded.authMethod || 'credentials',
         realm: decoded.realm || null,
         providerId: decoded.providerId || null,

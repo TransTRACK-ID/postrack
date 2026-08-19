@@ -470,7 +470,11 @@ export async function canDeleteOwnedResource(
     return true;
   }
 
-  if (createdBy && createdBy === userId) {
+  if (createdBy && (createdBy === userId || (
+    userEmail &&
+    createdBy.includes('@') &&
+    createdBy.toLowerCase() === userEmail.toLowerCase()
+  ))) {
     const canEdit = await canEditCollection(userId, collectionId, userEmail);
     return canEdit;
   }

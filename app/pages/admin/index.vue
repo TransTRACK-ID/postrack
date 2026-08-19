@@ -29,6 +29,7 @@ import {
   canDeleteOwnedResource,
   type OwnableResource,
 } from '~/utils/resource-ownership';
+import { buildRequestUpdateFromParsedCurl } from '~/utils/curl-command';
 
 definePageMeta({
   layout: 'admin',
@@ -1601,6 +1602,8 @@ const requestFolderName = ref<string>('');
 const requestCollectionId = ref<string | null>(null);
 const requestCollectionName = ref<string>('');
 const pendingCurlCommand = ref<string | null>(null);
+const curlImportMode = ref<'create' | 'update'>('create');
+const curlUpdateTargetName = ref('');
 const saveDialogDefaultCollectionId = ref('');
 const saveDialogDefaultFolderId = ref('');
 
@@ -3172,6 +3175,8 @@ const openCreateRequest = (folderId?: string | null, collectionId?: string) => {
 
 // For importing from cURL - shows the modal
 const openImportCurl = (folderId?: string | null, collectionId?: string, curlCommand?: string) => {
+  curlImportMode.value = 'create';
+  curlUpdateTargetName.value = '';
   pendingCurlCommand.value = curlCommand?.trim() || null;
 
   if (folderId) {
@@ -3205,18 +3210,10 @@ const handleImportCurlFromBuilder = (curlCommand: string) => {
   const request = selectedRequest.value;
   if (!request) return;
 
-  const folderId = request.folderId || null;
-  if (folderId) {
-    openImportCurl(folderId, undefined, curlCommand);
-    return;
-  }
-
-  if (activeCollectionId.value) {
-    openImportCurl(null, activeCollectionId.value, curlCommand);
-    return;
-  }
-
-  alert('Please select a folder or collection first');
+  curlImportMode.value = 'update';
+  curlUpdateTargetName.value = request.name || 'Untitled Request';
+  pendingCurlCommand.value = curlCommand.trim();
+  showRequestModal.value = true;
 };
 
 const handleRequestModalClose = () => {
@@ -3224,6 +3221,36 @@ const handleRequestModalClose = () => {
   requestFolderId.value = null;
   requestCollectionId.value = null;
   pendingCurlCommand.value = null;
+  curlImportMode.value = 'create';
+  curlUpdateTargetName.value = '';
+};
+
+const handleCurlUpdated = async (parsedData: any) => {
+  handleRequestModalClose();
+
+  const request = selectedRequest.value;
+  if (!request || !parsedData) return;
+
+  const curlUpdates = buildRequestUpdateFromParsedCurl(parsedData);
+  const updatedRequest = normalizeRequestForTab({
+    ...request,
+    ...curlUpdates,
+    name: request.name
+  });
+
+  selectedRequest.value = updatedRequest;
+
+  const tabIdx = openTabs.value.findIndex(t => t.key === activeTabKey.value);
+  if (tabIdx !== -1) {
+    openTabs.value[tabIdx] = {
+      ...openTabs.value[tabIdx],
+      request: updatedRequest,
+      hasUnsavedChanges: true
+    };
+  }
+
+  await nextTick();
+  await requestBuilderRef.value?.applyRequestUpdate?.(updatedRequest);
 };
 
 const handleCurlImported = async (result: any) => {
@@ -5488,6 +5515,8 @@ onDeactivated(() => {
     <!-- Import from cURL Modal -->
     <CreateRequestModal
       :show="showRequestModal"
+      :mode="curlImportMode"
+      :target-request-name="curlUpdateTargetName"
       :folder-id="requestFolderId || ''"
       :folder-name="requestFolderName"
       :collection-id="requestCollectionId || ''"
@@ -5495,6 +5524,7 @@ onDeactivated(() => {
       :initial-curl-command="pendingCurlCommand"
       @close="handleRequestModalClose"
       @imported="handleCurlImported"
+      @updated="handleCurlUpdated"
     />
 
     <!-- Keyboard Shortcuts Help Modal -->

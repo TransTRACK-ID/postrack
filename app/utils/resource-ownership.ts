@@ -9,7 +9,14 @@ export function isResourceOwnedByUser(
   if (!item?.createdBy || !userId) {
     return false;
   }
-  return item.createdBy === userId;
+  if (item.createdBy === userId) {
+    return true;
+  }
+  // Ownership is stored as email for most auth flows; compare case-insensitively.
+  if (item.createdBy.includes('@') && userId.includes('@')) {
+    return item.createdBy.toLowerCase() === userId.toLowerCase();
+  }
+  return false;
 }
 
 export function canDeleteOwnedResource(

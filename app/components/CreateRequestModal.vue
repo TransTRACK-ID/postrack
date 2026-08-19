@@ -3,6 +3,8 @@ import { nextTick } from 'vue';
 
 interface Props {
   show: boolean;
+  mode?: 'create' | 'update';
+  targetRequestName?: string;
   folderId?: string;
   folderName?: string;
   collectionId?: string;
@@ -10,17 +12,22 @@ interface Props {
   initialCurlCommand?: string | null;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  mode: 'create'
+});
 
 const emit = defineEmits<{
   close: [];
   imported: [request: any];
+  updated: [parsedData: any];
 }>();
+
+const isUpdateMode = computed(() => props.mode === 'update');
 
 // cURL import state
 const curlCommand = ref('');
 const isParsingCurl = ref(false);
-const isCreating = ref(false);
+const isSubmitting = ref(false);
 const curlError = ref('');
 const curlSuccess = ref(false);
 const parsedData = ref<any>(null);
@@ -29,8 +36,15 @@ const canParseCurl = computed(() => {
   return !isParsingCurl.value && curlCommand.value.trim();
 });
 
-const canCreate = computed(() => {
-  return parsedData.value && !isCreating.value;
+const canSubmit = computed(() => {
+  return parsedData.value && !isSubmitting.value;
+});
+
+const submitLabel = computed(() => {
+  if (isSubmitting.value) {
+    return isUpdateMode.value ? 'Updating...' : 'Creating...';
+  }
+  return isUpdateMode.value ? 'Update Request' : 'Create Request';
 });
 
 // cURL placeholder text
@@ -93,57 +107,66 @@ const parseCurlCommand = async () => {
   }
 };
 
-const createRequestFromCurl = async () => {
+const buildRequestBodyFromParsed = () => {
+  if (!parsedData.value) return null;
+
+  let body = null;
+  if (parsedData.value.body) {
+    body = typeof parsedData.value.body === 'object'
+      ? parsedData.value.body
+      : parsedData.value.body;
+  }
+
+  return {
+    name: parsedData.value.name || 'Imported Request',
+    method: parsedData.value.method,
+    url: parsedData.value.url,
+    headers: parsedData.value.headers || null,
+    body,
+    auth: parsedData.value.auth,
+    mockConfig: {
+      isEnabled: true,
+      statusCode: 200,
+      delay: 0,
+      responseBody: { message: 'Mock response' },
+      responseHeaders: { 'Content-Type': 'application/json' }
+    }
+  };
+};
+
+const submitFromCurl = async () => {
   if (!parsedData.value) {
     curlError.value = 'Please parse a curl command first';
     return;
   }
 
-  isCreating.value = true;
+  if (isUpdateMode.value) {
+    emit('updated', parsedData.value);
+    handleClose();
+    return;
+  }
+
+  isSubmitting.value = true;
   curlError.value = '';
 
   try {
-    let body = null;
-    if (parsedData.value.body) {
-      if (typeof parsedData.value.body === 'object') {
-        body = parsedData.value.body;
-      } else {
-        body = parsedData.value.body;
-      }
-    }
-
-    const requestBody = {
-      name: parsedData.value.name || 'Imported Request',
-      method: parsedData.value.method,
-      url: parsedData.value.url,
-      headers: parsedData.value.headers || null,
-      body: body,
-      auth: parsedData.value.auth,
-      mockConfig: {
-        isEnabled: true,
-        statusCode: 200,
-        delay: 0,
-        responseBody: { message: 'Mock response' },
-        responseHeaders: { 'Content-Type': 'application/json' }
-      }
-    };
+    const requestBody = buildRequestBodyFromParsed();
+    if (!requestBody) return;
 
     let result;
     if (props.collectionId) {
-      // Creating request at collection root
       result = await $fetch(`/api/admin/collections/${props.collectionId}/requests`, {
         method: 'POST',
         body: requestBody
       });
     } else if (props.folderId) {
-      // Creating request in a folder
       result = await $fetch(`/api/admin/folders/${props.folderId}/requests`, {
         method: 'POST',
         body: requestBody
       });
     } else {
       curlError.value = 'No folder or collection specified';
-      isCreating.value = false;
+      isSubmitting.value = false;
       return;
     }
 
@@ -152,7 +175,7 @@ const createRequestFromCurl = async () => {
   } catch (e: any) {
     curlError.value = e.data?.message || e.message || 'Failed to create request';
   } finally {
-    isCreating.value = false;
+    isSubmitting.value = false;
   }
 };
 
@@ -169,6 +192,25 @@ const loadExampleCurl = () => {
 
 <template>
   <Modal :show="show" title="Import from cURL" size="lg" @close="handleClose">
+    <div
+      v-if="isUpdateMode && targetRequestName"
+      class="mb-4 p-3 bg-accent-blue/10 border border-accent-blue/25 rounded-md"
+    >
+      <div class="flex items-start gap-2.5">
+        <svg class="text-accent-blue flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+        </svg>
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-text-primary">Update selected request</div>
+          <p class="text-xs text-text-secondary mt-1 leading-relaxed">
+            <span class="font-mono text-accent-blue">{{ targetRequestName }}</span>
+            will be updated with the method, URL, headers, body, and auth from this cURL command.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div v-if="curlError" class="mb-4 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md">
       <div class="flex items-start gap-2">
         <svg class="text-accent-red flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -186,10 +228,13 @@ const loadExampleCurl = () => {
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
         <div>
-          <div class="text-sm text-accent-green font-medium">cURL parsed successfully!</div>
+          <div class="text-sm text-accent-green font-medium">cURL parsed successfully</div>
           <div class="text-xs text-text-secondary mt-1">
             <span class="font-medium">{{ parsedData?.method }}</span> {{ parsedData?.url }}
           </div>
+          <p v-if="isUpdateMode" class="text-xs text-text-muted mt-1.5">
+            Review the details, then click Update Request to apply them.
+          </p>
         </div>
       </div>
     </div>
@@ -209,7 +254,7 @@ const loadExampleCurl = () => {
         v-model="curlCommand"
         :placeholder="curlPlaceholder"
         class="w-full h-40 py-2.5 px-3 bg-bg-input border border-border-default rounded-md text-text-primary text-sm font-mono focus:outline-none focus:border-accent-blue resize-y"
-        :disabled="isParsingCurl || isCreating"
+        :disabled="isParsingCurl || isSubmitting"
       ></textarea>
       <p class="text-xs text-text-muted mt-1.5">
         Supports: -X, -H, -d, -u, -F, --data, --data-raw, --data-binary, --form, and more
@@ -220,7 +265,7 @@ const loadExampleCurl = () => {
       <button 
         class="btn btn-secondary flex-1" 
         @click="resetCurl"
-        :disabled="isParsingCurl || isCreating || !curlCommand"
+        :disabled="isParsingCurl || isSubmitting || !curlCommand"
       >
         Clear
       </button>
@@ -242,8 +287,7 @@ const loadExampleCurl = () => {
       </button>
     </div>
 
-    <!-- Parse Instructions -->
-    <div class="p-3 bg-bg-tertiary rounded-lg">
+  <div class="p-3 bg-bg-tertiary rounded-lg">
       <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wide mb-2">Supported cURL Options</h4>
       <div class="grid grid-cols-2 gap-2 text-xs text-text-muted">
         <div><code class="text-accent-orange">-X, --request</code> HTTP method</div>
@@ -258,19 +302,19 @@ const loadExampleCurl = () => {
     </div>
 
     <template #footer>
-      <button class="btn btn-secondary" @click="handleClose" :disabled="isParsingCurl || isCreating">
+      <button class="btn btn-secondary" @click="handleClose" :disabled="isParsingCurl || isSubmitting">
         Cancel
       </button>
       <button 
         v-if="curlSuccess"
         class="btn btn-primary" 
-        @click="createRequestFromCurl"
-        :disabled="!canCreate"
+        @click="submitFromCurl"
+        :disabled="!canSubmit"
       >
-        <svg v-if="isCreating" class="animate-spin mr-1" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg v-if="isSubmitting" class="animate-spin mr-1" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
         </svg>
-        {{ isCreating ? 'Creating...' : 'Create Request' }}
+        {{ submitLabel }}
       </button>
     </template>
   </Modal>

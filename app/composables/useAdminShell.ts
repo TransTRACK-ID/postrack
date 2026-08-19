@@ -9,6 +9,7 @@ import {
   type Ref,
 } from 'vue';
 import type { AdminCollection, AdminMock, AdminShellPageBindings } from '~/types/admin-shell';
+import { resolveAuthUserId } from '~/utils/auth-user';
 
 export const ADMIN_SHELL_KEY: InjectionKey<ReturnType<typeof createAdminShellState>> =
   Symbol('admin-shell');
@@ -83,7 +84,7 @@ function createAdminShellState() {
   const isInitialLoading = computed(() => !isInitialLoadComplete.value);
 
   const currentUserEmail = computed(() => authData.value?.user?.email || null);
-  const currentUserId = computed(() => authData.value?.user?.id || null);
+  const currentUserId = computed(() => resolveAuthUserId(authData.value?.user));
   const isSuperAdmin = ref(false);
 
   const checkSuperAdmin = async () => {

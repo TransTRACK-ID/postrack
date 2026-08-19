@@ -20,6 +20,12 @@ describe('resource ownership helpers', () => {
     ).toBe(true);
   });
 
+  it('matches ownership case-insensitively for email-based ids', () => {
+    expect(
+      isResourceOwnedByUser({ createdBy: 'User@Example.com' }, 'user@example.com')
+    ).toBe(true);
+  });
+
   it('allows creators to delete only their own resources', () => {
     expect(
       canDeleteOwnedResource({ createdBy: 'user-1' }, 'user-1', false, false)
