@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Modal from './Modal.vue';
+import EnvironmentMultiSelect from './EnvironmentMultiSelect.vue';
 import { usePermissionBadge } from '../composables/usePermissionBadge';
 
 const { getPermissionBadge } = usePermissionBadge();
@@ -406,15 +407,6 @@ const fetchProjectEnvironments = async () => {
   }
 };
 
-const toggleEnvironment = (environmentId: string) => {
-  const selected = newShareForm.value.environmentIds;
-  if (selected.includes(environmentId)) {
-    newShareForm.value.environmentIds = selected.filter((id) => id !== environmentId);
-    return;
-  }
-  newShareForm.value.environmentIds = [...selected, environmentId];
-};
-
 const formatShareEnvironments = (share: ShareInfo) => {
   if (share.environmentAccess === 'all' || (!share.folderId && !share.collectionId)) {
     return 'All environments';
@@ -555,37 +547,22 @@ watch(() => props.projectId, () => {
           </div>
 
           <div v-if="isScopedShareMode" class="mb-4">
-            <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide mb-1.5">
-              Environments included in this link
-            </label>
-            <div
-              v-if="isLoadingEnvironments"
-              class="p-3 bg-bg-input border border-border-default rounded-md text-xs text-text-muted"
-            >
-              Loading environments...
-            </div>
-            <div
-              v-else-if="projectEnvironments.length === 0"
-              class="p-3 bg-bg-input border border-border-default rounded-md text-xs text-text-muted"
-            >
-              This project has no environments to include.
-            </div>
-            <div v-else class="space-y-1.5 p-3 bg-bg-input border border-border-default rounded-md max-h-44 overflow-y-auto">
-              <label
-                v-for="environment in projectEnvironments"
-                :key="environment.id"
-                class="flex items-center gap-2 text-sm text-text-primary cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  :checked="newShareForm.environmentIds.includes(environment.id)"
-                  class="rounded border-border-default"
-                  @change="toggleEnvironment(environment.id)"
-                />
-                <span>{{ environment.name }}</span>
-                <span v-if="environment.isMockEnvironment" class="text-[10px] uppercase text-accent-purple">Mock</span>
+            <div class="flex items-baseline justify-between gap-3 mb-1.5">
+              <label class="block text-xs font-medium text-text-secondary uppercase tracking-wide m-0">
+                Environments included in this link
               </label>
+              <span
+                v-if="!isLoadingEnvironments && projectEnvironments.length > 0"
+                class="text-[11px] text-text-muted whitespace-nowrap"
+              >
+                Optional
+              </span>
             </div>
+            <EnvironmentMultiSelect
+              v-model="newShareForm.environmentIds"
+              :environments="projectEnvironments"
+              :loading="isLoadingEnvironments"
+            />
             <p class="text-xs text-text-muted mt-2 mb-0">
               Recipients will see requests but cannot resolve {{ variableSyntax }} unless you include an environment.
             </p>
