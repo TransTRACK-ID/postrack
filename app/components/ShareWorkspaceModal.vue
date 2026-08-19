@@ -97,6 +97,7 @@ interface ProjectEnvironmentOption {
 
 const projectEnvironments = ref<ProjectEnvironmentOption[]>([]);
 const isLoadingEnvironments = ref(false);
+const variableSyntax = '{{variables}}';
 
 const expirationOptions = [
   { value: 0, label: 'Never' },
@@ -586,7 +587,7 @@ watch(() => props.projectId, () => {
               </label>
             </div>
             <p class="text-xs text-text-muted mt-2 mb-0">
-              Recipients will see requests but cannot resolve {{ '{{variables}}' }} unless you include an environment.
+              Recipients will see requests but cannot resolve {{ variableSyntax }} unless you include an environment.
             </p>
           </div>
 
