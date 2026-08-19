@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isCurlCommand, normalizeCurlCommand, buildRequestUpdateFromParsedCurl } from '../../app/utils/curl-command'
+import { isCurlCommand, normalizeCurlCommand, buildRequestUpdateFromParsedCurl, normalizeCurlBodyForRequest } from '../../app/utils/curl-command'
 
 describe('isCurlCommand', () => {
   it('detects standard curl commands', () => {
@@ -54,5 +54,53 @@ describe('buildRequestUpdateFromParsedCurl', () => {
     expect(update.auth).toEqual({ type: 'bearer', credentials: { token: 'abc' } })
     expect(update.queryParams).toEqual([{ key: 'page', value: '1', enabled: true, note: undefined }])
     expect(update.protocol).toBe('http')
+    expect(update.bodyFormat).toBe('json')
+    expect(update.jsonBody).toBe(JSON.stringify({ name: 'Jane' }, null, 2))
+    expect(update.rawBody).toBe('')
+    expect(update.formDataParams).toEqual([])
+  })
+
+  it('overwrites stale body draft fields instead of merging with old payload', () => {
+    const update = buildRequestUpdateFromParsedCurl({
+      name: 'POST Orders',
+      method: 'POST',
+      url: 'https://api.example.com/orders',
+      headers: { 'Content-Type': 'application/json' },
+      body: { orderId: '123' },
+      auth: { type: 'none' },
+      queryParams: []
+    })
+
+    expect(update.bodyFormat).toBe('json')
+    expect(update.jsonBody).toContain('orderId')
+    expect(update.rawBody).toBe('')
+    expect(update.formDataParams).toEqual([])
+  })
+})
+
+describe('normalizeCurlBodyForRequest', () => {
+  it('clears body fields when curl has no payload', () => {
+    const body = normalizeCurlBodyForRequest(null)
+
+    expect(body.bodyFormat).toBe('none')
+    expect(body.body).toBeNull()
+    expect(body.jsonBody).toBe('')
+    expect(body.rawBody).toBe('')
+    expect(body.formDataParams).toEqual([])
+  })
+
+  it('maps form-data payload into formDataParams', () => {
+    const body = normalizeCurlBodyForRequest({
+      __mockServiceBodyFormat: 'form-data',
+      __mockServiceFormDataParams: [
+        { key: 'file', value: 'notes.txt', enabled: true, type: 'file' }
+      ]
+    })
+
+    expect(body.bodyFormat).toBe('form-data')
+    expect(body.formDataParams).toEqual([
+      { key: 'file', value: 'notes.txt', enabled: true, type: 'file' }
+    ])
+    expect(body.jsonBody).toBe('')
   })
 })

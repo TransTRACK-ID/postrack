@@ -3245,7 +3245,8 @@ const handleCurlUpdated = async (parsedData: any) => {
     openTabs.value[tabIdx] = {
       ...openTabs.value[tabIdx],
       request: updatedRequest,
-      hasUnsavedChanges: true
+      hasUnsavedChanges: true,
+      draftSnapshot: undefined
     };
   }
 
