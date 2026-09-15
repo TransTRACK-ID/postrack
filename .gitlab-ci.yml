@@ -11,8 +11,10 @@ default:
 variables:
   CONTAINER_REGISTRY: ${CI_REGISTRY_IMAGE}/application
 
-before_script:
-  - echo "$TRIGGER_AWX_JOB" > "$(pwd)/trigger_awx_job_$CI_PROJECT_NAME.sh"
+include:
+  - project: "devsecops-internal/ci-template"
+    ref: main
+    file: "awx-trigger.yml"
 
 build-check:
   stage: build
@@ -32,11 +34,12 @@ build-check:
 
 build:
   stage: build
+  extends: .awx_trigger
   variables:
     TARGET_HOST: "gitlab-runner"
-  script:
-    - bash trigger_awx_job_$CI_PROJECT_NAME.sh "build" "env_prod"
-    - rm -f trigger_awx_job_$CI_PROJECT_NAME.sh
+    AWX_ACTION: Build
+    AWX_ENV: prod
+    AWX_BEHAVIOR: pull env
   except:
     - branches
   artifacts:
@@ -93,11 +96,10 @@ report-sonar-to-merge-id:
 
 publish:
   stage: publish
+  extends: .awx_trigger
   variables:
     TARGET_HOST: "gitlab-runner"
-  script:
-    - bash trigger_awx_job_$CI_PROJECT_NAME.sh "publish"
-    - rm -f trigger_awx_job_$CI_PROJECT_NAME.sh
+    AWX_ACTION: Publish
   except:
     - branches
   artifacts:
@@ -194,11 +196,12 @@ production:
   stage: release
   dependencies:
     - publish
+  extends: .awx_trigger
   variables:
+    AWX_ACTION: Deploy
+    AWX_ENV: prod
+    AWX_BEHAVIOR: default
     TARGET_HOST: "prod-app-cluster-2"
-  script:
-    - bash trigger_awx_job_$CI_PROJECT_NAME.sh "production" "env_prod"
-    - rm -f trigger_awx_job_$CI_PROJECT_NAME.sh
   tags:
     - production-gcp
   only:
