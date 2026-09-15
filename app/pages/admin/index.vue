@@ -4160,7 +4160,7 @@ const handleReorderRequests = async (
             method: 'POST',
             body
         });
-        showToast('Request moved', 'success', { duration: 2000 });
+        showToast(updates.length > 1 ? `${updates.length} requests moved` : 'Request moved', 'success', { duration: 2000 });
         refreshWorkspaces();
     } catch (e: any) {
         showToast('Error moving request: ' + (e.data?.message || e.message), 'error', { duration: 4000 });

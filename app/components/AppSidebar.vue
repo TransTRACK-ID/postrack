@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import RequestHistoryPanel from './RequestHistoryPanel.vue';
 import ApiDefinitionsPanel from './ApiDefinitionsPanel.vue';
+import MoveRequestsModal, { type MoveTarget } from './MoveRequestsModal.vue';
 import MethodBadge from '~/components/MethodBadge.vue';
 import {
   canDeleteOwnedResource,
@@ -208,6 +209,15 @@ const selectedWorkspaceId = ref<string | null>(null);
 const activeView = ref<'hierarchy' | 'mocks' | 'history' | 'definitions'>('hierarchy');
 const contextMenu = ref<{ x: number; y: number; type: string; data: any } | null>(null);
 const contextMenuLoading = ref<string | null>(null);
+
+// Multi-selection of requests for batch moves:
+// - Cmd/Ctrl+Click toggles a request in the selection
+// - Shift+Click range-selects from the anchor (last clicked) to the target
+const multiSelectedRequestIds = ref<Set<string>>(new Set());
+const anchorRequestId = ref<string | null>(null);
+const isMultiSelectActive = computed(() => multiSelectedRequestIds.value.size > 0);
+const showMoveRequestsModal = ref(false);
+const moveModalRequestIds = ref<string[]>([]);
 
 const expandedCollections = useExpandedState('mock-service-expanded-collections');
 const expandedGroups = useExpandedState('mock-service-expanded-groups');
@@ -577,7 +587,178 @@ const isProjectExpanded = (projectId: string) => expandedProjects.value.has(proj
 const isCollectionHierarchyExpanded = (collectionId: string) => expandedCollectionsHierarchy.value.has(collectionId);
 const isFolderExpanded = (folderId: string) => expandedFolders.value.has(folderId);
 
+// ---------------------------------------------------------------------------
+// Request multi-selection
+// Cmd/Ctrl+Click toggles items; Shift+Click range-selects from the anchor.
+// ---------------------------------------------------------------------------
+
+/**
+ * Request ids in their visible tree order — used for Shift+Click range
+ * selection. Mirrors the rendered order exactly: expanded projects →
+ * expanded collections → items sorted via getSortedCollectionItems →
+ * expanded folders (child folders first, then the folder's requests,
+ * matching FolderTreeItem's render order).
+ */
+const visibleRequestIds = computed((): string[] => {
+  const ids: string[] = [];
+
+  const walkFolder = (folder: FolderWithRequestsAndChildren) => {
+    if (!expandedFolders.value.has(folder.id)) return;
+    for (const child of folder.children) {
+      walkFolder(child);
+    }
+    for (const request of folder.requests) {
+      ids.push(request.id);
+    }
+  };
+
+  for (const project of filteredProjects.value) {
+    if (!expandedProjects.value.has(project.id)) continue;
+    for (const collection of project.collections) {
+      if (!expandedCollectionsHierarchy.value.has(collection.id)) continue;
+      for (const item of getSortedCollectionItems(collection)) {
+        if (item.type === 'request') {
+          ids.push(item.id);
+        } else {
+          walkFolder(item.data);
+        }
+      }
+    }
+  }
+
+  return ids;
+});
+
+const toggleRequestSelection = (requestId: string) => {
+  const next = new Set(multiSelectedRequestIds.value);
+  if (next.has(requestId)) {
+    next.delete(requestId);
+  } else {
+    next.add(requestId);
+  }
+  multiSelectedRequestIds.value = next;
+  anchorRequestId.value = requestId;
+};
+
+const handleRangeSelectRequest = (requestId: string) => {
+  const list = visibleRequestIds.value;
+  const targetIndex = list.indexOf(requestId);
+  if (targetIndex === -1) return;
+
+  const anchorIndex = anchorRequestId.value ? list.indexOf(anchorRequestId.value) : -1;
+  if (anchorIndex === -1) {
+    // No anchor in view: select just this request and make it the anchor
+    multiSelectedRequestIds.value = new Set([requestId]);
+    anchorRequestId.value = requestId;
+    return;
+  }
+
+  const start = Math.min(anchorIndex, targetIndex);
+  const end = Math.max(anchorIndex, targetIndex);
+  multiSelectedRequestIds.value = new Set(list.slice(start, end + 1));
+};
+
+const clearRequestSelection = () => {
+  if (multiSelectedRequestIds.value.size > 0) {
+    multiSelectedRequestIds.value = new Set();
+  }
+  anchorRequestId.value = null;
+};
+
+const isRequestMultiSelected = (requestId: string) => multiSelectedRequestIds.value.has(requestId);
+
+const handleSelectRequest = (request: HttpRequest) => {
+  clearRequestSelection();
+  anchorRequestId.value = request.id;
+  emit('selectRequest', request);
+};
+
+const handleRootRequestClick = (event: MouseEvent, request: HttpRequest) => {
+  if (event.shiftKey) {
+    event.preventDefault();
+    handleRangeSelectRequest(request.id);
+    return;
+  }
+  if (event.metaKey || event.ctrlKey) {
+    event.preventDefault();
+    toggleRequestSelection(request.id);
+    return;
+  }
+  handleSelectRequest(request);
+};
+
+const openMoveModal = (requestIds: string[]) => {
+  moveModalRequestIds.value = requestIds;
+  showMoveRequestsModal.value = true;
+  closeContextMenu();
+};
+
+/** Sort request ids by their visible tree order for predictable batch moves. */
+const orderedRequestIds = (ids: string[]): string[] => {
+  const orderIndex = new Map(visibleRequestIds.value.map((id, i) => [id, i]));
+  return [...ids].sort(
+    (a, b) => (orderIndex.get(a) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b) ?? Number.MAX_SAFE_INTEGER)
+  );
+};
+
+/**
+ * Resolve the ids affected by a request drag: when the dragged request is part
+ * of the multi-selection, the whole selection moves; otherwise just the one.
+ */
+const getDraggedRequestIds = (sourceRequestId: string): string[] => {
+  if (multiSelectedRequestIds.value.has(sourceRequestId)) {
+    return orderedRequestIds([...multiSelectedRequestIds.value]);
+  }
+  return [sourceRequestId];
+};
+
+const handleMoveRequestsTo = (target: MoveTarget) => {
+  const ids = orderedRequestIds(moveModalRequestIds.value);
+  if (ids.length === 0) return;
+
+  if (target.type === 'folder') {
+    const targetFolder = findFolderById(currentWorkspace.value, target.id);
+    if (!targetFolder) return;
+    const baseOrder = targetFolder.requests.length;
+    const updates = ids.map((id, index) => ({
+      id,
+      folderId: target.id,
+      order: baseOrder + index
+    }));
+    emit('reorderRequests', target.id, updates, null);
+  } else {
+    let targetCollection: CollectionWithFolders | null = null;
+    for (const project of currentWorkspace.value?.projects ?? []) {
+      const found = project.collections.find(c => c.id === target.id);
+      if (found) {
+        targetCollection = found;
+        break;
+      }
+    }
+    if (!targetCollection) return;
+
+    const maxRequestOrder = targetCollection.requests.reduce((max, r) => Math.max(max, r.order), -1);
+    const maxFolderOrder = targetCollection.folders
+      .filter(f => f.parentFolderId === null)
+      .reduce((max, f) => Math.max(max, f.order), -1);
+    const baseOrder = Math.max(maxRequestOrder, maxFolderOrder) + 1;
+    const updates = ids.map((id, index) => ({
+      id,
+      collectionId: target.id,
+      order: baseOrder + index
+    }));
+    emit('reorderRequests', null, updates, target.id);
+  }
+
+  clearRequestSelection();
+};
+
 const handleDragStart = (type: 'folder' | 'request', id: string) => {
+  // Dragging a request outside the multi-selection collapses it so the
+  // drop only moves that single request.
+  if (type === 'request' && !multiSelectedRequestIds.value.has(id)) {
+    clearRequestSelection();
+  }
   dragState.setDragging(type, id);
 };
 
@@ -876,18 +1057,16 @@ const handleRequestToFolderDrop = async (requestId: string, targetFolderId: stri
   const targetFolder = findFolderById(currentWorkspace.value, targetFolderId);
   if (!targetFolder) return;
 
-  const newOrder = targetFolder.requests.length;
-  
-  // Check if request is currently at collection root
-  const requestLocation = findRequestLocation(requestId, currentWorkspace.value);
-  
-  if (requestLocation && requestLocation.type === 'collection') {
-    // Moving from collection root to folder
-    emit('reorderRequests', targetFolderId, [{ id: requestId, folderId: targetFolderId, order: newOrder }], null);
-  } else {
-    // Moving between folders
-    emit('reorderRequests', targetFolderId, [{ id: requestId, folderId: targetFolderId, order: newOrder }], null);
-  }
+  const requestIds = getDraggedRequestIds(requestId);
+  const baseOrder = targetFolder.requests.length;
+  const updates = requestIds.map((id, index) => ({
+    id,
+    folderId: targetFolderId,
+    order: baseOrder + index
+  }));
+
+  emit('reorderRequests', targetFolderId, updates, null);
+  if (requestIds.length > 1) clearRequestSelection();
 };
 
 const handleRequestToCollectionDrop = async (requestId: string, targetCollectionId: string) => {
@@ -906,40 +1085,48 @@ const handleRequestToCollectionDrop = async (requestId: string, targetCollection
   
   if (!targetCollection) return;
 
+  const requestIds = getDraggedRequestIds(requestId);
+
   // Calculate order at collection root (after all folders and existing requests)
   const existingRootRequests = targetCollection.requests;
   const existingRootFolders = targetCollection.folders.filter(f => f.parentFolderId === null);
   const maxRequestOrder = existingRootRequests.reduce((max, r) => Math.max(max, r.order), -1);
   const maxFolderOrder = existingRootFolders.reduce((max, f) => Math.max(max, f.order), -1);
-  const newOrder = Math.max(maxRequestOrder, maxFolderOrder) + 1;
-  
-  // Move request to collection root
-  emit('reorderRequests', null, [{ id: requestId, collectionId: targetCollectionId, order: newOrder }], targetCollectionId);
+  const baseOrder = Math.max(maxRequestOrder, maxFolderOrder) + 1;
+
+  // Move request(s) to collection root
+  const updates = requestIds.map((id, index) => ({
+    id,
+    collectionId: targetCollectionId,
+    order: baseOrder + index
+  }));
+  emit('reorderRequests', null, updates, targetCollectionId);
+  if (requestIds.length > 1) clearRequestSelection();
 };
 
 const handleRequestDrop = async (sourceRequestId: string, targetRequestId: string, position: 'before' | 'after') => {
+  const sourceIds = getDraggedRequestIds(sourceRequestId);
+  const sourceIdSet = new Set(sourceIds);
+  if (sourceIds.length > 1) clearRequestSelection();
+
   // Check if target is in a folder
   const targetFolder = findRequestFolder(targetRequestId, currentWorkspace.value);
-  
+
   if (targetFolder) {
     // Target is in a folder - use folder-based reordering
-    const siblings = targetFolder.requests;
-    const targetIndex = siblings.findIndex(r => r.id === targetRequestId);
-    const newOrder = position === 'before' ? targetIndex : targetIndex + 1;
+    const filtered = targetFolder.requests.filter(r => !sourceIdSet.has(r.id));
+    const targetIndex = filtered.findIndex(r => r.id === targetRequestId);
+    if (targetIndex === -1) return;
+    const insertAt = position === 'before' ? targetIndex : targetIndex + 1;
 
-    const updates = siblings
-      .filter(r => r.id !== sourceRequestId)
-      .map((r, idx) => ({
-        id: r.id,
-        folderId: targetFolder.id,
-        order: idx >= newOrder ? idx + 1 : idx
-      }));
-
-    if (siblings.find(r => r.id === sourceRequestId)) {
-      updates.push({ id: sourceRequestId, folderId: targetFolder.id, order: newOrder });
-    } else {
-      updates.unshift({ id: sourceRequestId, folderId: targetFolder.id, order: newOrder });
-    }
+    const updates = filtered.map((r, idx) => ({
+      id: r.id,
+      folderId: targetFolder.id,
+      order: idx >= insertAt ? idx + sourceIds.length : idx
+    }));
+    sourceIds.forEach((id, index) => {
+      updates.push({ id, folderId: targetFolder.id, order: insertAt + index });
+    });
 
     emit('reorderRequests', targetFolder.id, updates, null);
   } else {
@@ -947,23 +1134,19 @@ const handleRequestDrop = async (sourceRequestId: string, targetRequestId: strin
     const targetLocation = findRequestLocation(targetRequestId, currentWorkspace.value);
     if (targetLocation && targetLocation.type === 'collection') {
       const collection = targetLocation.collection;
-      const siblings = collection.requests;
-      const targetIndex = siblings.findIndex(r => r.id === targetRequestId);
-      const newOrder = position === 'before' ? targetIndex : targetIndex + 1;
+      const filtered = collection.requests.filter(r => !sourceIdSet.has(r.id));
+      const targetIndex = filtered.findIndex(r => r.id === targetRequestId);
+      if (targetIndex === -1) return;
+      const insertAt = position === 'before' ? targetIndex : targetIndex + 1;
 
-      const updates = siblings
-        .filter(r => r.id !== sourceRequestId)
-        .map((r, idx) => ({
-          id: r.id,
-          collectionId: collection.id,
-          order: idx >= newOrder ? idx + 1 : idx
-        }));
-
-      if (siblings.find(r => r.id === sourceRequestId)) {
-        updates.push({ id: sourceRequestId, collectionId: collection.id, order: newOrder });
-      } else {
-        updates.unshift({ id: sourceRequestId, collectionId: collection.id, order: newOrder });
-      }
+      const updates = filtered.map((r, idx) => ({
+        id: r.id,
+        collectionId: collection.id,
+        order: idx >= insertAt ? idx + sourceIds.length : idx
+      }));
+      sourceIds.forEach((id, index) => {
+        updates.push({ id, collectionId: collection.id, order: insertAt + index });
+      });
 
       emit('reorderRequests', null, updates, collection.id);
     }
@@ -1204,8 +1387,20 @@ const handleContextMenu = (event: MouseEvent, type: string, data: any) => {
   event.stopPropagation();
   // For viewers, only allow folder context menu (for "Copy Prompt")
   if (!canEdit.value && type !== 'folder') return;
+  // Right-clicking a request outside the multi-selection collapses the
+  // selection back to that single request (standard selection behavior).
+  if (type === 'request' && !multiSelectedRequestIds.value.has(data?.id)) {
+    clearRequestSelection();
+  }
   contextMenu.value = { x: event.clientX, y: event.clientY, type, data };
 };
+
+// True when the request context menu applies to a multi-selection
+const isMultiSelectContextMenu = computed(() =>
+  contextMenu.value?.type === 'request' &&
+  multiSelectedRequestIds.value.size > 1 &&
+  multiSelectedRequestIds.value.has(contextMenu.value.data?.id)
+);
 
 const closeContextMenu = () => {
   contextMenu.value = null;
@@ -1285,6 +1480,13 @@ const handleContextAction = (action: string) => {
         contextMenuLoading.value = 'duplicate';
         emit('duplicateRequest', data);
         // Don't close context menu - let parent handle loading state
+      } else if (action === 'move-request') {
+        openMoveModal([data.id]);
+      } else if (action === 'move-selected-requests') {
+        openMoveModal([...multiSelectedRequestIds.value]);
+      } else if (action === 'clear-selection') {
+        clearRequestSelection();
+        closeContextMenu();
       }
       break;
     default:
@@ -1562,12 +1764,20 @@ const getMethodIcon = (method: string) => {
   return icons[method] || '?';
 };
 
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && multiSelectedRequestIds.value.size > 0) {
+    clearRequestSelection();
+  }
+};
+
 onMounted(() => {
   window.addEventListener('click', closeContextMenu);
+  window.addEventListener('keydown', handleGlobalKeydown);
 });
 
 onUnmounted(() => {
   window.removeEventListener('click', closeContextMenu);
+  window.removeEventListener('keydown', handleGlobalKeydown);
 });
 
 // Watch for loading state changes to close context menu when done
@@ -1580,6 +1790,7 @@ watch(() => props.isDuplicatingRequest, (isDuplicating) => {
 
 watch(selectedWorkspaceId, (newId) => {
   if (newId) {
+    clearRequestSelection();
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedWorkspaceId', newId);
     }
@@ -1594,6 +1805,7 @@ watch(() => props.selectedWorkspaceId, (newId) => {
 });
 
 watch(activeView, (newView) => {
+  clearRequestSelection();
   if (typeof window !== 'undefined') {
     localStorage.setItem('activeView', newView);
   }
@@ -1613,6 +1825,15 @@ watch(
   () => {
     if (props.selectedRequestId) {
       revealSelectedRequest(props.selectedRequestId);
+    }
+    // Prune multi-selection of requests that no longer exist after refresh
+    if (multiSelectedRequestIds.value.size > 0) {
+      const kept = [...multiSelectedRequestIds.value].filter(
+        (id) => findRequestLocation(id, currentWorkspace.value) !== null
+      );
+      if (kept.length !== multiSelectedRequestIds.value.size) {
+        multiSelectedRequestIds.value = new Set(kept);
+      }
     }
   },
   { deep: true }
@@ -1978,12 +2199,15 @@ defineExpose({
                         :dragging-project-id="draggingProjectId"
                         :drop-target="dropTarget"
                         :selected-request-id="selectedRequestId"
+                        :multi-selected-request-ids="multiSelectedRequestIds"
                         :permission="currentWorkspace?.permission || (currentWorkspace?.isOwner ? 'owner' : 'view')"
                         :current-user-id="currentUserId"
                         :is-workspace-owner="isWorkspaceOwner"
                         :is-super-admin="isSuperAdmin"
                         @toggle-folder="toggleFolder"
-                        @select-request="emit('selectRequest', $event)"
+                        @select-request="handleSelectRequest"
+                        @toggle-request-selection="toggleRequestSelection"
+                        @range-select-request="handleRangeSelectRequest"
                         @hover-request="emit('hoverRequest', $event)"
                         @context-menu="handleContextMenu"
                         @create-request="emit('createRequest', $event)"
@@ -1996,12 +2220,13 @@ defineExpose({
                       <!-- Render Request -->
                       <div
                         v-else
-                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, selectedRequestId, canEdit]"
+                        v-memo="[item.data.id, item.data.name, item.data.method, dropTarget?.type === 'request' && dropTarget?.id === item.data.id, selectedRequestId, canEdit, isRequestMultiSelected(item.data.id)]"
                         :data-request-id="item.data.id"
                         :aria-current="selectedRequestId === item.data.id ? 'true' : undefined"
                         :class="[
                           'flex items-center gap-2 py-1.5 px-3 mx-2 my-px rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
-                          selectedRequestId === item.data.id ? 'bg-bg-active' : '',
+                          isRequestMultiSelected(item.data.id) ? 'bg-accent-blue/15 ring-1 ring-inset ring-accent-blue/40' : '',
+                          selectedRequestId === item.data.id && !isRequestMultiSelected(item.data.id) ? 'bg-bg-active' : '',
                           dropTarget?.type === 'request' && dropTarget?.id === item.data.id ? 'bg-accent-blue/10' : ''
                         ]"
                         :draggable="canEdit"
@@ -2010,7 +2235,7 @@ defineExpose({
                         @dragover="handleRequestItemDragOver($event, item.data.id)"
                         @dragleave="handleDragLeave"
                         @drop="handleRequestItemDrop($event, item.data.id)"
-                        @click="emit('selectRequest', item.data)"
+                        @click="handleRootRequestClick($event, item.data)"
                         @mouseenter="emit('hoverRequest', item.data.id)"
                         @contextmenu.prevent="handleContextMenu($event, 'request', item.data)"
                       >
@@ -2034,6 +2259,14 @@ defineExpose({
                           title="Created by you"
                           aria-label="Created by you"
                         ></span>
+                        <svg
+                          v-if="isRequestMultiSelected(item.data.id)"
+                          class="text-accent-blue flex-shrink-0"
+                          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                          aria-label="Selected"
+                        >
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
                         <div
                           v-if="dropTarget?.type === 'request' && dropTarget?.id === item.data.id && dropTarget?.position === 'after'"
                           class="absolute left-2 right-2 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
@@ -2053,6 +2286,50 @@ defineExpose({
           </div>
         </div>
       </div>
+
+      <!-- Multi-select action bar (Shift+Click selection) -->
+      <Transition name="expand">
+        <div
+          v-if="isMultiSelectActive && activeView === 'hierarchy'"
+          class="mx-2 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-secondary border border-accent-blue/40 shadow-lg flex-shrink-0"
+        >
+          <svg class="text-accent-blue flex-shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span
+            class="flex-1 text-xs text-text-secondary truncate"
+            title="Shift+Click for range select · Cmd/Ctrl+Click to toggle"
+          >
+            <span class="font-semibold text-text-primary">{{ multiSelectedRequestIds.size }}</span>
+            {{ multiSelectedRequestIds.size === 1 ? 'request' : 'requests' }} selected
+          </span>
+          <button
+            v-if="canEdit"
+            type="button"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent-blue text-white text-[11px] font-medium cursor-pointer border-none transition-all duration-fast hover:bg-[#1976D2] focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+            title="Move selected requests to a folder"
+            @click="openMoveModal([...multiSelectedRequestIds])"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              <polyline points="16 8 20 12 16 16"></polyline>
+              <line x1="20" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Move to…
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center w-6 h-6 rounded-md bg-transparent border-none text-text-secondary cursor-pointer transition-all duration-fast hover:bg-bg-hover hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+            title="Clear selection (Esc)"
+            @click="clearRequestSelection"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </Transition>
 
       <!-- Mocks View -->
       <div v-if="activeView === 'mocks'" class="flex-1 overflow-y-auto py-2">
@@ -2488,6 +2765,45 @@ defineExpose({
             </button>
           </template>
           <template v-if="contextMenu.type === 'request'">
+            <!-- Multi-selection actions -->
+            <template v-if="isMultiSelectContextMenu">
+              <button
+                v-if="canEdit"
+                class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+                @click.stop="handleContextAction('move-selected-requests')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  <polyline points="16 8 20 12 16 16"></polyline>
+                  <line x1="20" y1="12" x2="9" y2="12"></line>
+                </svg>
+                Move {{ multiSelectedRequestIds.size }} Requests to…
+              </button>
+              <button
+                class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+                @click.stop="handleContextAction('clear-selection')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                Deselect All
+              </button>
+            </template>
+            <!-- Single request actions -->
+            <template v-else>
+            <button
+              v-if="canEdit"
+              class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors focus-visible:ring-1 focus-visible:ring-accent-blue/50 focus-visible:outline-none"
+              @click.stop="handleContextAction('move-request')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <polyline points="16 8 20 12 16 16"></polyline>
+                <line x1="20" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Move to Folder…
+            </button>
             <button
               v-if="canEdit"
               class="flex items-center w-full px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2519,6 +2835,7 @@ defineExpose({
               </svg>
               Delete Request
             </button>
+            </template>
           </template>
           <template v-if="contextMenu.type === 'workspace'">
             <button
@@ -2588,6 +2905,15 @@ defineExpose({
         @click="emit('closeSidebar')"
       ></div>
     </Teleport>
+
+    <!-- Move Requests Modal -->
+    <MoveRequestsModal
+      :show="showMoveRequestsModal"
+      :workspace="currentWorkspace"
+      :request-count="moveModalRequestIds.length"
+      @close="showMoveRequestsModal = false"
+      @move="handleMoveRequestsTo"
+    />
   </aside>
 </template>
 

@@ -47,6 +47,7 @@ interface FolderTreeItemProps {
   } | null;
   permission?: 'owner' | 'edit' | 'view' | null;
   selectedRequestId?: string | null;
+  multiSelectedRequestIds?: Set<string>;
   currentUserId?: string | null;
   isWorkspaceOwner?: boolean;
   isSuperAdmin?: boolean;
@@ -55,6 +56,7 @@ interface FolderTreeItemProps {
 const props = withDefaults(defineProps<FolderTreeItemProps>(), {
   permission: 'owner',
   selectedRequestId: null,
+  multiSelectedRequestIds: () => new Set<string>(),
   currentUserId: null,
   isWorkspaceOwner: false,
   isSuperAdmin: false
@@ -63,6 +65,8 @@ const props = withDefaults(defineProps<FolderTreeItemProps>(), {
 const emit = defineEmits<{
   toggleFolder: [folderId: string];
   selectRequest: [request: HttpRequest];
+  toggleRequestSelection: [requestId: string];
+  rangeSelectRequest: [requestId: string];
   hoverRequest: [requestId: string];
   contextMenu: [event: MouseEvent, type: string, data: any];
   createRequest: [folderId?: string];
@@ -81,6 +85,25 @@ const isOwnedByCurrentUser = (item: OwnableResource | null | undefined) =>
   isResourceOwnedByUser(item, props.currentUserId);
 
 const isExpanded = (folderId: string) => props.expandedFolderIds.has(folderId);
+
+const isMultiSelected = (requestId: string) => props.multiSelectedRequestIds?.has(requestId) ?? false;
+
+const handleRequestClick = (event: MouseEvent, request: HttpRequest) => {
+  // Shift+Click range-selects every request between the anchor (last clicked
+  // request) and this one, following the visible tree order.
+  if (event.shiftKey) {
+    event.preventDefault();
+    emit('rangeSelectRequest', request.id);
+    return;
+  }
+  // Cmd/Ctrl+Click toggles this request in the multi-selection.
+  if (event.metaKey || event.ctrlKey) {
+    event.preventDefault();
+    emit('toggleRequestSelection', request.id);
+    return;
+  }
+  emit('selectRequest', { ...request, folderId: props.folder.id });
+};
 
 const handleDragStart = (event: DragEvent, type: 'folder' | 'request', id: string) => {
   if (!canDrag.value) {
@@ -331,11 +354,14 @@ const isBeforeRequestsDrop = computed(() =>
             :drop-target="dropTarget"
             :permission="permission"
             :selected-request-id="selectedRequestId"
+            :multi-selected-request-ids="multiSelectedRequestIds"
             :current-user-id="currentUserId"
             :is-workspace-owner="isWorkspaceOwner"
             :is-super-admin="isSuperAdmin"
             @toggle-folder="emit('toggleFolder', $event)"
             @select-request="emit('selectRequest', $event)"
+            @toggle-request-selection="emit('toggleRequestSelection', $event)"
+            @range-select-request="emit('rangeSelectRequest', $event)"
             @context-menu="(...args: any[]) => emit('contextMenu', args[0], args[1], args[2])"
             @create-request="emit('createRequest', $event)"
             @drag-start="(...args: any[]) => emit('dragStart', args[0], args[1])"
@@ -363,18 +389,19 @@ const isBeforeRequestsDrop = computed(() =>
           <template v-for="request in folder.requests" :key="request.id">
             <div class="relative mx-1.5">
               <div
-                v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId]"
+                v-memo="[request.id, request.name, request.method, dropTarget?.id === request.id, selectedRequestId, isMultiSelected(request.id)]"
                 :data-request-id="request.id"
                 :class="[
                   'flex items-center gap-2 py-2 px-3 rounded cursor-pointer transition-all duration-fast hover:bg-bg-hover relative',
-                  selectedRequestId === request.id ? 'bg-bg-active' : '',
+                  isMultiSelected(request.id) ? 'bg-accent-blue/15 ring-1 ring-inset ring-accent-blue/40' : '',
+                  selectedRequestId === request.id && !isMultiSelected(request.id) ? 'bg-bg-active' : '',
                   dropTarget?.type === 'request' && dropTarget?.id === request.id ? 'bg-accent-blue/10' : ''
                 ]"
                 :aria-current="selectedRequestId === request.id ? 'true' : undefined"
                 :draggable="true"
                 @dragstart="handleDragStart($event, 'request', request.id)"
                 @dragend="handleDragEnd"
-                @click="emit('selectRequest', { ...request, folderId: props.folder.id })"
+                @click="handleRequestClick($event, request)"
                 @mouseenter="emit('hoverRequest', request.id)"
                 @contextmenu.prevent="emit('contextMenu', $event, 'request', request)"
                 @dragover="handleRequestItemDragOver($event, request.id)"
@@ -401,6 +428,14 @@ const isBeforeRequestsDrop = computed(() =>
                   title="Created by you"
                   aria-label="Created by you"
                 ></span>
+                <svg
+                  v-if="isMultiSelected(request.id)"
+                  class="text-accent-blue flex-shrink-0"
+                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                  aria-label="Selected"
+                >
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
                 <div
                   v-if="dropTarget?.type === 'request' && dropTarget?.id === request.id && dropTarget?.position === 'after'"
                   class="absolute left-0 right-0 bottom-0 h-0.5 bg-accent-blue z-20 pointer-events-none"
