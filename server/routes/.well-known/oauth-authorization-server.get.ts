@@ -1,0 +1,34 @@
+import {
+  getAuthorizationEndpoint,
+  getMcpOAuthIssuer,
+  getRegistrationEndpoint,
+  getTokenEndpoint,
+  isMcpOAuthEnabled,
+  MCP_SCOPES_SUPPORTED,
+} from "../../utils/mcp-oauth/config";
+
+export default defineEventHandler(() => {
+  if (!isMcpOAuthEnabled()) {
+    return {
+      issuer: getMcpOAuthIssuer(),
+      enabled: false,
+    };
+  }
+
+  return {
+    issuer: getMcpOAuthIssuer(),
+    authorization_endpoint: getAuthorizationEndpoint(),
+    token_endpoint: getTokenEndpoint(),
+    registration_endpoint: getRegistrationEndpoint(),
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: [
+      "client_secret_basic",
+      "client_secret_post",
+      "none",
+    ],
+    scopes_supported: [...MCP_SCOPES_SUPPORTED],
+    client_id_metadata_document_supported: true,
+  };
+});
