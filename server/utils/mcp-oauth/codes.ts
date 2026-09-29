@@ -6,6 +6,9 @@ export interface AuthorizationCodeRecord {
   redirectUri: string;
   codeChallenge: string;
   scope: string;
+  /** The app user who approved consent — scopes the issued token. */
+  userId: string;
+  userEmail?: string;
   expiresAt: number;
 }
 
@@ -26,6 +29,8 @@ export function createAuthorizationCode(input: {
   redirectUri: string;
   codeChallenge: string;
   scope: string;
+  userId: string;
+  userEmail?: string;
 }): string {
   purgeExpiredCodes();
 
@@ -36,6 +41,8 @@ export function createAuthorizationCode(input: {
     redirectUri: input.redirectUri,
     codeChallenge: input.codeChallenge,
     scope: input.scope,
+    userId: input.userId,
+    userEmail: input.userEmail,
     expiresAt: Date.now() + CODE_TTL_MS,
   });
 

@@ -6,7 +6,12 @@ import {
 } from "./config";
 
 export interface McpAccessTokenPayload {
+  /** The app user who approved consent — tools are scoped to their access. */
   sub: string;
+  /** The app user's email (for invitation-based workspace membership checks). */
+  email?: string;
+  /** The MCP client the token was issued to. */
+  client_id: string;
   aud: string;
   scope: string;
   type: "mcp_access";
@@ -14,9 +19,16 @@ export interface McpAccessTokenPayload {
 
 export interface McpRefreshTokenPayload {
   sub: string;
+  email?: string;
+  client_id: string;
   aud: string;
   scope: string;
   type: "mcp_refresh";
+}
+
+export interface McpTokenUser {
+  userId: string;
+  userEmail?: string;
 }
 
 // Refresh tokens are stateless JWTs so they survive deploys/restarts and work
@@ -24,14 +36,20 @@ export interface McpRefreshTokenPayload {
 // stays valid until its expiry even after rotation issues a new pair.
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
-export function issueMcpAccessToken(clientId: string, scope: string): {
+export function issueMcpAccessToken(
+  clientId: string,
+  scope: string,
+  user?: McpTokenUser,
+): {
   accessToken: string;
   expiresIn: number;
   refreshToken: string;
 } {
   const expiresIn = getMcpOAuthTokenExpirySeconds();
   const payload: McpAccessTokenPayload = {
-    sub: clientId,
+    sub: user?.userId ?? clientId,
+    email: user?.userEmail,
+    client_id: clientId,
     aud: getMcpResourceUrl(),
     scope,
     type: "mcp_access",
@@ -42,8 +60,9 @@ export function issueMcpAccessToken(clientId: string, scope: string): {
   });
 
   // Issue a refresh token so OAuth clients can persist the connection.
+  const { type: _type, ...rest } = payload;
   const refreshPayload: McpRefreshTokenPayload = {
-    ...payload,
+    ...rest,
     type: "mcp_refresh",
   };
   const refreshToken = jwt.sign(refreshPayload, getMcpOAuthSigningSecret(), {
@@ -81,7 +100,13 @@ export function refreshMcpAccessToken(refreshToken: string): {
     }
 
     // Rotate: issue a new access + refresh token pair for the same subject.
-    return { ...issueMcpAccessToken(decoded.sub, decoded.scope), scope: decoded.scope };
+    return {
+      ...issueMcpAccessToken(decoded.client_id, decoded.scope, {
+        userId: decoded.sub,
+        userEmail: decoded.email,
+      }),
+      scope: decoded.scope,
+    };
   } catch {
     return null;
   }

@@ -85,6 +85,7 @@ const writeTools = [
 
 const envVars = [
   { name: 'MCP_API_KEY', description: 'Static bearer key. Accepts Authorization: Bearer or X-API-Key.' },
+  { name: 'MCP_API_KEY_USER', description: 'Bind the API key to an account email — tools then act with that account\u2019s workspace permissions. Unset = service account (full access).' },
   { name: 'MCP_OAUTH_CLIENT_ID', description: 'Enables OAuth 2.0 + PKCE when set with the secret.' },
   { name: 'MCP_OAUTH_CLIENT_SECRET', description: 'Pairs with the client ID to enable OAuth.' },
   { name: 'MCP_OAUTH_ISSUER', description: 'Public base URL for OAuth metadata. Defaults to APP_URL.' },
@@ -171,8 +172,9 @@ const envVars = [
             <p class="text-xs text-text-secondary">
               Enabled when <code class="font-mono">MCP_OAUTH_CLIENT_ID</code> and
               <code class="font-mono">MCP_OAUTH_CLIENT_SECRET</code> are set. Just paste the endpoint
-              URL into your client — it will open a consent page and exchange an authorization code
-              automatically. Mutating tools require the <code class="font-mono">mcp:write</code> scope.
+              URL into your client — it will ask you to sign in, open a consent page, and exchange
+              an authorization code automatically. Mutating tools require the
+              <code class="font-mono">mcp:write</code> scope.
             </p>
           </div>
           <div class="rounded-md border border-border-default bg-bg-primary p-4">
@@ -182,6 +184,16 @@ const envVars = [
               <code class="font-mono">Authorization: Bearer &lt;key&gt;</code> or
               <code class="font-mono">X-API-Key: &lt;key&gt;</code>. API-key clients get full tool
               access. If neither mode is configured, the endpoint is open (local development).
+            </p>
+          </div>
+          <div class="rounded-md border border-border-default bg-bg-primary p-4">
+            <p class="text-sm font-medium text-text-primary mb-1">Account scoping</p>
+            <p class="text-xs text-text-secondary">
+              OAuth tokens are bound to the account that approves consent — tools can only read and
+              mutate workspaces/collections that account can already reach, with the same
+              owner/edit/view rules as the app. There are no delete tools. For the static API key,
+              set <code class="font-mono">MCP_API_KEY_USER</code> to an account email to scope it the
+              same way; without it the key is a service account with full access.
             </p>
           </div>
         </div>

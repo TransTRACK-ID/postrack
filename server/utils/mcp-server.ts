@@ -33,6 +33,18 @@ import {
   validateRequestUrl,
 } from "./request-protocol";
 import { formatSavedRequestResponse } from "./saved-request-response";
+import {
+  canAccessCollection,
+  canAccessWorkspace,
+  canEditCollection,
+  canEditWorkspace,
+  getAccessibleWorkspaceIds,
+  getCollectionMemberAllowedEnvIds,
+  getCollectionOnlyWorkspaceIds,
+  getCollectionWorkspaceId,
+} from "./permissions";
+import { filterWorkspaceTreeForCollectionOnlyAccess } from "./treeCollectionFilter";
+import { trackResourceAction } from "../services/usageTracking";
 import { cache } from "./cache";
 import {
   isMcpOAuthEnabled,
@@ -46,10 +58,20 @@ import { verifyMcpAccessToken } from "./mcp-oauth/tokens";
 
 export const MCP_API_KEY = process.env.MCP_API_KEY;
 
+/**
+ * When set, the static API key acts as this account (email): MCP tools then
+ * see and mutate only the workspaces that account can reach. Unset = the key
+ * is a service account with full access.
+ */
+export const MCP_API_KEY_USER = process.env.MCP_API_KEY_USER;
+
 export interface McpAuthContext {
   method: "api-key" | "oauth" | "open";
   scopes: string[];
   clientId?: string;
+  /** The account this credential acts as — tools scope data to it. */
+  userId?: string;
+  userEmail?: string;
 }
 
 const FULL_SCOPES: string[] = [...MCP_SCOPES_SUPPORTED];
@@ -71,16 +93,27 @@ export function checkMcpAuth(
   const providedKey = bearer || apiKeyHeader || "";
 
   if (MCP_API_KEY && providedKey === MCP_API_KEY) {
-    return { method: "api-key", scopes: FULL_SCOPES };
+    const boundUser = MCP_API_KEY_USER?.trim().toLowerCase();
+    return {
+      method: "api-key",
+      scopes: FULL_SCOPES,
+      userId: boundUser || undefined,
+      userEmail: boundUser || undefined,
+    };
   }
 
   if (isMcpOAuthEnabled() && bearer) {
     const payload = verifyMcpAccessToken(bearer);
     if (payload) {
+      // Tokens issued before account binding have no client_id — reject them
+      // so clients re-consent and the token gets bound to a user.
+      if (!payload.client_id) return null;
       return {
         method: "oauth",
         scopes: payload.scope.split(/\s+/).filter(Boolean),
-        clientId: payload.sub,
+        clientId: payload.client_id,
+        userId: payload.sub,
+        userEmail: payload.email,
       };
     }
   }
@@ -552,6 +585,149 @@ function invalidateTreeCache() {
   cache.deletePattern("tree:");
 }
 
+/* ------------------------------------------------------------------ */
+/* 5b. Access scoping                                                  */
+/*                                                                     */
+/* Credentials bound to an account (OAuth consent or MCP_API_KEY_USER) */
+/* only see and mutate resources inside workspaces/collections that    */
+/* account can reach — same rules as the admin API. Service accounts   */
+/* (API key without MCP_API_KEY_USER) and open mode keep full access.  */
+/* ------------------------------------------------------------------ */
+
+async function getProjectWorkspaceId(projectId: string): Promise<string | null> {
+  const row = (
+    await db
+      .select({ workspaceId: projects.workspaceId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1)
+  )[0];
+  return row?.workspaceId ?? null;
+}
+
+async function getFolderCollectionId(folderId: string): Promise<string | null> {
+  const row = (
+    await db
+      .select({ collectionId: folders.collectionId })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1)
+  )[0];
+  return row?.collectionId ?? null;
+}
+
+async function getEnvironmentWorkspaceId(environmentId: string): Promise<string | null> {
+  const row = (
+    await db
+      .select({ projectId: environments.projectId })
+      .from(environments)
+      .where(eq(environments.id, environmentId))
+      .limit(1)
+  )[0];
+  return row ? getProjectWorkspaceId(row.projectId) : null;
+}
+
+/** Resolve the collection a saved request lives in (direct or via folder). */
+async function getRequestCollectionId(requestId: string): Promise<string | null> {
+  const row = (
+    await db
+      .select({ collectionId: savedRequests.collectionId, folderId: savedRequests.folderId })
+      .from(savedRequests)
+      .where(eq(savedRequests.id, requestId))
+      .limit(1)
+  )[0];
+  if (!row) return null;
+  return row.folderId ? getFolderCollectionId(row.folderId) : row.collectionId;
+}
+
+function accessDenied() {
+  return toolError({
+    statusCode: 403,
+    statusMessage: "This account does not have access to the requested resource",
+  });
+}
+
+/** Returns a toolError when the bound user can't access the workspace, else null. */
+async function denyWorkspaceAccess(
+  auth: McpAuthContext,
+  workspaceId: string | null,
+  write: boolean,
+): Promise<ReturnType<typeof toolError> | null> {
+  if (!auth.userId) return null;
+  if (!workspaceId) {
+    return toolError({ statusCode: 404, statusMessage: "Resource not found" });
+  }
+  const allowed = write
+    ? await canEditWorkspace(auth.userId, workspaceId, auth.userEmail)
+    : await canAccessWorkspace(auth.userId, workspaceId, auth.userEmail);
+  return allowed ? null : accessDenied();
+}
+
+/** Returns a toolError when the bound user can't access the collection, else null. */
+async function denyCollectionAccess(
+  auth: McpAuthContext,
+  collectionId: string | null,
+  write: boolean,
+): Promise<ReturnType<typeof toolError> | null> {
+  if (!auth.userId) return null;
+  if (!collectionId) {
+    return toolError({ statusCode: 404, statusMessage: "Resource not found" });
+  }
+  const allowed = write
+    ? await canEditCollection(auth.userId, collectionId, auth.userEmail)
+    : await canAccessCollection(auth.userId, collectionId, auth.userEmail);
+  return allowed ? null : accessDenied();
+}
+
+/**
+ * Environment READ access mirrors admin environments/[id].get.ts: workspace
+ * membership/share OR collection membership with an environment allowlist.
+ * Returns a toolError when denied, else null.
+ */
+async function denyEnvironmentRead(
+  auth: McpAuthContext,
+  environmentId: string,
+): Promise<ReturnType<typeof toolError> | null> {
+  if (!auth.userId) return null;
+  const workspaceId = await getEnvironmentWorkspaceId(environmentId);
+  if (!workspaceId) {
+    return toolError({ statusCode: 404, statusMessage: "Environment not found" });
+  }
+  const accessibleIds = await getAccessibleWorkspaceIds(auth.userId, auth.userEmail);
+  if (!accessibleIds.includes(workspaceId)) return accessDenied();
+  const allowedEnvIds = await getCollectionMemberAllowedEnvIds(
+    auth.userId,
+    workspaceId,
+    auth.userEmail,
+  );
+  if (allowedEnvIds && !allowedEnvIds.includes(environmentId)) return accessDenied();
+  return null;
+}
+
+/** Activity tracking for MCP writes — same usage_events feed the admin API uses. */
+function trackMcpResourceAction(
+  auth: McpAuthContext,
+  input: {
+    workspaceId: string | null;
+    action: "create" | "update";
+    resourceType: "request" | "folder" | "environment";
+    resourceId: string;
+    resourceName?: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  trackResourceAction({
+    userId: auth.userId ?? "mcp-service",
+    userEmail: auth.userEmail ?? "mcp@service",
+    workspaceId: input.workspaceId ?? "personal",
+    action: input.action,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    resourceName: input.resourceName,
+    metadata: { via: "mcp", clientId: auth.clientId, ...input.metadata },
+  });
+}
+
 interface EndpointSummary {
   id: string;
   folderId: string | null;
@@ -602,15 +778,27 @@ export async function createMcpServer(auth: McpAuthContext) {
         return toolError({ statusCode: 403, statusMessage: "Insufficient scope: mcp:write is required for write tools" });
       }
 
-      const createdBy = auth.clientId ? `mcp:${auth.clientId}` : "mcp";
+      const createdBy = `mcp:${auth.userId ?? auth.clientId ?? "service"}`;
 
       switch (name) {
         case "list_workspaces": {
           ListWorkspacesSchema.parse(args ?? {});
-          const rows = await db
-            .select()
-            .from(workspaces)
-            .orderBy(desc(workspaces.createdAt));
+          const accessibleIds = auth.userId
+            ? await getAccessibleWorkspaceIds(auth.userId, auth.userEmail)
+            : null;
+          if (accessibleIds && accessibleIds.length === 0) {
+            return toolResult([]);
+          }
+          const rows = accessibleIds
+            ? await db
+                .select()
+                .from(workspaces)
+                .where(inArray(workspaces.id, accessibleIds))
+                .orderBy(desc(workspaces.createdAt))
+            : await db
+                .select()
+                .from(workspaces)
+                .orderBy(desc(workspaces.createdAt));
           return toolResult(
             rows.map((w) => ({
               id: w.id,
@@ -629,6 +817,17 @@ export async function createMcpServer(auth: McpAuthContext) {
           )[0];
           if (!workspace) {
             return toolError({ statusCode: 404, statusMessage: "Workspace not found" });
+          }
+          // Mirror admin tree.get.ts: accessibleIds includes collection-only
+          // members (who get a filtered tree below), while canAccessWorkspace
+          // would deny them outright.
+          let collectionOnlyIds: string[] | undefined;
+          if (auth.userId) {
+            const accessibleIds = await getAccessibleWorkspaceIds(auth.userId, auth.userEmail);
+            if (!accessibleIds.includes(workspaceId)) return accessDenied();
+            collectionOnlyIds = (
+              await getCollectionOnlyWorkspaceIds(auth.userId, auth.userEmail)
+            ).get(workspaceId);
           }
 
           const projectRows = await db
@@ -703,11 +902,22 @@ export async function createMcpServer(auth: McpAuthContext) {
             })),
           };
 
-          return toolResult(tree);
+          return toolResult(
+            filterWorkspaceTreeForCollectionOnlyAccess(tree, collectionOnlyIds),
+          );
         }
 
         case "list_endpoints": {
           const input = ListEndpointsSchema.parse(args);
+
+          const denied = await denyCollectionAccess(
+            auth,
+            input.folderId
+              ? await getFolderCollectionId(input.folderId)
+              : input.collectionId!,
+            false,
+          );
+          if (denied) return denied;
 
           let conditions;
           if (input.folderId) {
@@ -749,6 +959,12 @@ export async function createMcpServer(auth: McpAuthContext) {
 
         case "get_endpoint": {
           const { id } = GetEndpointSchema.parse(args);
+          const denied = await denyCollectionAccess(
+            auth,
+            await getRequestCollectionId(id),
+            false,
+          );
+          if (denied) return denied;
           const row = (
             await db.select().from(savedRequests).where(eq(savedRequests.id, id)).limit(1)
           )[0];
@@ -760,6 +976,12 @@ export async function createMcpServer(auth: McpAuthContext) {
 
         case "create_endpoint": {
           const input = CreateEndpointSchema.parse(args);
+
+          const targetCollectionId = input.folderId
+            ? await getFolderCollectionId(input.folderId)
+            : input.collectionId!;
+          const denied = await denyCollectionAccess(auth, targetCollectionId, true);
+          if (denied) return denied;
 
           const protocol = resolveRequestProtocol(input.protocol);
           const method = validateRequestMethod(
@@ -851,11 +1073,24 @@ export async function createMcpServer(auth: McpAuthContext) {
           )[0];
 
           invalidateTreeCache();
+          trackMcpResourceAction(auth, {
+            workspaceId: targetCollectionId
+              ? await getCollectionWorkspaceId(targetCollectionId)
+              : null,
+            action: "create",
+            resourceType: "request",
+            resourceId: newRequest.id,
+            resourceName: newRequest.name,
+          });
           return toolResult(formatSavedRequestResponse(newRequest));
         }
 
         case "update_endpoint": {
           const input = UpdateEndpointSchema.parse(args);
+
+          const requestCollectionId = await getRequestCollectionId(input.id);
+          const denied = await denyCollectionAccess(auth, requestCollectionId, true);
+          if (denied) return denied;
 
           const existing = (
             await db
@@ -941,11 +1176,22 @@ export async function createMcpServer(auth: McpAuthContext) {
           )[0];
 
           invalidateTreeCache();
+          trackMcpResourceAction(auth, {
+            workspaceId: requestCollectionId
+              ? await getCollectionWorkspaceId(requestCollectionId)
+              : null,
+            action: "update",
+            resourceType: "request",
+            resourceId: updated.id,
+            resourceName: updated.name,
+          });
           return toolResult(formatSavedRequestResponse(updated));
         }
 
         case "list_folders": {
           const { collectionId } = ListFoldersSchema.parse(args);
+          const denied = await denyCollectionAccess(auth, collectionId, false);
+          if (denied) return denied;
           const rows = await db
             .select()
             .from(folders)
@@ -965,6 +1211,8 @@ export async function createMcpServer(auth: McpAuthContext) {
 
         case "create_folder": {
           const input = CreateFolderSchema.parse(args);
+          const denied = await denyCollectionAccess(auth, input.collectionId, true);
+          if (denied) return denied;
           const name = input.name.trim();
           const parentFolderId = input.parentFolderId ?? null;
 
@@ -1032,16 +1280,41 @@ export async function createMcpServer(auth: McpAuthContext) {
           )[0];
 
           invalidateTreeCache();
+          trackMcpResourceAction(auth, {
+            workspaceId: await getCollectionWorkspaceId(input.collectionId),
+            action: "create",
+            resourceType: "folder",
+            resourceId: newFolder.id,
+            resourceName: newFolder.name,
+          });
           return toolResult(newFolder);
         }
 
         case "list_environments": {
           const { projectId } = ListEnvironmentsSchema.parse(args);
-          const envRows = await db
-            .select()
-            .from(environments)
-            .where(eq(environments.projectId, projectId))
-            .orderBy(desc(environments.createdAt));
+          // Mirror admin projects/[id]/environments.get.ts: workspace access OR
+          // collection membership, filtered by the env allowlist.
+          let allowedEnvIds: string[] | null = null;
+          if (auth.userId) {
+            const workspaceId = await getProjectWorkspaceId(projectId);
+            if (!workspaceId) {
+              return toolError({ statusCode: 404, statusMessage: "Project not found" });
+            }
+            const accessibleIds = await getAccessibleWorkspaceIds(auth.userId, auth.userEmail);
+            if (!accessibleIds.includes(workspaceId)) return accessDenied();
+            allowedEnvIds = await getCollectionMemberAllowedEnvIds(
+              auth.userId,
+              workspaceId,
+              auth.userEmail,
+            );
+          }
+          const envRows = (
+            await db
+              .select()
+              .from(environments)
+              .where(eq(environments.projectId, projectId))
+              .orderBy(desc(environments.createdAt))
+          ).filter((e) => !allowedEnvIds || allowedEnvIds.includes(e.id));
 
           const envIds = envRows.map((e) => e.id);
           const varRows = envIds.length
@@ -1063,6 +1336,8 @@ export async function createMcpServer(auth: McpAuthContext) {
 
         case "get_environment": {
           const { id } = GetEnvironmentSchema.parse(args);
+          const denied = await denyEnvironmentRead(auth, id);
+          if (denied) return denied;
           const env = (
             await db.select().from(environments).where(eq(environments.id, id)).limit(1)
           )[0];
@@ -1078,6 +1353,9 @@ export async function createMcpServer(auth: McpAuthContext) {
 
         case "create_environment": {
           const input = CreateEnvironmentSchema.parse(args);
+          const envWorkspaceId = await getProjectWorkspaceId(input.projectId);
+          const denied = await denyWorkspaceAccess(auth, envWorkspaceId, true);
+          if (denied) return denied;
           const name = input.name.trim();
 
           if (name.toUpperCase() === "CLOUD MOCK") {
@@ -1126,11 +1404,21 @@ export async function createMcpServer(auth: McpAuthContext) {
               .returning()
           )[0];
 
+          trackMcpResourceAction(auth, {
+            workspaceId: envWorkspaceId,
+            action: "create",
+            resourceType: "environment",
+            resourceId: newEnv.id,
+            resourceName: newEnv.name,
+          });
           return toolResult(newEnv);
         }
 
         case "update_environment": {
           const input = UpdateEnvironmentSchema.parse(args);
+          const envWorkspaceId = await getEnvironmentWorkspaceId(input.id);
+          const denied = await denyWorkspaceAccess(auth, envWorkspaceId, true);
+          if (denied) return denied;
           if (input.name === undefined && input.isActive === undefined) {
             return toolError({
               statusCode: 400,
@@ -1198,11 +1486,21 @@ export async function createMcpServer(auth: McpAuthContext) {
               .returning()
           )[0];
 
+          trackMcpResourceAction(auth, {
+            workspaceId: envWorkspaceId,
+            action: "update",
+            resourceType: "environment",
+            resourceId: updated.id,
+            resourceName: updated.name,
+          });
           return toolResult(updated);
         }
 
         case "set_environment_variable": {
           const input = SetEnvironmentVariableSchema.parse(args);
+          const envWorkspaceId = await getEnvironmentWorkspaceId(input.environmentId);
+          const denied = await denyWorkspaceAccess(auth, envWorkspaceId, true);
+          if (denied) return denied;
           const key = input.key.trim();
 
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
@@ -1263,6 +1561,14 @@ export async function createMcpServer(auth: McpAuthContext) {
             )[0];
           }
 
+          trackMcpResourceAction(auth, {
+            workspaceId: envWorkspaceId,
+            action: "update",
+            resourceType: "environment",
+            resourceId: env.id,
+            resourceName: env.name,
+            metadata: { variableKey: key },
+          });
           return toolResult({
             ...result,
             value: result.isSecret ? "••••••••" : result.value,

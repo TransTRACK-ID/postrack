@@ -8,6 +8,14 @@ function buildRedirectUrl(redirectUri: string, params: Record<string, string>): 
   return url.toString();
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function renderConsentPage(input: {
   clientId: string;
   scope: string;
@@ -16,6 +24,7 @@ export function renderConsentPage(input: {
   codeChallenge: string;
   codeChallengeMethod: string;
   responseType: string;
+  userEmail?: string;
 }): string {
   const params = new URLSearchParams({
     client_id: input.clientId,
@@ -56,7 +65,8 @@ export function renderConsentPage(input: {
   <div class="card">
     <h1>Allow Postrack MCP access?</h1>
     <p>An application is requesting ${canWrite ? "read and write" : "read-only"} access to the Postrack MCP server (endpoints, folders, and environments).</p>
-    <div class="scope">scope: ${input.scope || MCP_DEFAULT_SCOPE}</div>
+    ${input.userEmail ? `<p style="color:#7dd3fc;font-size:.85rem;margin-bottom:14px;">Connected as ${escapeHtml(input.userEmail)} — access is limited to workspaces this account can reach.</p>` : ""}
+    <div class="scope">scope: ${escapeHtml(input.scope || MCP_DEFAULT_SCOPE)}</div>
     <div class="actions">
       <a class="button deny" href="${buildRedirectUrl(input.redirectUri, {
         error: "access_denied",
@@ -65,7 +75,7 @@ export function renderConsentPage(input: {
       })}">Deny</a>
       <form method="GET" action="/oauth/authorize" style="flex:1;display:flex;">
         ${Array.from(params.entries())
-          .map(([key, value]) => `<input type="hidden" name="${key}" value="${value}" />`)
+          .map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" />`)
           .join("")}
         <button class="approve" type="submit" style="width:100%;">Allow</button>
       </form>

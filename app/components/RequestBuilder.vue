@@ -6,6 +6,7 @@ import VariableInput from './VariableInput.vue'
 import VariableTextarea from './VariableTextarea.vue'
 import RequestExampleManager from './RequestExampleManager.vue'
 import RequestActivityLog from './RequestActivityLog.vue'
+import RequestDocumentationPanel from './RequestDocumentationPanel.vue'
 import MockConfiguration from './MockConfiguration.vue'
 import BulkEditPanel from './BulkEditPanel.vue'
 import WebSocketPanel from './WebSocketPanel.vue'
@@ -103,6 +104,9 @@ interface HttpRequest {
   pathVariables?: import('../../server/db/schema/savedRequest').RequestPathVariables | null;
   paramNotes?: import('../../server/db/schema/savedRequest').RequestParamNotes | null;
   queryParams?: import('../../server/db/schema/savedRequest').QueryParam[];
+  notes?: string | null;
+  paramSchema?: import('../../server/db/schema/savedRequest').ParamSchema[] | null;
+  curlExample?: string | null;
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -155,7 +159,7 @@ export interface ProxyErrorResponse {
 }
 
 // TabType without 'response' - response is now in split panel
-export type TabType = 'params' | 'headers' | 'body' | 'auth' | 'preScript' | 'postScript' | 'mock' | 'examples' | 'activity';
+export type TabType = 'params' | 'headers' | 'body' | 'auth' | 'preScript' | 'postScript' | 'mock' | 'examples' | 'activity' | 'docs';
 type BodyFormat = 'none' | 'json' | 'form-data' | 'urlencoded' | 'raw' | 'binary';
 type ResponseViewType = 'pretty' | 'preview' | 'raw' | 'headers' | 'cookies' | 'imagePreview' | 'console';
 
@@ -229,6 +233,7 @@ const emit = defineEmits<{
   // Environment variable changes applied by post/pre scripts
   environmentVariablesChanged: [environmentId: string];
   importCurl: [command: string];
+  saveDocumentation: [data: { notes: string | null; paramSchema: import('../../server/db/schema/savedRequest').ParamSchema[] | null; curlExample: string | null }];
 }>();
 
 const handleCurlPaste = (command: string) => {
@@ -260,13 +265,20 @@ const isStreamProtocol = computed(() => isWebSocket.value || isSse.value);
 const availableTabs = computed((): TabType[] => {
   if (isStreamProtocol.value) {
     return props.readOnly
-      ? ['params', 'headers', 'auth', 'examples', 'activity']
-      : ['params', 'headers', 'auth', 'preScript', 'postScript', 'examples', 'activity'];
+      ? ['params', 'headers', 'auth', 'examples', 'activity', 'docs']
+      : ['params', 'headers', 'auth', 'preScript', 'postScript', 'examples', 'activity', 'docs'];
   }
   return props.readOnly
-    ? ['params', 'headers', 'body', 'auth', 'examples', 'activity']
-    : ['params', 'headers', 'body', 'auth', 'preScript', 'postScript', 'mock', 'examples', 'activity'];
+    ? ['params', 'headers', 'body', 'auth', 'examples', 'activity', 'docs']
+    : ['params', 'headers', 'body', 'auth', 'preScript', 'postScript', 'mock', 'examples', 'activity', 'docs'];
 });
+
+// Docs edits go through the admin API; share-link guests get a read-only view.
+const docsReadOnly = computed(() => props.readOnly || !!props.shareToken);
+
+const handleDocsSave = (data: { notes: string | null; paramSchema: import('../../server/db/schema/savedRequest').ParamSchema[] | null; curlExample: string | null }) => {
+  emit('saveDocumentation', data);
+};
 
 const handleProtocolChange = (newProtocol: typeof REQUEST_PROTOCOLS[number]) => {
   form.value.protocol = newProtocol;
@@ -3981,7 +3993,7 @@ defineExpose({
       </div>
 
       <div class="border-b border-border-default bg-bg-secondary">
-        <div class="flex gap-0">
+        <div class="flex gap-0 overflow-x-auto">
           <button
             v-for="tab in availableTabs"
             :key="tab"
@@ -5092,6 +5104,15 @@ defineExpose({
           <RequestActivityLog
             :request-id="props.request.id"
             :refresh-token="examplesRefreshToken"
+          />
+        </div>
+
+        <!-- Docs Tab -->
+        <div v-else-if="activeTab === 'docs'" :class="tabPanelClass">
+          <RequestDocumentationPanel
+            :request="props.request"
+            :read-only="docsReadOnly"
+            @save="handleDocsSave"
           />
         </div>
 

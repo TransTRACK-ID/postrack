@@ -15,7 +15,6 @@ import ShareWorkspaceModal from '~/components/ShareWorkspaceModal.vue';
 import TeamCollectionWarningDialog from '~/components/TeamCollectionWarningDialog.vue';
 import VariableInput from '~/components/VariableInput.vue';
 import EnvironmentManager from '~/components/EnvironmentManager.vue';
-import RequestDocumentationPanel from '~/components/RequestDocumentationPanel.vue';
 import CollectionDocBlocksEditor from '~/components/CollectionDocBlocksEditor.vue';
 import { useKeyboardShortcuts } from '~/composables/useKeyboardShortcuts';
 import { useExampleData } from '~/composables/useExampleData';
@@ -1472,7 +1471,6 @@ if (error.value && error.value.statusCode === 401) {
 // Modals
 const showResourceModal = ref(false);
 const showSettingsModal = ref(false);
-const showDocPanel = ref(false);
 const showDocBlocksModal = ref(false);
 const docBlocksCollectionId = ref('');
 const docBlocksEndpoints = ref<Array<{ id: string; name: string; method: string; cleanPath: string }>>([]);
@@ -4683,25 +4681,6 @@ onDeactivated(() => {
             @reorder-tabs="handleReorderTabs"
           />
 
-          <!-- Documentation Toolbar -->
-          <div class="flex items-center gap-2 px-3 py-1.5 bg-bg-header border-b border-border-default">
-            <button
-              v-if="selectedRequest"
-              @click="showDocPanel = true"
-              class="flex items-center gap-1.5 px-2 py-1 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
-              title="Edit request documentation"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-              </svg>
-              Docs
-            </button>
-
-           </div>
-
           <!-- Request Builder with Code Examples Sidebar -->
           <div v-if="selectedRequest && activeTabKey" class="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
             <!-- Main Request Builder -->
@@ -4729,6 +4708,7 @@ onDeactivated(() => {
                 @open-collection-settings="handleOpenCollectionSettings"
                 @update:variable="updateVariableFromSettings"
                 @import-curl="handleImportCurlFromBuilder"
+                @save-documentation="handleSaveDocs"
               />
             </div>
             
@@ -5189,15 +5169,6 @@ onDeactivated(() => {
           </button>
         </div>
       </template>
-    </Modal>
-
-    <!-- Request Documentation Panel Modal -->
-    <Modal :show="showDocPanel" title="Documentation" size="lg" @close="showDocPanel = false">
-      <RequestDocumentationPanel
-        :request="selectedRequest"
-        :read-only="!canEditWorkspace"
-        @save="handleSaveDocs"
-      />
     </Modal>
 
     <!-- Collection Doc Blocks Editor Modal -->

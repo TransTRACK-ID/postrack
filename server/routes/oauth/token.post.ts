@@ -110,7 +110,11 @@ export default defineEventHandler(async (event) => {
     throw oauthError(400, "invalid_grant", "PKCE verification failed.");
   }
 
-  const { accessToken, expiresIn, refreshToken } = issueMcpAccessToken(bodyClientId, record.scope);
+  const { accessToken, expiresIn, refreshToken } = issueMcpAccessToken(
+    bodyClientId,
+    record.scope,
+    { userId: record.userId, userEmail: record.userEmail },
+  );
   return {
     access_token: accessToken,
     token_type: "Bearer",

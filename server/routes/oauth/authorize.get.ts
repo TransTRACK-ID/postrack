@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import {
   isMcpOAuthEnabled,
   MCP_DEFAULT_SCOPE,
@@ -5,6 +6,28 @@ import {
 import { createAuthorizationCode } from "../../utils/mcp-oauth/codes";
 import { isRedirectUriAllowed } from "../../utils/mcp-oauth/clients";
 import { renderConsentPage } from "../../utils/mcp-oauth/consent";
+
+/**
+ * Resolve the signed-in app user from the auth_token cookie — the same JWT
+ * the admin session middleware verifies. The consenting user's identity is
+ * bound into the issued OAuth tokens so MCP tools act on their account only.
+ */
+function getSessionUser(event: Parameters<typeof getCookie>[0]): {
+  userId: string;
+  userEmail?: string;
+} | null {
+  const token = getCookie(event, "auth_token");
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, useRuntimeConfig().jwtSecret) as Record<string, unknown>;
+    const userId =
+      (decoded.email as string) || (decoded.sub as string) || (decoded.id as string);
+    if (!userId) return null;
+    return { userId, userEmail: (decoded.email as string) || undefined };
+  } catch {
+    return null;
+  }
+}
 
 function buildRedirectUrl(redirectUri: string, params: Record<string, string>): string {
   const url = new URL(redirectUri);
@@ -63,6 +86,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // Consent is only meaningful when bound to a signed-in account — send the
+  // user through /login first, preserving this authorize URL to return to.
+  const sessionUser = getSessionUser(event);
+  if (!sessionUser) {
+    const requestUrl = getRequestURL(event);
+    return sendRedirect(event, `/login?redirect=${encodeURIComponent(requestUrl.pathname + requestUrl.search)}`);
+  }
+
   if (!approved) {
     setHeader(event, "Content-Type", "text/html; charset=utf-8");
     return renderConsentPage({
@@ -73,6 +104,7 @@ export default defineEventHandler(async (event) => {
       codeChallenge,
       codeChallengeMethod,
       responseType,
+      userEmail: sessionUser.userEmail || sessionUser.userId,
     });
   }
 
@@ -81,6 +113,8 @@ export default defineEventHandler(async (event) => {
     redirectUri,
     codeChallenge,
     scope,
+    userId: sessionUser.userId,
+    userEmail: sessionUser.userEmail,
   });
 
   return sendRedirect(
