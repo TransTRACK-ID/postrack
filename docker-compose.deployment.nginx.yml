@@ -8,6 +8,18 @@ services:
             SERVICE_NAME: ${IMAGE_NAME}-${APP_ENV}-application
             SERVICE_TAGS: ${APP_ENV}
             DATABASE_PATH: /app/data/sqlite.db
+            # Public URL + auth secrets
+            APP_URL: ${APP_URL:-}
+            JWT_SECRET: ${JWT_SECRET:-}
+            # MCP server (see .env.example)
+            MCP_API_KEY: ${MCP_API_KEY:-}
+            MCP_OAUTH_CLIENT_ID: ${MCP_OAUTH_CLIENT_ID:-}
+            MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+            MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER:-}
+            MCP_OAUTH_SIGNING_SECRET: ${MCP_OAUTH_SIGNING_SECRET:-}
+            MCP_OAUTH_TOKEN_EXPIRY: ${MCP_OAUTH_TOKEN_EXPIRY:-}
+            MCP_OAUTH_REDIRECT_URIS: ${MCP_OAUTH_REDIRECT_URIS:-}
+            MCP_CORS_ORIGINS: ${MCP_CORS_ORIGINS:-}
             # Datadog configuration for APM and log correlation
             DD_ENV: ${DATADOG_ENV:-production}
             DD_SERVICE: postrack-api
