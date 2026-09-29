@@ -3516,16 +3516,21 @@ const sendRequest = async () => {
     let requestHeaders = buildHeadersRecord();
     const authHeaders = _buildAuthHeaders();
 
+    // Header names are case-insensitive over the wire but case-sensitive in this
+    // record — remove existing variants first so fetch can't merge duplicates
+    // into an invalid comma-joined Content-Type value.
+    if (bodyFormat.value !== 'none') {
+      for (const key of Object.keys(requestHeaders)) {
+        if (key.toLowerCase() === 'content-type') delete requestHeaders[key];
+      }
+    }
+
     if (bodyFormat.value === 'raw') {
       requestHeaders['Content-Type'] = rawContentType.value;
     } else if (bodyFormat.value === 'json') {
       requestHeaders['Content-Type'] = 'application/json';
-    } else if (bodyFormat.value === 'form-data') {
-      delete requestHeaders['Content-Type'];
     } else if (bodyFormat.value === 'urlencoded') {
       requestHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
-    } else if (bodyFormat.value === 'binary') {
-      delete requestHeaders['Content-Type'];
     }
 
     requestHeaders = { ...requestHeaders, ...authHeaders };
