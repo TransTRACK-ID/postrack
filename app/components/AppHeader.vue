@@ -431,6 +431,20 @@ defineExpose({
             Accessibility
           </NuxtLink>
 
+          <NuxtLink
+            to="/admin/mcp"
+            class="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors duration-fast"
+            @click="showUserMenu = false"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22v-5"></path>
+              <path d="M9 8V2"></path>
+              <path d="M15 8V2"></path>
+              <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"></path>
+            </svg>
+            MCP Integration
+          </NuxtLink>
+
           <a
             v-if="isSuperAdmin"
             href="/admin/sso"
@@ -642,6 +656,20 @@ defineExpose({
               <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
             </svg>
             Accessibility
+          </NuxtLink>
+
+          <NuxtLink
+            to="/admin/mcp"
+            class="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors duration-fast"
+            @click="showUserMenu = false"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22v-5"></path>
+              <path d="M9 8V2"></path>
+              <path d="M15 8V2"></path>
+              <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"></path>
+            </svg>
+            MCP Integration
           </NuxtLink>
 
           <a
