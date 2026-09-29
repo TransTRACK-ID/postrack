@@ -86,7 +86,7 @@ const writeTools = [
 const envVars = [
   { name: 'MCP_API_KEY', description: 'Static bearer key. Accepts Authorization: Bearer or X-API-Key.' },
   { name: 'MCP_API_KEY_USER', description: 'Bind the API key to an account email — tools then act with that account\u2019s workspace permissions. Unset = service account (full access).' },
-  { name: 'MCP_OAUTH_SIGNING_SECRET', description: 'JWT signing secret for OAuth tokens. Defaults to JWT_SECRET — OAuth is enabled whenever a signing secret exists.' },
+  { name: 'MCP_OAUTH_SIGNING_SECRET', description: 'JWT signing secret for OAuth tokens. Optional — defaults to JWT_SECRET / the app\u2019s JWT secret. OAuth is always enabled.' },
   { name: 'MCP_OAUTH_CLIENT_ID', description: 'Optional pre-configured confidential client ID. Most clients self-register instead.' },
   { name: 'MCP_OAUTH_CLIENT_SECRET', description: 'Pairs with the static client ID.' },
   { name: 'MCP_OAUTH_ISSUER', description: 'Public base URL for OAuth metadata. Defaults to APP_URL.' },
@@ -169,8 +169,8 @@ const envVars = [
           <div class="rounded-md border border-border-default bg-bg-primary p-4">
             <p class="text-sm font-medium text-text-primary mb-1">OAuth 2.0 + PKCE</p>
             <p class="text-xs text-text-secondary">
-              Enabled whenever a signing secret exists (<code class="font-mono">JWT_SECRET</code> or
-              <code class="font-mono">MCP_OAUTH_SIGNING_SECRET</code>). Just paste the endpoint URL
+              Always enabled — tokens are signed with <code class="font-mono">MCP_OAUTH_SIGNING_SECRET</code>,
+              <code class="font-mono">JWT_SECRET</code>, or the app&rsquo;s JWT secret. Just paste the endpoint URL
               into your client — it self-registers, asks you to sign in, opens a consent page, and
               exchanges an authorization code automatically. Mutating tools require the
               <code class="font-mono">mcp:write</code> scope.

@@ -37,20 +37,30 @@ export function getMcpOAuthClientSecret(): string | undefined {
 }
 
 /**
- * OAuth is enabled whenever a signing secret is available. JWT_SECRET is
- * required by the app's own session auth, so in practice OAuth is always on;
- * the MCP_OAUTH_CLIENT_* pair only adds an optional pre-configured
- * confidential client — dynamic registration (RFC 7591) is the normal path.
- * MCP_OAUTH_CLIENT_SECRET works as a last-resort signing source so a deploy
- * that only sets the client pair still enables OAuth.
+ * OAuth is always enabled: the signing secret falls back to the app's own
+ * JWT secret (runtimeConfig.jwtSecret always resolves — nuxt.config carries
+ * a default), which is also the secret that verifies the session cookie the
+ * consent flow requires. MCP_OAUTH_* envs remain overrides; the client pair
+ * only adds an optional pre-configured confidential client — dynamic
+ * registration (RFC 7591) is the normal path.
  */
-function getSigningSecret(): string | undefined {
-  return (
+function getSigningSecret(): string {
+  const envSecret =
     process.env.MCP_OAUTH_SIGNING_SECRET?.trim() ||
     process.env.JWT_SECRET?.trim() ||
-    process.env.MCP_OAUTH_CLIENT_SECRET?.trim() ||
-    undefined
-  );
+    process.env.MCP_OAUTH_CLIENT_SECRET?.trim();
+  if (envSecret) {
+    return envSecret;
+  }
+  try {
+    const appSecret = (useRuntimeConfig().jwtSecret as string | undefined)?.trim();
+    if (appSecret) {
+      return appSecret;
+    }
+  } catch {
+    // outside a Nitro request context — fall through to the static default
+  }
+  return "mcp-oauth-signing-secret";
 }
 
 export function isMcpOAuthEnabled(): boolean {
@@ -58,13 +68,7 @@ export function isMcpOAuthEnabled(): boolean {
 }
 
 export function getMcpOAuthSigningSecret(): string {
-  const secret = getSigningSecret();
-  if (!secret) {
-    throw new Error(
-      "MCP OAuth requires MCP_OAUTH_SIGNING_SECRET, JWT_SECRET, or MCP_OAUTH_CLIENT_SECRET",
-    );
-  }
-  return secret;
+  return getSigningSecret();
 }
 
 export function getMcpOAuthTokenExpirySeconds(): number {
