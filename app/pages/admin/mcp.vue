@@ -183,7 +183,8 @@ const envVars = [
               Set <code class="font-mono">MCP_API_KEY</code> on the server, then send it as
               <code class="font-mono">Authorization: Bearer &lt;key&gt;</code> or
               <code class="font-mono">X-API-Key: &lt;key&gt;</code>. API-key clients get full tool
-              access. If neither mode is configured, the endpoint is open (local development).
+              access. If neither mode is configured, all MCP requests are denied — there is no
+              unauthenticated mode.
             </p>
           </div>
           <div class="rounded-md border border-border-default bg-bg-primary p-4">
@@ -212,7 +213,7 @@ const envVars = [
           <div>
             <div class="flex items-center justify-between mb-2">
               <p class="text-xs font-medium uppercase tracking-wide text-text-secondary">
-                MCP client config (OAuth / open)
+                MCP client config (OAuth)
               </p>
               <button
                 type="button"

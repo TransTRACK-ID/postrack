@@ -66,7 +66,7 @@ export const MCP_API_KEY = process.env.MCP_API_KEY;
 export const MCP_API_KEY_USER = process.env.MCP_API_KEY_USER;
 
 export interface McpAuthContext {
-  method: "api-key" | "oauth" | "open";
+  method: "api-key" | "oauth";
   scopes: string[];
   clientId?: string;
   /** The account this credential acts as — tools scope data to it. */
@@ -78,15 +78,15 @@ const FULL_SCOPES: string[] = [...MCP_SCOPES_SUPPORTED];
 
 /**
  * Authenticate an MCP request. Bearer auth accepts either the static
- * MCP_API_KEY or an OAuth-issued access token. When neither auth mode is
- * configured the endpoint is open (same behavior as local dev).
+ * MCP_API_KEY or an OAuth-issued access token. There is no open mode —
+ * when neither auth mode is configured, every request is denied.
  */
 export function checkMcpAuth(
   authHeader: string | undefined,
   apiKeyHeader: string | undefined,
 ): McpAuthContext | null {
   if (!MCP_API_KEY && !isMcpOAuthEnabled()) {
-    return { method: "open", scopes: FULL_SCOPES };
+    return null;
   }
 
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
@@ -591,7 +591,7 @@ function invalidateTreeCache() {
 /* Credentials bound to an account (OAuth consent or MCP_API_KEY_USER) */
 /* only see and mutate resources inside workspaces/collections that    */
 /* account can reach — same rules as the admin API. Service accounts   */
-/* (API key without MCP_API_KEY_USER) and open mode keep full access.  */
+/* (API key without MCP_API_KEY_USER) keeps full access.               */
 /* ------------------------------------------------------------------ */
 
 async function getProjectWorkspaceId(projectId: string): Promise<string | null> {
