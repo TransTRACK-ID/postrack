@@ -86,13 +86,12 @@ const writeTools = [
 const envVars = [
   { name: 'MCP_API_KEY', description: 'Static bearer key. Accepts Authorization: Bearer or X-API-Key.' },
   { name: 'MCP_API_KEY_USER', description: 'Bind the API key to an account email — tools then act with that account\u2019s workspace permissions. Unset = service account (full access).' },
-  { name: 'MCP_OAUTH_CLIENT_ID', description: 'Enables OAuth 2.0 + PKCE when set with the secret.' },
-  { name: 'MCP_OAUTH_CLIENT_SECRET', description: 'Pairs with the client ID to enable OAuth.' },
+  { name: 'MCP_OAUTH_SIGNING_SECRET', description: 'JWT signing secret for OAuth tokens. Defaults to JWT_SECRET — OAuth is enabled whenever a signing secret exists.' },
+  { name: 'MCP_OAUTH_CLIENT_ID', description: 'Optional pre-configured confidential client ID. Most clients self-register instead.' },
+  { name: 'MCP_OAUTH_CLIENT_SECRET', description: 'Pairs with the static client ID.' },
   { name: 'MCP_OAUTH_ISSUER', description: 'Public base URL for OAuth metadata. Defaults to APP_URL.' },
-  { name: 'MCP_OAUTH_SIGNING_SECRET', description: 'JWT signing secret. Defaults to JWT_SECRET.' },
   { name: 'MCP_OAUTH_TOKEN_EXPIRY', description: 'Access token lifetime in seconds (default 3600).' },
-  { name: 'MCP_OAUTH_REDIRECT_URIS', description: 'Comma-separated allowed redirect URIs.' },
-  { name: 'MCP_CORS_ORIGINS', description: 'Extra comma-separated origins allowed for MCP routes.' },
+  { name: 'MCP_OAUTH_REDIRECT_URIS', description: 'Comma-separated allowed redirect URIs for the static client.' },
 ];
 </script>
 
@@ -170,10 +169,10 @@ const envVars = [
           <div class="rounded-md border border-border-default bg-bg-primary p-4">
             <p class="text-sm font-medium text-text-primary mb-1">OAuth 2.0 + PKCE</p>
             <p class="text-xs text-text-secondary">
-              Enabled when <code class="font-mono">MCP_OAUTH_CLIENT_ID</code> and
-              <code class="font-mono">MCP_OAUTH_CLIENT_SECRET</code> are set. Just paste the endpoint
-              URL into your client — it will ask you to sign in, open a consent page, and exchange
-              an authorization code automatically. Mutating tools require the
+              Enabled whenever a signing secret exists (<code class="font-mono">JWT_SECRET</code> or
+              <code class="font-mono">MCP_OAUTH_SIGNING_SECRET</code>). Just paste the endpoint URL
+              into your client — it self-registers, asks you to sign in, opens a consent page, and
+              exchanges an authorization code automatically. Mutating tools require the
               <code class="font-mono">mcp:write</code> scope.
             </p>
           </div>

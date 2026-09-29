@@ -9,11 +9,11 @@ import { registerClient } from "../../utils/mcp-oauth/clients";
  */
 export default defineEventHandler(async (event) => {
   if (!isMcpOAuthEnabled()) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: "Service Unavailable",
-      message: "MCP OAuth is not configured on the server.",
-    });
+    setResponseStatus(event, 503);
+    return {
+      error: "temporarily_unavailable",
+      error_description: "MCP OAuth is not configured on the server.",
+    };
   }
 
   const body = (await readBody(event)) as Record<string, unknown> | null;
@@ -33,12 +33,8 @@ export default defineEventHandler(async (event) => {
   });
 
   if ("error" in result) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "invalid_client_metadata",
-      message: result.error,
-      data: { error: "invalid_client_metadata", error_description: result.error },
-    });
+    setResponseStatus(event, 400);
+    return { error: "invalid_client_metadata", error_description: result.error };
   }
 
   setResponseStatus(event, 201);

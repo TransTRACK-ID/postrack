@@ -7,6 +7,24 @@ import { verifyPkceS256 } from "../../utils/mcp-oauth/pkce";
 import { issueMcpAccessToken, refreshMcpAccessToken } from "../../utils/mcp-oauth/tokens";
 import { validateClientCredentials } from "../../utils/mcp-oauth/clients";
 
+/** Token exchange must accept application/x-www-form-urlencoded (OAuth spec
+ * default) as well as application/json — MCP clients use both. */
+async function readTokenBody(event: Parameters<typeof readRawBody>[0]) {
+  const contentType = getHeader(event, "content-type") ?? "";
+  const text = (await readRawBody(event)) ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      return (JSON.parse(text) || {}) as Record<string, unknown>;
+    } catch {
+      return {} as Record<string, unknown>;
+    }
+  }
+  return Object.fromEntries(new URLSearchParams(text).entries()) as Record<
+    string,
+    unknown
+  >;
+}
+
 function parseClientCredentials(
   authHeader: string | undefined,
   body: Record<string, unknown>,
@@ -32,36 +50,44 @@ function parseClientCredentials(
   };
 }
 
-function oauthError(status: number, error: string, description?: string) {
-  return createError({
-    statusCode: status,
-    statusMessage: error,
-    message: description || error,
-    data: { error, error_description: description },
-  });
+/** Flat { error, error_description } body — the shape OAuth clients parse. */
+function oauthError(
+  event: Parameters<typeof setResponseStatus>[0],
+  status: number,
+  error: string,
+  description?: string,
+) {
+  setResponseStatus(event, status);
+  return { error, error_description: description || error };
 }
 
 export default defineEventHandler(async (event) => {
   if (!isMcpOAuthEnabled()) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: "Service Unavailable",
-      message: "MCP OAuth is not configured on the server.",
-    });
+    return oauthError(
+      event,
+      503,
+      "temporarily_unavailable",
+      "MCP OAuth is not configured on the server.",
+    );
   }
 
-  const body = (await readBody(event)) as Record<string, unknown>;
+  const body = await readTokenBody(event);
   const grantType = typeof body.grant_type === "string" ? body.grant_type : undefined;
 
   if (grantType === "refresh_token") {
     const refreshToken =
       typeof body.refresh_token === "string" ? body.refresh_token : undefined;
     if (!refreshToken) {
-      throw oauthError(400, "invalid_request", "refresh_token is required.");
+      return oauthError(event, 400, "invalid_request", "refresh_token is required.");
     }
     const result = refreshMcpAccessToken(refreshToken);
     if (!result) {
-      throw oauthError(400, "invalid_grant", "Refresh token is invalid or expired.");
+      return oauthError(
+        event,
+        400,
+        "invalid_grant",
+        "Refresh token is invalid or expired.",
+      );
     }
     return {
       access_token: result.accessToken,
@@ -74,7 +100,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (grantType !== "authorization_code") {
-    throw oauthError(400, "unsupported_grant_type", "Only authorization_code and refresh_token are supported.");
+    return oauthError(
+      event,
+      400,
+      "unsupported_grant_type",
+      "Only authorization_code and refresh_token are supported.",
+    );
   }
 
   const code = typeof body.code === "string" ? body.code : undefined;
@@ -90,24 +121,39 @@ export default defineEventHandler(async (event) => {
     typeof body.client_id === "string" ? body.client_id : clientId;
 
   if (!code || !redirectUri || !bodyClientId) {
-    throw oauthError(400, "invalid_request", "code, redirect_uri, and client_id are required.");
+    return oauthError(
+      event,
+      400,
+      "invalid_request",
+      "code, redirect_uri, and client_id are required.",
+    );
   }
 
   if (!validateClientCredentials(bodyClientId, clientSecret)) {
-    throw oauthError(401, "invalid_client", "Client authentication failed.");
+    return oauthError(event, 401, "invalid_client", "Client authentication failed.");
   }
 
   const record = consumeAuthorizationCode(code);
   if (!record) {
-    throw oauthError(400, "invalid_grant", "Authorization code is invalid or expired.");
+    return oauthError(
+      event,
+      400,
+      "invalid_grant",
+      "Authorization code is invalid or expired.",
+    );
   }
 
   if (record.clientId !== bodyClientId || record.redirectUri !== redirectUri) {
-    throw oauthError(400, "invalid_grant", "Authorization code does not match the client.");
+    return oauthError(
+      event,
+      400,
+      "invalid_grant",
+      "Authorization code does not match the client.",
+    );
   }
 
   if (!verifyPkceS256(codeVerifier, record.codeChallenge)) {
-    throw oauthError(400, "invalid_grant", "PKCE verification failed.");
+    return oauthError(event, 400, "invalid_grant", "PKCE verification failed.");
   }
 
   const { accessToken, expiresIn, refreshToken } = issueMcpAccessToken(

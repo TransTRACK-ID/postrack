@@ -18,6 +18,7 @@ function escapeHtml(value: string): string {
 
 export function renderConsentPage(input: {
   clientId: string;
+  clientName?: string;
   scope: string;
   state?: string;
   redirectUri: string;
@@ -64,7 +65,7 @@ export function renderConsentPage(input: {
 <body>
   <div class="card">
     <h1>Allow Postrack MCP access?</h1>
-    <p>An application is requesting ${canWrite ? "read and write" : "read-only"} access to the Postrack MCP server (endpoints, folders, and environments).</p>
+    <p><strong>${escapeHtml(input.clientName || input.clientId)}</strong> is requesting ${canWrite ? "read and write" : "read-only"} access to the Postrack MCP server (endpoints, folders, and environments).</p>
     ${input.userEmail ? `<p style="color:#7dd3fc;font-size:.85rem;margin-bottom:14px;">Connected as ${escapeHtml(input.userEmail)} — access is limited to workspaces this account can reach.</p>` : ""}
     <div class="scope">scope: ${escapeHtml(input.scope || MCP_DEFAULT_SCOPE)}</div>
     <div class="actions">

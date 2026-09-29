@@ -4,7 +4,7 @@ import {
   MCP_DEFAULT_SCOPE,
 } from "../../utils/mcp-oauth/config";
 import { createAuthorizationCode } from "../../utils/mcp-oauth/codes";
-import { isRedirectUriAllowed } from "../../utils/mcp-oauth/clients";
+import { isRedirectUriAllowed, resolveClient } from "../../utils/mcp-oauth/clients";
 import { renderConsentPage } from "../../utils/mcp-oauth/consent";
 
 /**
@@ -78,6 +78,15 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const client = resolveClient(clientId);
+  if (!client) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Bad Request",
+      message: "Unknown client_id.",
+    });
+  }
+
   if (!(await isRedirectUriAllowed(clientId, redirectUri))) {
     throw createError({
       statusCode: 400,
@@ -98,6 +107,7 @@ export default defineEventHandler(async (event) => {
     setHeader(event, "Content-Type", "text/html; charset=utf-8");
     return renderConsentPage({
       clientId,
+      clientName: client.clientName,
       scope,
       state,
       redirectUri,
