@@ -14,7 +14,7 @@ import { environments, environmentVariables } from '../../db/schema';
 import type { HttpMethod, RequestData, ResponseData } from '../../db/schema/requestHistory';
 import type { MockConfig } from '../../db/schema/savedRequest';
 import { eq, inArray, sql, and } from 'drizzle-orm';
-import { executePreScript, executePostScript, type ScriptLogEntry } from '../../services/script-runner';
+import { executePreScript, executePostScript, type ScriptLogEntry, type ScriptTestResult } from '../../services/script-runner';
 import { getMagicVariableValue } from '../../utils/magic-variables';
 import { trackServerError, setSpanTags, finishSpanWithError } from '../../utils/error-tracking';
 import { trackRequestExecution as trackDatadogMetrics, trackSlowRequest } from '../../utils/datadog-metrics';
@@ -80,6 +80,7 @@ interface ProxyResponse {
   };
   scriptLogs?: ScriptLogEntry[];
   scriptErrors?: string[];
+  testResults?: ScriptTestResult[];
   environmentChanges?: Array<{
     key: string;
     value: string;
@@ -102,6 +103,7 @@ interface ProxyErrorResponse {
   variableWarnings?: string[];
   scriptLogs?: ScriptLogEntry[];
   scriptErrors?: string[];
+  testResults?: ScriptTestResult[];
 }
 
 const VALID_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
@@ -113,6 +115,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
   const variableWarnings: string[] = [];
   const scriptLogs: ScriptLogEntry[] = [];
   const scriptErrors: string[] = [];
+  const testResults: ScriptTestResult[] = [];
   const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
 
   // Variables to hold script-modified request data
@@ -373,6 +376,9 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
 
           scriptLogs.push(...preResult.logs);
           scriptErrors.push(...preResult.errors);
+          if (preResult.testResults) {
+            testResults.push(...preResult.testResults);
+          }
 
           // Capture environment changes from pre-script
           if (preResult.environmentChanges && preResult.environmentChanges.length > 0) {
@@ -437,6 +443,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
         scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        testResults: testResults.length > 0 ? testResults : undefined,
         environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
@@ -571,6 +578,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
               variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
               scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
               scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+              testResults: testResults.length > 0 ? testResults : undefined,
               environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
             };
 
@@ -629,6 +637,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
           scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          testResults: testResults.length > 0 ? testResults : undefined,
           environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       } catch (error: any) {
@@ -649,6 +658,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
           scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          testResults: testResults.length > 0 ? testResults : undefined,
           environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       }
@@ -670,7 +680,9 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       signal: AbortSignal.timeout(timeout)
     };
 
-    if (body.body && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    // Gate on resolvedBody (post-script modifications included), not the
+    // original payload — a pre-script can add a body to a bodiless request.
+    if (resolvedBody !== undefined && resolvedBody !== null && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
       if (typeof resolvedBody === 'string') {
         fetchOptions.body = resolvedBody;
       } else if (resolvedBody instanceof FormData) {
@@ -690,7 +702,10 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
           }
         }
         fetchOptions.body = serverFormData;
-        delete resolvedHeaders['Content-Type'];
+        // Remove any explicit Content-Type so fetch sets the multipart boundary
+        for (const headerKey of Object.keys(resolvedHeaders)) {
+          if (headerKey.toLowerCase() === 'content-type') delete resolvedHeaders[headerKey];
+        }
       } else {
         fetchOptions.body = JSON.stringify(resolvedBody);
         if (!resolvedHeaders['Content-Type'] && !resolvedHeaders['content-type']) {
@@ -803,6 +818,9 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
 
           scriptLogs.push(...postResult.logs);
           scriptErrors.push(...postResult.errors);
+          if (postResult.testResults) {
+            testResults.push(...postResult.testResults);
+          }
 
           // Capture environment changes from post-script
           if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
@@ -837,6 +855,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       resolvedValues: resolvedValues && Object.keys(resolvedValues).length > 0 ? resolvedValues : undefined,
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
       scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      testResults: testResults.length > 0 ? testResults : undefined,
       environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
 
@@ -980,6 +999,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
         scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        testResults: testResults.length > 0 ? testResults : undefined,
         environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
@@ -1009,6 +1029,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
         scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        testResults: testResults.length > 0 ? testResults : undefined,
         environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
@@ -1038,6 +1059,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
         scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        testResults: testResults.length > 0 ? testResults : undefined,
         environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
@@ -1067,6 +1089,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
         variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
         scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
         scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+        testResults: testResults.length > 0 ? testResults : undefined,
         environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
       };
     }
@@ -1094,6 +1117,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       variableWarnings: variableWarnings.length > 0 ? variableWarnings : undefined,
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
       scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      testResults: testResults.length > 0 ? testResults : undefined,
       environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
   }

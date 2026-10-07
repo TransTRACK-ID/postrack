@@ -51,6 +51,14 @@ interface ScriptLogEntry {
   timestamp: number;
 }
 
+interface ScriptTestResult {
+  name: string;
+  passed: boolean;
+  skipped?: boolean;
+  error?: string;
+  phase: 'pre' | 'post';
+}
+
 interface ScriptExecutionResult {
   success: boolean;
   logs: ScriptLogEntry[];
@@ -65,6 +73,7 @@ interface ScriptExecutionResult {
     value: string;
     action: 'set' | 'unset';
   }>;
+  testResults?: ScriptTestResult[];
 }
 
 interface ClientRequestOptions {
@@ -435,6 +444,7 @@ export async function executeClientRequest(
   const startTime = Date.now();
   const scriptLogs: ScriptLogEntry[] = [];
   const scriptErrors: string[] = [];
+  const testResults: ScriptTestResult[] = [];
 
   try {
     const {
@@ -549,13 +559,18 @@ export async function executeClientRequest(
               url: resolvedUrl,
               method,
               headers: { ...resolvedHeaders },
-              body: resolvedBody
+              // FormData can't cross the JSON boundary to the script runner —
+              // omit it so it survives instead of arriving as a corrupting {}.
+              body: resolvedBody instanceof FormData ? undefined : resolvedBody
             },
             environmentId
           );
 
           scriptLogs.push(...preResult.logs);
           scriptErrors.push(...preResult.errors);
+          if (preResult.testResults) {
+            testResults.push(...preResult.testResults);
+          }
 
           // Capture environment changes from pre-script
           if (preResult.environmentChanges && preResult.environmentChanges.length > 0) {
@@ -595,6 +610,27 @@ export async function executeClientRequest(
         fetchOptions.body = resolvedBody;
       } else if (resolvedBody instanceof FormData) {
         fetchOptions.body = resolvedBody;
+      } else if (resolvedBody?.__formData === true && Array.isArray(resolvedBody.entries)) {
+        // Script-set form-data (pm.request.body.update) — rebuild a real FormData.
+        const formData = new FormData();
+        for (const entry of resolvedBody.entries) {
+          if (!entry || entry.key === undefined || entry.key === null) continue;
+          if (entry.isFile && entry.fileName) {
+            const content = entry.value == null ? '' : String(entry.value);
+            formData.append(
+              String(entry.key),
+              new Blob([content], { type: entry.fileType || 'application/octet-stream' }),
+              String(entry.fileName)
+            );
+          } else {
+            formData.append(String(entry.key), entry.value == null ? '' : String(entry.value));
+          }
+        }
+        fetchOptions.body = formData;
+        // Let the browser set the multipart Content-Type with boundary
+        for (const headerKey of Object.keys(resolvedHeaders)) {
+          if (headerKey.toLowerCase() === 'content-type') delete resolvedHeaders[headerKey];
+        }
       } else {
         fetchOptions.body = JSON.stringify(resolvedBody);
         if (!resolvedHeaders['Content-Type'] && !resolvedHeaders['content-type']) {
@@ -631,6 +667,7 @@ export async function executeClientRequest(
           },
           scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
           scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+          testResults: testResults.length > 0 ? testResults : undefined,
           environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
         };
       }
@@ -681,7 +718,7 @@ export async function executeClientRequest(
               url: resolvedUrl,
               method,
               headers: { ...resolvedHeaders },
-              body: resolvedBody
+              body: resolvedBody instanceof FormData ? undefined : resolvedBody
             },
             {
               status: response.status,
@@ -696,6 +733,9 @@ export async function executeClientRequest(
 
           scriptLogs.push(...postResult.logs);
           scriptErrors.push(...postResult.errors);
+          if (postResult.testResults) {
+            testResults.push(...postResult.testResults);
+          }
 
           // Capture environment changes from post-script
           if (postResult.environmentChanges && postResult.environmentChanges.length > 0) {
@@ -722,6 +762,7 @@ export async function executeClientRequest(
       },
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
       scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      testResults: testResults.length > 0 ? testResults : undefined,
       environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
 
@@ -772,6 +813,7 @@ export async function executeClientRequest(
       },
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
       scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
+      testResults: testResults.length > 0 ? testResults : undefined,
       environmentChanges: environmentChanges.length > 0 ? environmentChanges : undefined
     };
   }

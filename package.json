@@ -35,6 +35,7 @@
     "@types/pg": "^8.16.0",
     "@types/uuid": "^10.0.0",
     "@vercel/kv": "^1.0.1",
+    "crypto-js": "^4.2.0",
     "dd-trace": "^4.55.0",
     "drizzle-orm": "^0.38.3",
     "highlight.js": "^11.11.1",

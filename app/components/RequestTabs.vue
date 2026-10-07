@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, withDefaults } from 'vue';
-import type { ProxyResponse, ProxyErrorResponse, TabType, RequestDraftSnapshot } from './RequestBuilder.vue';
+import type { ProxyResponse, ProxyErrorResponse, TabType, RequestDraftSnapshot, ScriptTestResult } from './RequestBuilder.vue';
 
 interface HttpRequest {
   id: string;
@@ -48,6 +48,7 @@ export interface OpenTab {
   response?: ProxyResponse | ProxyErrorResponse | null;
   activeBuilderTab?: TabType;
   scriptLogs?: Array<{ phase: 'pre' | 'post'; type: 'log' | 'error' | 'warn'; message: string; timestamp: number }>;
+  scriptTestResults?: ScriptTestResult[];
   draftSnapshot?: RequestDraftSnapshot;
   expandedNodes?: string[];
 }
@@ -60,6 +61,7 @@ export type PersistedOpenTab = {
   response?: any; // Serialized response data
   activeBuilderTab?: string; // Serialized tab type as string
   scriptLogs?: any[]; // Serialized script logs
+  scriptTestResults?: any[]; // Serialized script test results
   draftSnapshot?: RequestDraftSnapshot;
   expandedNodes?: string[]; // Serialized expanded node paths
 };

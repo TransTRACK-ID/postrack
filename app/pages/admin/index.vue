@@ -468,6 +468,7 @@ const normalizeOpenTab = (tab: Partial<OpenTab> | null | undefined): OpenTab | n
     response: (tab as OpenTab).response,
     activeBuilderTab: (tab as OpenTab).activeBuilderTab,
     scriptLogs: (tab as OpenTab).scriptLogs,
+    scriptTestResults: (tab as OpenTab).scriptTestResults,
     draftSnapshot: (tab as OpenTab).draftSnapshot,
     expandedNodes: (tab as OpenTab).expandedNodes
   };
@@ -486,6 +487,7 @@ const serializeOpenTabs = (): PersistedTabSession => ({
     response: tab.response,
     activeBuilderTab: tab.activeBuilderTab,
     scriptLogs: tab.scriptLogs,
+    scriptTestResults: tab.scriptTestResults,
     draftSnapshot: tab.draftSnapshot,
     expandedNodes: tab.expandedNodes
   })) as OpenTab[],
@@ -517,6 +519,7 @@ const hydrateOpenTabs = (session: PersistedTabSession | null | undefined) => {
       tab.response = persistedTab.response;
       tab.activeBuilderTab = persistedTab.activeBuilderTab;
       tab.scriptLogs = persistedTab.scriptLogs;
+      tab.scriptTestResults = persistedTab.scriptTestResults;
       tab.draftSnapshot = persistedTab.draftSnapshot;
       tab.expandedNodes = persistedTab.expandedNodes;
 
@@ -2729,6 +2732,7 @@ const handleBuilderStateChange = (state: {
   response: any;
   activeTab: string;
   scriptLogs: any[];
+  scriptTestResults?: any[];
   expandedNodes: string[];
 }) => {
   const tab = openTabs.value.find(t => t.key === activeTabKey.value);
@@ -2740,6 +2744,7 @@ const handleBuilderStateChange = (state: {
   tab.response = state.response;
   tab.activeBuilderTab = state.activeTab as any;
   tab.scriptLogs = state.scriptLogs;
+  tab.scriptTestResults = state.scriptTestResults;
   tab.expandedNodes = state.expandedNodes;
 };
 
@@ -4696,6 +4701,7 @@ onDeactivated(() => {
                 :initial-response="getActiveOpenTab()?.response"
                 :initial-active-tab="getActiveOpenTab()?.activeBuilderTab"
                 :initial-script-logs="getActiveOpenTab()?.scriptLogs"
+                :initial-script-test-results="getActiveOpenTab()?.scriptTestResults"
                 :initial-expanded-nodes="getActiveOpenTab()?.expandedNodes"
                 :read-only="!canEditWorkspace"
                 :is-shared-workspace="isSharedWorkspace"

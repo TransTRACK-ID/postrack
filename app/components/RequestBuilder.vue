@@ -11,6 +11,7 @@ import MockConfiguration from './MockConfiguration.vue'
 import BulkEditPanel from './BulkEditPanel.vue'
 import WebSocketPanel from './WebSocketPanel.vue'
 import SsePanel from './SsePanel.vue'
+import ScriptEditor from './ScriptEditor.vue'
 import { useBulkKeyValueEdit } from '~/composables/useBulkKeyValueEdit'
 import { useUsageTracking } from '~/composables/useUsageTracking'
 import { useClientRequest, isLocalUrl } from '~/composables/useClientRequest'
@@ -131,12 +132,21 @@ export interface ProxyResponse {
   };
   scriptLogs?: Array<{ phase: 'pre' | 'post'; type: 'log' | 'error' | 'warn'; message: string; timestamp: number }>;
   scriptErrors?: string[];
+  testResults?: ScriptTestResult[];
   environmentChanges?: Array<{
     key: string;
     value: string;
     action: 'set' | 'unset';
   }>;
   viaProxy?: boolean;
+}
+
+export interface ScriptTestResult {
+  name: string;
+  passed: boolean;
+  skipped?: boolean;
+  error?: string;
+  phase: 'pre' | 'post';
 }
 
 export interface ProxyErrorResponse {
@@ -156,12 +166,13 @@ export interface ProxyErrorResponse {
     value: string;
     action: 'set' | 'unset';
   }>;
+  testResults?: ScriptTestResult[];
 }
 
 // TabType without 'response' - response is now in split panel
 export type TabType = 'params' | 'headers' | 'body' | 'auth' | 'preScript' | 'postScript' | 'mock' | 'examples' | 'activity' | 'docs';
 type BodyFormat = 'none' | 'json' | 'form-data' | 'urlencoded' | 'raw' | 'binary';
-type ResponseViewType = 'pretty' | 'preview' | 'raw' | 'headers' | 'cookies' | 'imagePreview' | 'console';
+type ResponseViewType = 'pretty' | 'preview' | 'raw' | 'headers' | 'cookies' | 'imagePreview' | 'console' | 'tests';
 
 // Panel resize configuration
 const PANEL_STORAGE_KEY = 'requestBuilderPanelConfig';
@@ -209,6 +220,7 @@ interface Props {
   initialResponse?: ProxyResponse | ProxyErrorResponse | null
   initialActiveTab?: TabType
   initialScriptLogs?: Array<{ phase: 'pre' | 'post'; type: 'log' | 'error' | 'warn'; message: string; timestamp: number }>
+  initialScriptTestResults?: ScriptTestResult[]
   initialExpandedNodes?: string[]
   isSharedWorkspace?: boolean
   shareToken?: string
@@ -225,7 +237,7 @@ const emit = defineEmits<{
   saveAsRequest: [request: HttpRequest];
   unsavedChanges: [request: HttpRequest, hasUnsavedChanges: boolean, draft: RequestDraftSnapshot];
   // State persistence events
-  stateChange: [state: { response: any; activeTab: TabType; scriptLogs: any[]; expandedNodes: string[] }];
+  stateChange: [state: { response: any; activeTab: TabType; scriptLogs: any[]; scriptTestResults: ScriptTestResult[]; expandedNodes: string[] }];
   // Collection settings
   openCollectionSettings: [collectionId: string];
   // Variable inline editing
@@ -718,6 +730,13 @@ const mockConfig = ref<import('../../server/db/schema/savedRequest').MockConfig 
 const preScript = ref('');
 const postScript = ref('');
 const scriptLogs = ref<Array<{ phase: 'pre' | 'post'; type: 'log' | 'error' | 'warn'; message: string; timestamp: number }>>([]);
+const scriptErrors = ref<string[]>([]);
+const scriptTestResults = ref<ScriptTestResult[]>([]);
+const scriptTestSummary = computed(() => {
+  const total = scriptTestResults.value.filter(t => !t.skipped).length;
+  const passed = scriptTestResults.value.filter(t => t.passed && !t.skipped).length;
+  return { passed, total, allPassed: total > 0 && passed === total };
+});
 const activeScriptTab = ref<'console' | 'preScript' | 'postScript'>('console');
 
 const { trackRequestExecution } = useUsageTracking();
@@ -1279,6 +1298,12 @@ const loadRequestData = async (request: HttpRequest) => {
       } else {
         scriptLogs.value = [];
       }
+
+      if (props.initialScriptTestResults !== undefined) {
+        scriptTestResults.value = props.initialScriptTestResults;
+      } else {
+        scriptTestResults.value = [];
+      }
       
       if (props.initialActiveTab !== undefined) {
         activeTab.value = props.initialActiveTab;
@@ -1424,6 +1449,7 @@ const emitStateChange = debounce((state: {
   response: any;
   activeTab: TabType;
   scriptLogs: any[];
+  scriptTestResults: ScriptTestResult[];
   expandedNodes: string[];
 }) => {
   emit('stateChange', state);
@@ -1437,6 +1463,7 @@ watch(
     response: response.value,
     activeTab: activeTab.value,
     scriptLogs: scriptLogs.value,
+    scriptTestResults: scriptTestResults.value,
     expandedNodesVer: expandedNodesVersion
   }),
   (newState, oldState) => {
@@ -1445,6 +1472,7 @@ watch(
       newState.response !== oldState?.response ||
       newState.activeTab !== oldState?.activeTab ||
       newState.scriptLogs !== oldState?.scriptLogs ||
+      newState.scriptTestResults !== oldState?.scriptTestResults ||
       newState.expandedNodesVer !== oldState?.expandedNodesVer
     ) {
       const expandedNodesArray = Array.from(expandedNodes.value);
@@ -1452,6 +1480,7 @@ watch(
         response: newState.response,
         activeTab: newState.activeTab,
         scriptLogs: newState.scriptLogs,
+        scriptTestResults: newState.scriptTestResults,
         expandedNodes: expandedNodesArray
       });
     }
@@ -2906,6 +2935,13 @@ const insertSnippet = (type: 'pre' | 'post', snippet: string) => {
   const snippets: Record<string, string> = {
     'env-get': `const value = pm.environment.get("key");`,
     'env-set': `pm.environment.set("key", "value");`,
+    'collection-set': `pm.collectionVariables.set("key", "value");`,
+    'variables-replacein': `const resolved = pm.variables.replaceIn("{{variableName}}");`,
+    'cryptojs-base64': `const encoded = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse("value"));`,
+    'body-formdata': `pm.request.body.update({\n  mode: "formdata",\n  formdata: [{ key: "field", value: "value", type: "text" }]\n});`,
+    'test': `pm.test("My test", function () {\n  pm.expect(true).to.be.true;\n});`,
+    'test-status': `pm.test("Status is 200", function () {\n  pm.response.to.have.status(200);\n});`,
+    'test-json': `pm.test("Response is JSON", function () {\n  const json = pm.response.json();\n  pm.expect(json).to.be.an("object");\n});`,
     'request': `// Access request properties\npm.request.headers["X-Custom"] = "value";`,
     'console': `console.log("message", value);`,
     'response-code': `if (pm.response.code === 200) {\n  console.log("Success!");\n}`,
@@ -3513,6 +3549,8 @@ const sendRequest = async () => {
   isLoading.value = true;
   response.value = null;
   scriptLogs.value = [];
+  scriptErrors.value = [];
+  scriptTestResults.value = [];
   searchQuery.value = '';
   showSearch.value = false;
   searchMatches.value = [];
@@ -3672,6 +3710,20 @@ const sendRequest = async () => {
     // Capture script logs from response
     if (result.scriptLogs && result.scriptLogs.length > 0) {
       scriptLogs.value = result.scriptLogs;
+    }
+    // Capture pm.test() results from pre/post scripts
+    if (result.testResults && result.testResults.length > 0) {
+      scriptTestResults.value = result.testResults;
+      // Surface failures immediately rather than leaving them on a hidden tab
+      if (responseViewType.value !== 'tests' && result.testResults.some(t => !t.passed && !t.skipped)) {
+        responseViewType.value = 'tests';
+      }
+    }
+    // Script execution failures (syntax errors, timeouts, sandbox violations)
+    // take precedence over test results — the script may not have run at all.
+    if (result.scriptErrors && result.scriptErrors.length > 0) {
+      scriptErrors.value = result.scriptErrors;
+      responseViewType.value = 'console';
     }
     
     // If post-script modified environment variables, refresh them immediately.
@@ -5039,23 +5091,24 @@ defineExpose({
         <div v-else-if="activeTab === 'preScript'" :class="tabPanelClass">
           <div class="p-3 border-b border-border-default bg-bg-secondary">
             <p class="text-xs text-text-muted">
-              JavaScript code to run before the request. Use <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.environment.set("key", "value")</code> to update environment variables.
+              JavaScript code to run before the request. Use <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.environment.set("key", "value")</code> to update environment variables, <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.request.body.update()</code> to rewrite the body, and <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">CryptoJS</code> for hashing/encoding.
             </p>
           </div>
           <div class="flex-1 overflow-hidden">
-            <textarea
+            <ScriptEditor
               v-model="preScript"
-              class="w-full h-full p-4 bg-bg-input text-text-primary font-mono text-sm resize-none border-none focus:outline-none"
-              placeholder="// Pre-request script&#10;// Example: Set a dynamic header&#10;const timestamp = new Date().toISOString();&#10;pm.request.headers['X-Timestamp'] = timestamp;&#10;console.log('Timestamp set:', timestamp);&#10;&#10;// Or use pm.console.log('Timestamp set:', timestamp);"
-              spellcheck="false"
-            ></textarea>
+              aria-label="Pre-request script editor"
+              placeholder="// Pre-request script&#10;// Example: Set a dynamic header&#10;const timestamp = new Date().toISOString();&#10;pm.request.headers['X-Timestamp'] = timestamp;&#10;console.log('Timestamp set:', timestamp);"
+            />
           </div>
-          <div class="p-2 border-t border-border-default bg-bg-secondary flex items-center gap-2">
-            <span class="text-xs text-text-muted">Available:</span>
+          <div class="p-2 border-t border-border-default bg-bg-secondary flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-text-muted">Snippets:</span>
             <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'env-get')">pm.environment.get()</code>
             <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'env-set')">pm.environment.set()</code>
-            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'request')">pm.request</code>
-            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'console')">console.log()</code>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'variables-replacein')">pm.variables.replaceIn()</code>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'cryptojs-base64')">CryptoJS Base64</code>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'body-formdata')">pm.request.body.update()</code>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('pre', 'test')">pm.test()</code>
           </div>
         </div>
 
@@ -5063,24 +5116,24 @@ defineExpose({
         <div v-else-if="activeTab === 'postScript'" :class="tabPanelClass">
           <div class="p-3 border-b border-border-default bg-bg-secondary">
             <p class="text-xs text-text-muted">
-              JavaScript code to run after the request. Access response via <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.response</code>.
+              JavaScript code to run after the request. Access response via <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.response</code>, write assertions with <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.test()</code> and <code class="px-1 py-0.5 bg-bg-tertiary rounded text-accent-blue">pm.expect()</code>.
             </p>
           </div>
           <div class="flex-1 overflow-hidden">
-            <textarea
+            <ScriptEditor
               v-model="postScript"
-              class="w-full h-full p-4 bg-bg-input text-text-primary font-mono text-sm resize-none border-none focus:outline-none"
-              placeholder="// Post-response script&#10;// Example: Check status code and extract token&#10;if (pm.response.code == 200) {&#10;  const json = pm.response.json();&#10;  if (json.access_token) {&#10;    pm.environment.set('access_token', json.access_token);&#10;    console.log('Token saved:', json.access_token);&#10;    console.log('Response time:', pm.response.responseTime + 'ms');&#10;  }&#10;}"
-              spellcheck="false"
-            ></textarea>
+              aria-label="Post-response script editor"
+              placeholder="// Post-response script&#10;// Example: Check status code and extract token&#10;pm.test('Status is 200', function () {&#10;  pm.response.to.have.status(200);&#10;});&#10;&#10;const json = pm.response.json();&#10;if (json.access_token) {&#10;  pm.environment.set('access_token', json.access_token);&#10;}"
+            />
           </div>
-          <div class="p-2 border-t border-border-default bg-bg-secondary flex items-center gap-2">
-            <span class="text-xs text-text-muted">Available:</span>
-            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'response-code')">pm.response.code</code>
+          <div class="p-2 border-t border-border-default bg-bg-secondary flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-text-muted">Snippets:</span>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'test-status')">pm.test() status</code>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'test-json')">pm.test() JSON</code>
             <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'response-json')">pm.response.json()</code>
             <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'response-time')">pm.response.responseTime</code>
-            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'response-size')">pm.response.size</code>
             <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'env-set')">pm.environment.set()</code>
+            <code class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded text-accent-blue cursor-pointer hover:bg-bg-hover" @click="insertSnippet('post', 'collection-set')">pm.collectionVariables.set()</code>
           </div>
         </div>
 
@@ -5487,14 +5540,31 @@ defineExpose({
                     />
                   </button>
                   <button
-                    v-if="scriptLogs.length > 0"
+                    v-if="scriptLogs.length > 0 || scriptErrors.length > 0"
                     @click="responseViewType = 'console'"
                     class="px-3 py-2 text-xs font-medium transition-all duration-fast whitespace-nowrap relative"
                     :class="responseViewType === 'console' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'"
                   >
-                    <span class="relative z-10">Console ({{ scriptLogs.length }})</span>
+                    <span class="relative z-10">Console ({{ scriptLogs.length + scriptErrors.length }})</span>
                     <span 
                       v-if="responseViewType === 'console'"
+                      class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-blue animate-scale-x"
+                    />
+                  </button>
+                  <button
+                    v-if="scriptTestResults.length > 0"
+                    @click="responseViewType = 'tests'"
+                    class="px-3 py-2 text-xs font-medium transition-all duration-fast whitespace-nowrap relative"
+                    :class="responseViewType === 'tests' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'"
+                  >
+                    <span class="relative z-10">
+                      Tests
+                      <span :class="scriptTestSummary.allPassed ? 'text-accent-green' : 'text-accent-red'">
+                        ({{ scriptTestSummary.passed }}/{{ scriptTestSummary.total }})
+                      </span>
+                    </span>
+                    <span
+                      v-if="responseViewType === 'tests'"
                       class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-blue animate-scale-x"
                     />
                   </button>
@@ -5680,14 +5750,23 @@ defineExpose({
                   <div v-else-if="responseViewType === 'console'" class="h-full flex flex-col">
                     <div class="flex items-center gap-2 mb-3 pb-2 border-b border-border-default">
                       <span class="text-xs text-text-muted">Script Console ({{ scriptLogs.length }} logs)</span>
+                      <span v-if="scriptErrors.length > 0" class="text-xs text-accent-red font-medium">{{ scriptErrors.length }} error{{ scriptErrors.length === 1 ? '' : 's' }}</span>
                       <button
-                        @click="scriptLogs = []"
+                        @click="scriptLogs = []; scriptErrors = []"
                         class="text-xs text-accent-blue hover:text-accent-blue/80 transition-colors duration-fast"
                       >
                         Clear
                       </button>
                     </div>
                     <div class="flex-1 overflow-auto bg-bg-tertiary rounded border border-border-default p-3">
+                      <div
+                        v-for="(err, index) in scriptErrors"
+                        :key="`err-${index}`"
+                        class="py-1 px-2 border-b border-accent-red/30 font-mono text-xs text-accent-red"
+                      >
+                        <span class="text-accent-red/70 text-[10px] mr-2">[SCRIPT ERROR]</span>
+                        <span>{{ err }}</span>
+                      </div>
                       <div
                         v-for="(log, index) in scriptLogs"
                         :key="index"
@@ -5701,8 +5780,53 @@ defineExpose({
                         <span class="text-text-muted text-[10px] mr-2">[{{ log.phase === 'pre' ? 'PRE' : 'POST' }}]</span>
                         <span>{{ log.message }}</span>
                       </div>
-                      <div v-if="scriptLogs.length === 0" class="text-text-muted text-xs italic">
-                        No script logs
+                      <div v-if="scriptLogs.length === 0 && scriptErrors.length === 0" class="text-text-muted text-xs italic">
+                        No script output
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Test Results View -->
+                  <div v-else-if="responseViewType === 'tests'" class="h-full flex flex-col">
+                    <div class="flex items-center gap-2 mb-3 pb-2 border-b border-border-default">
+                      <span class="text-xs text-text-muted">Test Results</span>
+                      <span
+                        class="text-xs font-medium"
+                        :class="scriptTestSummary.allPassed ? 'text-accent-green' : 'text-accent-red'"
+                      >
+                        {{ scriptTestSummary.passed }}/{{ scriptTestSummary.total }} passed
+                      </span>
+                      <button
+                        @click="scriptTestResults = []"
+                        class="text-xs text-accent-blue hover:text-accent-blue/80 transition-colors duration-fast ml-auto"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div class="flex-1 overflow-auto bg-bg-tertiary rounded border border-border-default">
+                      <div
+                        v-for="(test, index) in scriptTestResults"
+                        :key="index"
+                        class="flex items-start gap-2.5 py-2 px-3 border-b border-border-default/50 last:border-b-0"
+                      >
+                        <span
+                          class="mt-0.5 flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold"
+                          :class="test.skipped
+                            ? 'bg-accent-yellow/15 text-accent-yellow'
+                            : test.passed
+                              ? 'bg-accent-green/15 text-accent-green'
+                              : 'bg-accent-red/15 text-accent-red'"
+                        >{{ test.skipped ? '–' : test.passed ? '✓' : '✗' }}</span>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-xs text-text-primary">{{ test.name }}</span>
+                            <span class="text-[10px] text-text-muted font-mono">[{{ test.phase === 'pre' ? 'PRE' : 'POST' }}]</span>
+                          </div>
+                          <div v-if="test.error" class="text-xs text-accent-red font-mono mt-0.5 break-words">{{ test.error }}</div>
+                        </div>
+                      </div>
+                      <div v-if="scriptTestResults.length === 0" class="text-text-muted text-xs italic p-3">
+                        No test results
                       </div>
                     </div>
                   </div>
@@ -5732,6 +5856,14 @@ defineExpose({
                     <div class="mb-3">
                       <div class="text-sm font-medium text-accent-red mb-1">{{ response.error.message }}</div>
                       <div v-if="response.error.cause" class="text-xs text-text-muted">{{ response.error.cause }}</div>
+                    </div>
+                    <div v-if="scriptErrors.length > 0" class="mt-3 pt-3 border-t border-accent-red/20">
+                      <div class="text-xs font-medium text-accent-red mb-1">Script errors</div>
+                      <div v-for="(err, i) in scriptErrors" :key="i" class="text-xs font-mono text-accent-red/90 py-0.5">{{ err }}</div>
+                    </div>
+                    <div v-else-if="scriptTestResults.some(t => !t.passed && !t.skipped)" class="mt-3 pt-3 border-t border-accent-red/20">
+                      <div class="text-xs font-medium text-accent-red mb-1">Failed script tests</div>
+                      <div v-for="(t, i) in scriptTestResults.filter(t => !t.passed && !t.skipped)" :key="i" class="text-xs font-mono text-accent-red/90 py-0.5">{{ t.name }}: {{ t.error }}</div>
                     </div>
                   </div>
                 </div>
