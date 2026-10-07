@@ -208,6 +208,8 @@ const emit = defineEmits<{
 const selectedWorkspaceId = ref<string | null>(null);
 const activeView = ref<'hierarchy' | 'mocks' | 'history' | 'definitions'>('hierarchy');
 const contextMenu = ref<{ x: number; y: number; type: string; data: any } | null>(null);
+const contextMenuEl = ref<HTMLElement | null>(null);
+const contextMenuStyle = ref<Record<string, string>>({});
 const contextMenuLoading = ref<string | null>(null);
 
 // Multi-selection of requests for batch moves:
@@ -1382,7 +1384,7 @@ const getSortedCollectionItems = (collection: CollectionWithFolders): SortedColl
   return items.sort((a, b) => a.order - b.order);
 };
 
-const handleContextMenu = (event: MouseEvent, type: string, data: any) => {
+const handleContextMenu = async (event: MouseEvent, type: string, data: any) => {
   event.preventDefault();
   event.stopPropagation();
   // For viewers, only allow folder context menu (for "Copy Prompt")
@@ -1393,6 +1395,21 @@ const handleContextMenu = (event: MouseEvent, type: string, data: any) => {
     clearRequestSelection();
   }
   contextMenu.value = { x: event.clientX, y: event.clientY, type, data };
+  // Render hidden at the click point, then measure and keep the menu inside
+  // the viewport (flips above/left of the cursor when near the edges).
+  contextMenuStyle.value = { left: `${event.clientX}px`, top: `${event.clientY}px`, visibility: 'hidden' };
+  await nextTick();
+  const el = contextMenuEl.value;
+  if (!el || !contextMenu.value) return;
+  const rect = el.getBoundingClientRect();
+  const margin = 8;
+  const x = event.clientX + rect.width > window.innerWidth - margin
+    ? Math.max(margin, event.clientX - rect.width)
+    : event.clientX;
+  const y = event.clientY + rect.height > window.innerHeight - margin
+    ? Math.max(margin, event.clientY - rect.height)
+    : event.clientY;
+  contextMenuStyle.value = { left: `${x}px`, top: `${y}px` };
 };
 
 // True when the request context menu applies to a multi-selection
@@ -2524,8 +2541,9 @@ defineExpose({
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 bg-bg-secondary border border-border-default rounded-lg shadow-lg min-w-[180px]"
-        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+        ref="contextMenuEl"
+        class="fixed z-50 bg-bg-secondary border border-border-default rounded-lg shadow-lg min-w-[180px] max-h-[calc(100vh-16px)] overflow-y-auto"
+        :style="contextMenuStyle"
         @click="closeContextMenu"
       >
         <div class="py-1">
