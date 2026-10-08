@@ -7,7 +7,7 @@
 
 import { db } from '../db';
 import { environmentVariables } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { createContext, Script } from 'vm';
 import { getMagicVariableValue } from '../utils/magic-variables';
 import { createExpect } from '../utils/pm-expect';
@@ -73,6 +73,8 @@ export interface ScriptExecutionResult {
     key: string;
     value: string;
     action: 'set' | 'unset';
+    /** Target environment for the write — differs from the active env for pm.collectionVariables */
+    environmentId?: string;
   }>;
   testResults?: ScriptTestResult[];
 }
@@ -91,14 +93,16 @@ interface EnvironmentVariable {
 export async function executePreScript(params: {
   code: string;
   context: ScriptExecutionContext;
-  environmentId: string;
+  environmentId?: string;
+  collectionEnvironmentId?: string;
 }): Promise<ScriptExecutionResult> {
-  const { code, context, environmentId } = params;
+  const { code, context, environmentId, collectionEnvironmentId } = params;
 
   return executeScript({
     code,
     context,
     environmentId,
+    collectionEnvironmentId,
     phase: 'pre'
   });
 }
@@ -110,16 +114,18 @@ export async function executePostScript(params: {
   code: string;
   context: ScriptExecutionContext;
   response: ScriptExecutionResponse;
-  environmentId: string;
+  environmentId?: string;
+  collectionEnvironmentId?: string;
   responseTimeMs?: number;
   responseSize?: number;
 }): Promise<ScriptExecutionResult> {
-  const { code, context, response, environmentId, responseTimeMs, responseSize } = params;
+  const { code, context, response, environmentId, collectionEnvironmentId, responseTimeMs, responseSize } = params;
 
   return executeScript({
     code,
     context,
     environmentId,
+    collectionEnvironmentId,
     phase: 'post',
     response,
     responseTimeMs,
@@ -128,27 +134,44 @@ export async function executePostScript(params: {
 }
 
 /**
- * Apply environment variable changes to the database
+ * Apply environment variable changes to the database.
+ * Each change carries the environment it targets — pm.environment/pm.globals
+ * write to the active environment while pm.collectionVariables writes to the
+ * collection's "<name> Variables" environment.
  */
 export async function applyEnvironmentChanges(
-  environmentId: string,
-  changes: Array<{ key: string; value: string; action: 'set' | 'unset' }>
+  changes: Array<{ key: string; value: string; action: 'set' | 'unset'; environmentId?: string }>
 ): Promise<void> {
   if (!changes || changes.length === 0) return;
 
-  // Load existing variables
+  const targetEnvIds = [...new Set(
+    changes.map(c => c.environmentId).filter((id): id is string => !!id)
+  )];
+  if (targetEnvIds.length === 0) return;
+
+  // Load existing variables across every targeted environment
   const existingVars = await db
     .select()
     .from(environmentVariables)
-    .where(eq(environmentVariables.environmentId, environmentId));
+    .where(inArray(environmentVariables.environmentId, targetEnvIds));
 
-  const existingVarMap = new Map(existingVars.map(v => [v.key, v]));
+  const existingByEnv = new Map<string, Map<string, EnvironmentVariable>>();
+  for (const v of existingVars) {
+    let m = existingByEnv.get(v.environmentId);
+    if (!m) {
+      m = new Map();
+      existingByEnv.set(v.environmentId, m);
+    }
+    m.set(v.key, v);
+  }
 
   for (const change of changes) {
+    if (!change.environmentId) continue;
+    const existingVarMap = existingByEnv.get(change.environmentId);
     try {
       if (change.action === 'unset') {
         // Delete the variable
-        const existing = existingVarMap.get(change.key);
+        const existing = existingVarMap?.get(change.key);
         if (existing) {
           await db
             .delete(environmentVariables)
@@ -156,7 +179,7 @@ export async function applyEnvironmentChanges(
         }
       } else {
         // Set or update the variable
-        const existing = existingVarMap.get(change.key);
+        const existing = existingVarMap?.get(change.key);
         if (existing) {
           await db
             .update(environmentVariables)
@@ -164,7 +187,7 @@ export async function applyEnvironmentChanges(
             .where(eq(environmentVariables.id, existing.id));
         } else {
           await db.insert(environmentVariables).values({
-            environmentId,
+            environmentId: change.environmentId,
             key: change.key,
             value: change.value,
             isSecret: false
@@ -183,17 +206,18 @@ export async function applyEnvironmentChanges(
 async function executeScript(params: {
   code: string;
   context: ScriptExecutionContext;
-  environmentId: string;
+  environmentId?: string;
+  collectionEnvironmentId?: string;
   phase: 'pre' | 'post';
   response?: ScriptExecutionResponse;
   responseTimeMs?: number;
   responseSize?: number;
 }): Promise<ScriptExecutionResult> {
-  const { code, context, environmentId, phase, response, responseTimeMs, responseSize } = params;
+  const { code, context, environmentId, collectionEnvironmentId, phase, response, responseTimeMs, responseSize } = params;
 
   const logs: ScriptLogEntry[] = [];
   const errors: string[] = [];
-  const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
+  const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset'; environmentId?: string }> = [];
   const testResults: ScriptTestResult[] = [];
   const pendingTests: Promise<void>[] = [];
 
@@ -206,26 +230,38 @@ async function executeScript(params: {
   };
 
   try {
-    // Load environment variables
+    // Load the active environment variables and the collection variables
+    // together. Postman resolves {{var}} / pm.variables across scopes —
+    // collection vars live in the "<Collection> Variables" environment
+    // that the Postman importer creates per collection.
     let envVars: Record<string, string> = {};
-    try {
-      const dbVars = await db
-        .select()
-        .from(environmentVariables)
-        .where(eq(environmentVariables.environmentId, environmentId));
+    let collectionVars: Record<string, string> = {};
+    const scopeEnvIds = [...new Set(
+      [environmentId, collectionEnvironmentId].filter((v): v is string => !!v)
+    )];
+    if (scopeEnvIds.length > 0) {
+      try {
+        const dbVars = await db
+          .select()
+          .from(environmentVariables)
+          .where(inArray(environmentVariables.environmentId, scopeEnvIds));
 
-      envVars = dbVars.reduce((acc, v) => {
-        acc[v.key] = v.value;
-        return acc;
-      }, {} as Record<string, string>);
-    } catch (error) {
-      console.error('[ScriptRunner] Failed to load environment variables:', error);
-      errors.push('Failed to load environment variables');
+        for (const v of dbVars) {
+          if (v.environmentId === environmentId) envVars[v.key] = v.value;
+          if (v.environmentId === collectionEnvironmentId) collectionVars[v.key] = v.value;
+        }
+      } catch (error) {
+        console.error('[ScriptRunner] Failed to load environment variables:', error);
+        errors.push('Failed to load environment variables');
+      }
     }
 
     // Create the pm context object
     const pmContext = createPmContext({
       envVars,
+      collectionVars,
+      environmentId,
+      collectionEnvironmentId,
       context: modifiedContext,
       response,
       phase,
@@ -243,8 +279,8 @@ async function executeScript(params: {
           });
         }
       },
-      onEnvironmentChange: (key, value, action) => {
-        environmentChanges.push({ key, value, action });
+      onEnvironmentChange: (key, value, action, targetEnvironmentId) => {
+        environmentChanges.push({ key, value, action, environmentId: targetEnvironmentId });
       },
       onContextModify: (key, value) => {
         // Only allow modifying request properties in pre-script
@@ -339,12 +375,14 @@ async function executeScript(params: {
     }
 
     // Apply environment changes immediately after script completes.
-    // Dedupe last-wins per key — pm.environment/pm.collectionVariables/pm.globals
-    // share one store, so scripts that mirror writes across scopes produce
-    // duplicate inserts otherwise.
+    // Dedupe last-wins per scope+key — scripts that mirror writes across
+    // pm.environment/pm.collectionVariables/pm.globals produce duplicate
+    // inserts otherwise.
     if (environmentChanges.length > 0) {
-      const deduped = new Map(environmentChanges.map(c => [c.key, c]));
-      await applyEnvironmentChanges(environmentId, [...deduped.values()]);
+      const deduped = new Map(
+        environmentChanges.map(c => [`${c.environmentId ?? ''}|${c.key}`, c])
+      );
+      await applyEnvironmentChanges([...deduped.values()]);
     }
 
     return {
@@ -386,6 +424,9 @@ async function executeScript(params: {
  */
 function createPmContext(params: {
   envVars: Record<string, string>;
+  collectionVars: Record<string, string>;
+  environmentId?: string;
+  collectionEnvironmentId?: string;
   context: ScriptExecutionContext;
   response?: ScriptExecutionResponse;
   phase: 'pre' | 'post';
@@ -394,10 +435,10 @@ function createPmContext(params: {
   testResults: ScriptTestResult[];
   pendingTests: Promise<void>[];
   onLog: (type: 'log' | 'error' | 'warn', message: string) => void;
-  onEnvironmentChange: (key: string, value: string, action: 'set' | 'unset') => void;
+  onEnvironmentChange: (key: string, value: string, action: 'set' | 'unset', environmentId?: string) => void;
   onContextModify: (key: string, value: any) => void;
 }) {
-  const { envVars, context, response, phase, responseTimeMs, responseSize, testResults, pendingTests, onLog, onEnvironmentChange, onContextModify } = params;
+  const { envVars, collectionVars, environmentId, collectionEnvironmentId, context, response, phase, responseTimeMs, responseSize, testResults, pendingTests, onLog, onEnvironmentChange, onContextModify } = params;
 
   // Script-local variables (Postman's "local" scope). Not persisted; they take
   // precedence over environment values for {{var}} resolution within this run.
@@ -406,42 +447,79 @@ function createPmContext(params: {
   const expectFn = createExpect();
 
   // Substitute {{var}} and {{$magic}} in a string.
-  // Resolution order: script-local vars, environment vars, magic variables.
+  // Postman resolution order: script-local vars, environment vars,
+  // collection vars, magic variables.
   const substituteInTemplate = (template: string): string => {
     return String(template).replace(/\{\{([^}]+)\}\}/g, (match, key) => {
       const trimmedKey = key.trim();
       if (localVars[trimmedKey] !== undefined) return localVars[trimmedKey];
       if (envVars[trimmedKey] !== undefined) return envVars[trimmedKey];
+      if (collectionVars[trimmedKey] !== undefined) return collectionVars[trimmedKey];
       const magicValue = getMagicVariableValue(trimmedKey);
       return magicValue !== null ? magicValue : match;
     });
   };
 
-  // Single shared scope for pm.environment / pm.collectionVariables / pm.globals.
-  // Postrack stores all of these in the selected environment (collection
-  // variables are imported as an environment), so all three facades map here.
+  // pm.environment / pm.globals map to the active environment store. When no
+  // environment is selected, writes still apply for this run but are not
+  // persisted (Postman warns "no environment selected" in the same case).
+  const warnNoEnvironment = () =>
+    onLog('warn', 'pm.environment: no active environment — change will not persist');
+
   const variableScope = {
     get: (key: string): string | undefined => envVars[key],
     set: (key: string, value: any): void => {
       const str = typeof value === 'string' ? value : String(value);
       const resolved = substituteInTemplate(str);
       envVars[key] = resolved;
-      onEnvironmentChange(key, resolved, 'set');
+      if (environmentId) onEnvironmentChange(key, resolved, 'set', environmentId);
+      else warnNoEnvironment();
     },
     unset: (key: string): void => {
       delete envVars[key];
-      onEnvironmentChange(key, '', 'unset');
+      if (environmentId) onEnvironmentChange(key, '', 'unset', environmentId);
+      else warnNoEnvironment();
     },
     has: (key: string): boolean => Object.prototype.hasOwnProperty.call(envVars, key),
     clear: (): void => {
-      for (const key of Object.keys(envVars)) {
+      const keys = Object.keys(envVars);
+      for (const key of keys) {
         delete envVars[key];
-        onEnvironmentChange(key, '', 'unset');
+        if (environmentId) onEnvironmentChange(key, '', 'unset', environmentId);
       }
+      if (!environmentId && keys.length > 0) warnNoEnvironment();
     },
     replaceIn: (template: string): string => substituteInTemplate(template),
     toObject: (): Record<string, string> => ({ ...envVars })
   };
+
+  // pm.collectionVariables — a dedicated scope when the request's collection
+  // has an imported "<name> Variables" environment; otherwise falls back to
+  // the environment store (previous behavior).
+  const collectionScope = collectionEnvironmentId
+    ? {
+        get: (key: string): string | undefined => collectionVars[key],
+        set: (key: string, value: any): void => {
+          const str = typeof value === 'string' ? value : String(value);
+          const resolved = substituteInTemplate(str);
+          collectionVars[key] = resolved;
+          onEnvironmentChange(key, resolved, 'set', collectionEnvironmentId);
+        },
+        unset: (key: string): void => {
+          delete collectionVars[key];
+          onEnvironmentChange(key, '', 'unset', collectionEnvironmentId);
+        },
+        has: (key: string): boolean => Object.prototype.hasOwnProperty.call(collectionVars, key),
+        clear: (): void => {
+          for (const key of Object.keys(collectionVars)) {
+            delete collectionVars[key];
+            onEnvironmentChange(key, '', 'unset', collectionEnvironmentId);
+          }
+        },
+        replaceIn: (template: string): string => substituteInTemplate(template),
+        toObject: (): Record<string, string> => ({ ...collectionVars })
+      }
+    : variableScope;
 
   /**
    * Wrap a headers record as a Postman-style HeaderList: plain property
@@ -763,17 +841,19 @@ function createPmContext(params: {
   return {
     // Environment variable access (values containing {{$randomFirstName}} etc. are resolved before storing)
     environment: variableScope,
-    // Postman collection variables map onto the environment store in Postrack
-    collectionVariables: variableScope,
+    // Postman collection variables — separate scope when the collection has
+    // an imported "<name> Variables" environment
+    collectionVariables: collectionScope,
     // Postrack has no separate global scope; globals share the environment store
     globals: variableScope,
 
-    // Variable substitution and read access (local > environment > magic)
+    // Variable substitution and read access (local > environment > collection > magic)
     variables: {
       get: (key: string): string | undefined => {
         const k = String(key);
         if (localVars[k] !== undefined) return localVars[k];
         if (envVars[k] !== undefined) return envVars[k];
+        if (collectionVars[k] !== undefined) return collectionVars[k];
         return getMagicVariableValue(k) ?? undefined;
       },
       set: (key: string, value: any): void => {
@@ -785,11 +865,14 @@ function createPmContext(params: {
       has: (key: string): boolean => {
         const k = String(key);
         return (
-          localVars[k] !== undefined || envVars[k] !== undefined || getMagicVariableValue(k) !== null
+          localVars[k] !== undefined ||
+          envVars[k] !== undefined ||
+          collectionVars[k] !== undefined ||
+          getMagicVariableValue(k) !== null
         );
       },
       replaceIn: (template: string): string => substituteInTemplate(template),
-      toObject: (): Record<string, string> => ({ ...envVars, ...localVars })
+      toObject: (): Record<string, string> => ({ ...collectionVars, ...envVars, ...localVars })
     },
 
     // Tests (Postman test assertions)

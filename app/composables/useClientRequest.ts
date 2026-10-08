@@ -72,6 +72,7 @@ interface ScriptExecutionResult {
     key: string;
     value: string;
     action: 'set' | 'unset';
+    environmentId?: string;
   }>;
   testResults?: ScriptTestResult[];
 }
@@ -334,7 +335,8 @@ async function parseResponse(response: Response): Promise<any> {
 async function executePreScript(
   code: string,
   context: { url: string; method: string; headers: Record<string, string>; body: any },
-  environmentId: string
+  environmentId?: string,
+  savedRequestId?: string
 ): Promise<ScriptExecutionResult> {
   try {
     const result = await $fetch<ScriptExecutionResult>('/api/scripts/execute', {
@@ -343,7 +345,8 @@ async function executePreScript(
         scriptType: 'pre',
         code,
         context,
-        environmentId
+        environmentId,
+        savedRequestId
       }
     });
     return result;
@@ -363,9 +366,10 @@ async function executePostScript(
   code: string,
   context: { url: string; method: string; headers: Record<string, string>; body: any },
   response: { status: number; statusText: string; headers: Record<string, string>; body: any },
-  environmentId: string,
-  responseTimeMs: number,
-  responseSize: number
+  environmentId?: string,
+  responseTimeMs?: number,
+  responseSize?: number,
+  savedRequestId?: string
 ): Promise<ScriptExecutionResult> {
   try {
     const result = await $fetch<ScriptExecutionResult>('/api/scripts/execute', {
@@ -376,6 +380,7 @@ async function executePostScript(
         context,
         response,
         environmentId,
+        savedRequestId,
         responseTimeMs,
         responseSize
       }
@@ -460,7 +465,7 @@ export async function executeClientRequest(
     } = options;
 
     // Track environment variable changes from scripts
-    const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
+    const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset'; environmentId?: string }> = [];
 
     // Validate URL
     if (!url) {
@@ -486,7 +491,8 @@ export async function executeClientRequest(
     if (environmentId) {
       try {
         variables = await fetchEnvironmentVariableMap(environmentId, {
-          shareToken: options.shareToken
+          shareToken: options.shareToken,
+          requestId: savedRequestId
         });
 
         // Apply variable substitution
@@ -544,7 +550,7 @@ export async function executeClientRequest(
 
     // Load and execute pre-script if available
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
-    if (environmentId && (options.preScript !== undefined || savedRequestId)) {
+    if (options.preScript !== undefined || savedRequestId) {
       try {
         const preScriptCode = options.preScript
           ? options.preScript
@@ -563,7 +569,8 @@ export async function executeClientRequest(
               // omit it so it survives instead of arriving as a corrupting {}.
               body: resolvedBody instanceof FormData ? undefined : resolvedBody
             },
-            environmentId
+            environmentId,
+            savedRequestId
           );
 
           scriptLogs.push(...preResult.logs);
@@ -703,7 +710,7 @@ export async function executeClientRequest(
 
     // Execute post-script if available
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
-    if (environmentId && (options.postScript !== undefined || savedRequestId)) {
+    if (options.postScript !== undefined || savedRequestId) {
       try {
         const postScriptCode = options.postScript
           ? options.postScript
@@ -728,7 +735,8 @@ export async function executeClientRequest(
             },
             environmentId,
             endTime - startTime,
-            responseSize
+            responseSize,
+            savedRequestId
           );
 
           scriptLogs.push(...postResult.logs);

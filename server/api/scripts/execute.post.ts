@@ -7,6 +7,7 @@
  */
 
 import { executePreScript, executePostScript, ScriptExecutionResult } from '../../services/script-runner';
+import { findCollectionVariablesScope } from '../../utils/collection-variables';
 
 interface ScriptExecuteBody {
   scriptType: 'pre' | 'post';
@@ -25,7 +26,12 @@ interface ScriptExecuteBody {
     responseTimeMs?: number;
     responseSize?: number;
   };
-  environmentId: string;
+  environmentId?: string;
+  /** Saved request id — used to resolve the collection's variables scope */
+  savedRequestId?: string;
+  /** Callers may send timing at the top level instead of inside `response` */
+  responseTimeMs?: number;
+  responseSize?: number;
 }
 
 export default defineEventHandler(async (event): Promise<ScriptExecutionResult> => {
@@ -54,13 +60,6 @@ export default defineEventHandler(async (event): Promise<ScriptExecutionResult> 
       });
     }
 
-    if (!body.environmentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing required field: environmentId'
-      });
-    }
-
     // Validate script type
     if (!['pre', 'post'].includes(body.scriptType)) {
       throw createError({
@@ -69,12 +68,26 @@ export default defineEventHandler(async (event): Promise<ScriptExecutionResult> 
       });
     }
 
+    // Resolve the collection's variables scope so pm.variables/{{var}} and
+    // pm.collectionVariables behave like Postman (collection vars resolve
+    // independently of the selected environment).
+    let collectionEnvironmentId: string | undefined;
+    if (body.savedRequestId) {
+      try {
+        collectionEnvironmentId =
+          (await findCollectionVariablesScope(body.savedRequestId))?.environmentId;
+      } catch (error) {
+        console.error('[ScriptExecute] Failed to resolve collection variables:', error);
+      }
+    }
+
     // Execute script based on type
     if (body.scriptType === 'pre') {
       const result = await executePreScript({
         code: body.code,
         context: body.context,
-        environmentId: body.environmentId
+        environmentId: body.environmentId,
+        collectionEnvironmentId
       });
 
       return result;
@@ -97,8 +110,9 @@ export default defineEventHandler(async (event): Promise<ScriptExecutionResult> 
           body: body.response.body
         },
         environmentId: body.environmentId,
-        responseTimeMs: body.response.responseTimeMs,
-        responseSize: body.response.responseSize
+        collectionEnvironmentId,
+        responseTimeMs: body.responseTimeMs ?? body.response.responseTimeMs,
+        responseSize: body.responseSize ?? body.response.responseSize
       });
 
       return result;

@@ -137,6 +137,7 @@ export interface ProxyResponse {
     key: string;
     value: string;
     action: 'set' | 'unset';
+    environmentId?: string;
   }>;
   viaProxy?: boolean;
 }
@@ -165,6 +166,7 @@ export interface ProxyErrorResponse {
     key: string;
     value: string;
     action: 'set' | 'unset';
+    environmentId?: string;
   }>;
   testResults?: ScriptTestResult[];
 }
@@ -3733,10 +3735,14 @@ const sendRequest = async () => {
     if (result.environmentChanges && result.environmentChanges.length > 0) {
       console.log('[RequestBuilder] Post-script modified environment variables:', result.environmentChanges);
       await fetchEnvironmentVariables();
-      // Notify parent views (e.g. environment settings panel) so they can refresh without a page reload
-      if (props.environmentId) {
-        emit('environmentVariablesChanged', props.environmentId);
-      }
+      // Notify parent views (e.g. environment settings panel) so they can refresh without a page reload.
+      // Changes may target the collection's variables env, not just the selected one.
+      const changedEnvIds = new Set(
+        result.environmentChanges
+          .map(c => c.environmentId ?? props.environmentId)
+          .filter((id): id is string => !!id)
+      );
+      changedEnvIds.forEach(envId => emit('environmentVariablesChanged', envId));
       // Also refresh collection auth if inheriting, as it may use the updated variables
       if (inheritFromParent.value && props.collectionId) {
         await fetchCollectionAuth(props.collectionId);

@@ -104,7 +104,7 @@ async function fetchEnvironmentVariables(
 async function executePreScript(
   code: string,
   context: { url: string; method: string; headers: Record<string, string>; body: unknown },
-  environmentId: string
+  environmentId?: string
 ): Promise<{
   success: boolean;
   modifiedContext?: { url?: string; headers?: Record<string, string> };
@@ -372,7 +372,7 @@ export function useSseClient() {
         url = appendQueryParams(url, options.authQueryParams);
       }
 
-      if (options.preScript && options.environmentId) {
+      if (options.preScript) {
         const preResult = await executePreScript(
           options.preScript,
           { url, method: 'SSE', headers, body: null },

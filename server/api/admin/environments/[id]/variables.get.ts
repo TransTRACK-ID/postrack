@@ -2,6 +2,7 @@ import { db } from '../../../../db';
 import { environments, environmentVariables, projects } from '../../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { getAccessibleWorkspaceIds, isSuperAdmin, getCollectionMemberAllowedEnvIds } from '../../../../utils/permissions';
+import { findCollectionVariablesScope } from '../../../../utils/collection-variables';
 
 export default defineEventHandler(async (event) => {
   const environmentId = getRouterParam(event, 'id');
@@ -63,14 +64,14 @@ export default defineEventHandler(async (event) => {
     }
 
     // For collection-only users, verify this environment is in the allowed list
-    if (!isAdmin) {
-      const allowedEnvIds = await getCollectionMemberAllowedEnvIds(user.id, project.workspaceId, user.email);
-      if (allowedEnvIds && !allowedEnvIds.includes(environment.id)) {
-        throw createError({
-          statusCode: 403,
-          statusMessage: 'You do not have access to this environment'
-        });
-      }
+    const allowedEnvIds = isAdmin
+      ? null
+      : await getCollectionMemberAllowedEnvIds(user.id, project.workspaceId, user.email);
+    if (!isAdmin && allowedEnvIds && !allowedEnvIds.includes(environment.id)) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'You do not have access to this environment'
+      });
     }
 
     // Get all variables for this environment
@@ -79,7 +80,39 @@ export default defineEventHandler(async (event) => {
       .from(environmentVariables)
       .where(eq(environmentVariables.environmentId, environmentId));
 
-    return variables.map(v => ({
+    // ?requestId=<savedRequestId> merges in the request's collection variables
+    // scope so {{var}} resolution matches Postman (collection vars resolve
+    // even when a different environment is selected). Environment variables
+    // win on key conflicts. The collection environment must be allowed for
+    // collection-only members.
+    const requestIdParam = getQuery(event).requestId;
+    const requestId = typeof requestIdParam === 'string' ? requestIdParam : undefined;
+    let collectionVariablesList: typeof variables = [];
+    if (requestId) {
+      try {
+        const collectionScope = await findCollectionVariablesScope(requestId);
+        if (
+          collectionScope &&
+          collectionScope.environmentId !== environmentId &&
+          (!allowedEnvIds || allowedEnvIds.includes(collectionScope.environmentId))
+        ) {
+          collectionVariablesList = await db
+            .select()
+            .from(environmentVariables)
+            .where(eq(environmentVariables.environmentId, collectionScope.environmentId));
+        }
+      } catch (error) {
+        console.error('Error resolving collection variables:', error);
+      }
+    }
+
+    const envKeys = new Set(variables.map(v => v.key));
+    const merged = [
+      ...collectionVariablesList.filter(v => !envKeys.has(v.key)),
+      ...variables
+    ];
+
+    return merged.map(v => ({
       ...v,
       // Mask secret values
       value: v.isSecret ? '••••••••' : v.value

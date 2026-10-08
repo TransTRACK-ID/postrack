@@ -7,13 +7,19 @@ export interface EnvironmentVariableItem {
 
 export interface FetchEnvironmentVariablesOptions {
   shareToken?: string;
+  /**
+   * Saved request id — when set (non-shared path), the response merges the
+   * request's collection variables under the environment variables so {{var}}
+   * resolution matches Postman scope ordering.
+   */
+  requestId?: string;
 }
 
 export async function fetchEnvironmentVariablesList(
   environmentId: string,
   options: FetchEnvironmentVariablesOptions = {}
 ): Promise<EnvironmentVariableItem[]> {
-  const { shareToken } = options;
+  const { shareToken, requestId } = options;
 
   if (shareToken) {
     return await $fetch<EnvironmentVariableItem[]>(
@@ -24,7 +30,10 @@ export async function fetchEnvironmentVariablesList(
 
   return await $fetch<EnvironmentVariableItem[]>(
     `/api/admin/environments/${environmentId}/variables`,
-    { credentials: 'include' }
+    {
+      credentials: 'include',
+      query: requestId ? { requestId } : undefined
+    }
   );
 }
 

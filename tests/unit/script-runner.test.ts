@@ -41,6 +41,7 @@ vi.mock('../../server/db', () => ({
 import { executePreScript, executePostScript } from '../../server/services/script-runner';
 
 const ENV = 'env-test';
+const COLL_ENV = 'env-collection';
 const baseContext = { url: 'https://api.example.com/login', method: 'POST', headers: {} as Record<string, string> };
 
 const seedEnv = (vars: Record<string, string>) => {
@@ -51,6 +52,18 @@ const seedEnv = (vars: Record<string, string>) => {
     value,
     isSecret: false
   }));
+};
+
+const seedCollectionEnv = (vars: Record<string, string>) => {
+  harness.envRows.push(
+    ...Object.entries(vars).map(([key, value], i) => ({
+      id: `coll-row-${i}`,
+      environmentId: COLL_ENV,
+      key,
+      value,
+      isSecret: false
+    }))
+  );
 };
 
 beforeEach(() => {
@@ -95,6 +108,87 @@ console.log("postData " + postData);
     const messages = result.logs.map(l => l.message);
     expect(messages[0]).toBe(`JSON ${expectedTemplate}`);
     expect(messages[1]).toBe(`postData ${expectedBase64}`);
+  });
+
+  it('resolves collection variables when the selected environment lacks them (env wins on conflicts)', async () => {
+    // Mirrors the reported scenario: selected env has `password` but not
+    // `username`/`uuid`; the collection's variables env provides all three.
+    seedEnv({ password: 's3cret' });
+    seedCollectionEnv({ username: 'kevin', uuid: 'device-001', password: 'kevin' });
+
+    const code = `
+const template = pm.variables.replaceIn('{"username":"{{username}}","password":"{{password}}","UUID":"{{uuid}}"}');
+const postData = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(template));
+pm.request.body.update({
+  mode: "formdata",
+  formdata: [{ key: "postData", value: postData, type: "text" }]
+});
+console.log("JSON " + template);
+`;
+
+    const result = await executePreScript({
+      code,
+      context: { ...baseContext },
+      environmentId: ENV,
+      collectionEnvironmentId: COLL_ENV
+    });
+
+    expect(result.success).toBe(true);
+    // username/uuid resolved from collection scope; env's password wins over collection's
+    expect(result.logs[0].message).toBe('JSON {"username":"kevin","password":"s3cret","UUID":"device-001"}');
+    const body = result.modifiedContext?.body;
+    expect(body?.__formData).toBe(true);
+    expect(body.entries[0].value).toBe(
+      Buffer.from('{"username":"kevin","password":"s3cret","UUID":"device-001"}', 'utf8').toString('base64')
+    );
+  });
+
+  it('pm.collectionVariables writes target the collection scope, pm.variables reads through it', async () => {
+    seedEnv({ fromEnv: 'env-value' });
+    seedCollectionEnv({ fromCollection: 'coll-value' });
+
+    const result = await executePreScript({
+      code: `
+console.log(pm.variables.get('fromCollection'));
+console.log(pm.variables.get('fromEnv'));
+console.log(pm.collectionVariables.get('fromCollection'));
+pm.collectionVariables.set('cv', 'x');
+pm.environment.set('ev', 'y');
+`,
+      context: { ...baseContext },
+      environmentId: ENV,
+      collectionEnvironmentId: COLL_ENV
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.logs.map(l => l.message).slice(0, 3)).toEqual(['coll-value', 'env-value', 'coll-value']);
+    expect(result.environmentChanges).toEqual([
+      { key: 'cv', value: 'x', action: 'set', environmentId: COLL_ENV },
+      { key: 'ev', value: 'y', action: 'set', environmentId: ENV }
+    ]);
+    // The collection write persists to the collection environment, not the selected one
+    expect(harness.writes.some(
+      w => w.op === 'insert' && w.values?.environmentId === COLL_ENV && w.values?.key === 'cv'
+    )).toBe(true);
+    expect(harness.writes.some(
+      w => w.op === 'insert' && w.values?.environmentId === ENV && w.values?.key === 'ev'
+    )).toBe(true);
+  });
+
+  it('runs without an environment — magic vars resolve, env writes warn instead of persisting', async () => {
+    const result = await executePreScript({
+      code: `
+console.log(pm.variables.replaceIn('{{$randomUUID}}'));
+pm.environment.set('x', '1');
+`,
+      context: { ...baseContext }
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.logs[0].message).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.logs.some(l => l.type === 'warn')).toBe(true);
+    expect(result.environmentChanges).toEqual([]);
+    expect(harness.writes).toEqual([]);
   });
 
   it('resolves pm.variables.get/set in local scope and leaves env vars untouched', async () => {
@@ -146,7 +240,7 @@ console.log(CJS.enc.Base64.stringify(CJS.enc.Utf8.parse('abc')));
     });
 
     expect(result.success).toBe(true);
-    expect(result.environmentChanges).toEqual([{ key: 'token', value: 'abc123', action: 'set' }]);
+    expect(result.environmentChanges).toEqual([{ key: 'token', value: 'abc123', action: 'set', environmentId: ENV }]);
     expect(harness.writes.some(w => w.op === 'insert' && w.values?.key === 'token' && w.values?.value === 'abc123')).toBe(true);
   });
 });
@@ -302,7 +396,7 @@ console.log(postman.getEnvironmentVariable('legacy'));
 
     expect(result.success).toBe(true);
     expect(result.logs[0].message).toBe('yes');
-    expect(result.environmentChanges?.[0]).toEqual({ key: 'legacy', value: 'yes', action: 'set' });
+    expect(result.environmentChanges?.[0]).toEqual({ key: 'legacy', value: 'yes', action: 'set', environmentId: ENV });
   });
 
   it('does not expose Node.js builtins or process', async () => {

@@ -15,6 +15,7 @@ import type { HttpMethod, RequestData, ResponseData } from '../../db/schema/requ
 import type { MockConfig } from '../../db/schema/savedRequest';
 import { eq, inArray, sql, and } from 'drizzle-orm';
 import { executePreScript, executePostScript, type ScriptLogEntry, type ScriptTestResult } from '../../services/script-runner';
+import { findCollectionVariablesScope, type CollectionVariablesScope } from '../../utils/collection-variables';
 import { getMagicVariableValue } from '../../utils/magic-variables';
 import { trackServerError, setSpanTags, finishSpanWithError } from '../../utils/error-tracking';
 import { trackRequestExecution as trackDatadogMetrics, trackSlowRequest } from '../../utils/datadog-metrics';
@@ -85,6 +86,7 @@ interface ProxyResponse {
     key: string;
     value: string;
     action: 'set' | 'unset';
+    environmentId?: string;
   }>;
 }
 
@@ -116,7 +118,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
   const scriptLogs: ScriptLogEntry[] = [];
   const scriptErrors: string[] = [];
   const testResults: ScriptTestResult[] = [];
-  const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset' }> = [];
+  const environmentChanges: Array<{ key: string; value: string; action: 'set' | 'unset'; environmentId?: string }> = [];
 
   // Variables to hold script-modified request data
   let scriptModifiedUrl: string | undefined;
@@ -238,92 +240,111 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       }
     }
 
-    if (body.environmentId) {
+    // Postman resolves {{var}} against collection variables as well as the
+    // active environment. Imported collection variables live in the
+    // "<Collection> Variables" environment in the same project.
+    let collectionScope: CollectionVariablesScope | null = null;
+    if (body.savedRequestId) {
       try {
-        console.log('[Proxy] Looking up environment:', body.environmentId);
-        
-        const environment = (await db
-          .select()
-          .from(environments)
-          .where(eq(environments.id, body.environmentId))
-          .limit(1))[0];
+        collectionScope = await findCollectionVariablesScope(body.savedRequestId);
+        if (collectionScope) {
+          console.log('[Proxy] Collection variables found:', Object.keys(collectionScope.vars).length);
+        }
+      } catch (error) {
+        console.error('[Proxy] Failed to resolve collection variables:', error);
+      }
+    }
 
-        console.log('[Proxy] Environment found:', environment?.name || 'NOT FOUND');
+    if (body.environmentId || collectionScope) {
+      try {
+        // Collection vars fill the base; environment vars win on conflicts
+        const variables: Record<string, string> = { ...(collectionScope?.vars ?? {}) };
 
-        if (environment) {
-          const environmentVariablesList = await db
+        if (body.environmentId) {
+          console.log('[Proxy] Looking up environment:', body.environmentId);
+
+          const environment = (await db
             .select()
-            .from(environmentVariables)
-            .where(eq(environmentVariables.environmentId, body.environmentId));
+            .from(environments)
+            .where(eq(environments.id, body.environmentId))
+            .limit(1))[0];
 
-          console.log('[Proxy] Variables found:', environmentVariablesList.length);
-          console.log('[Proxy] Variable keys:', environmentVariablesList.map(v => v.key));
+          console.log('[Proxy] Environment found:', environment?.name || 'NOT FOUND');
 
-          const variables: Record<string, string> = {};
-          environmentVariablesList.forEach((v: EnvironmentVariable) => {
-            variables[v.key] = v.value;
-          });
+          if (environment) {
+            const environmentVariablesList = await db
+              .select()
+              .from(environmentVariables)
+              .where(eq(environmentVariables.environmentId, body.environmentId));
 
-          const substituteWithLimit = (input: string, maxIterations: number = 10): string => {
-            let result = input;
-            let iterations = 0;
-            // Match both {{...}} and URL-encoded %7B%7B...%7D%7D
-            const variablePattern = /(\{\{|%7B%7B)([^{}%]+)(\}\}|%7D%7D)/g;
+            console.log('[Proxy] Variables found:', environmentVariablesList.length);
+            console.log('[Proxy] Variable keys:', environmentVariablesList.map(v => v.key));
 
-            let match;
-            while ((match = variablePattern.exec(result)) !== null && iterations < maxIterations) {
-              const trimmedName = match[2].trim();
-              let replacement: string | undefined = variables[trimmedName];
-              if (replacement === undefined) {
-                const magicValue = getMagicVariableValue(trimmedName);
-                if (magicValue !== null) replacement = magicValue;
-              }
-              if (replacement !== undefined) {
-                console.log(`[Proxy] Substituting {{${trimmedName}}}:`, variables.hasOwnProperty(trimmedName) ? 'ENV' : 'MAGIC');
-                result = result.replace(match[0], replacement);
-                variablePattern.lastIndex = 0;
-                iterations++;
-              }
-            }
-
-            if (iterations >= maxIterations) {
-              variableWarnings.push(`Variable substitution limit reached (possible circular reference)`);
-            }
-
-            return result;
-          };
-
-          const originalUrl = body.url;
-          resolvedUrl = substituteWithLimit(body.url);
-          console.log('[Proxy] URL substitution:', { original: originalUrl, resolved: resolvedUrl });
-
-          if (resolvedUrl !== originalUrl) {
-            resolvedValues = { ...resolvedValues, url: resolvedUrl };
+            environmentVariablesList.forEach((v: EnvironmentVariable) => {
+              variables[v.key] = v.value;
+            });
+          } else {
+            console.log('[Proxy] WARNING: Environment not found');
           }
+        }
 
-          for (const [key, value] of Object.entries(resolvedHeaders)) {
-            if (typeof value === 'string' && value.includes('{{')) {
-              resolvedHeaders[key] = substituteWithLimit(value);
+        const substituteWithLimit = (input: string, maxIterations: number = 10): string => {
+          let result = input;
+          let iterations = 0;
+          // Match both {{...}} and URL-encoded %7B%7B...%7D%7D
+          const variablePattern = /(\{\{|%7B%7B)([^{}%]+)(\}\}|%7D%7D)/g;
+
+          let match;
+          while ((match = variablePattern.exec(result)) !== null && iterations < maxIterations) {
+            const trimmedName = match[2].trim();
+            let replacement: string | undefined = variables[trimmedName];
+            if (replacement === undefined) {
+              const magicValue = getMagicVariableValue(trimmedName);
+              if (magicValue !== null) replacement = magicValue;
+            }
+            if (replacement !== undefined) {
+              console.log(`[Proxy] Substituting {{${trimmedName}}}:`, variables.hasOwnProperty(trimmedName) ? 'ENV' : 'MAGIC');
+              result = result.replace(match[0], replacement);
+              variablePattern.lastIndex = 0;
+              iterations++;
             }
           }
 
-          if (resolvedBody && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-            if (typeof resolvedBody === 'string') {
-              resolvedBody = substituteWithLimit(resolvedBody);
-            } else if (resolvedBody?.__formData === true) {
-              // Skip variable substitution for form-data to avoid corrupting base64-encoded file payloads
-            } else {
-              const bodyStr = JSON.stringify(resolvedBody);
-              const substitutedBody = substituteWithLimit(bodyStr);
-              try {
-                resolvedBody = JSON.parse(substitutedBody);
-              } catch {
-                resolvedBody = substitutedBody;
-              }
+          if (iterations >= maxIterations) {
+            variableWarnings.push(`Variable substitution limit reached (possible circular reference)`);
+          }
+
+          return result;
+        };
+
+        const originalUrl = body.url;
+        resolvedUrl = substituteWithLimit(body.url);
+        console.log('[Proxy] URL substitution:', { original: originalUrl, resolved: resolvedUrl });
+
+        if (resolvedUrl !== originalUrl) {
+          resolvedValues = { ...resolvedValues, url: resolvedUrl };
+        }
+
+        for (const [key, value] of Object.entries(resolvedHeaders)) {
+          if (typeof value === 'string' && value.includes('{{')) {
+            resolvedHeaders[key] = substituteWithLimit(value);
+          }
+        }
+
+        if (resolvedBody && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+          if (typeof resolvedBody === 'string') {
+            resolvedBody = substituteWithLimit(resolvedBody);
+          } else if (resolvedBody?.__formData === true) {
+            // Skip variable substitution for form-data to avoid corrupting base64-encoded file payloads
+          } else {
+            const bodyStr = JSON.stringify(resolvedBody);
+            const substitutedBody = substituteWithLimit(bodyStr);
+            try {
+              resolvedBody = JSON.parse(substitutedBody);
+            } catch {
+              resolvedBody = substitutedBody;
             }
           }
-        } else {
-          console.log('[Proxy] WARNING: Environment not found');
         }
       } catch (error) {
         console.error('[Proxy] Failed to fetch environment variables:', error);
@@ -354,7 +375,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
       return savedRequest;
     };
 
-    if (body.environmentId && (body.preScript !== undefined || body.savedRequestId)) {
+    if (body.preScript !== undefined || body.savedRequestId) {
       try {
         const preScriptCode = body.preScript
           ? body.preScript
@@ -371,7 +392,8 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
               headers: { ...resolvedHeaders },
               body: resolvedBody
             },
-            environmentId: body.environmentId
+            environmentId: body.environmentId,
+            collectionEnvironmentId: collectionScope?.environmentId
           });
 
           scriptLogs.push(...preResult.logs);
@@ -776,7 +798,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
 
     // Execute post-script if available
     // Prefer unsaved editor scripts when explicitly provided; fall back to saved request scripts
-    if (body.environmentId && (body.postScript !== undefined || savedRequest?.postScript || body.savedRequestId)) {
+    if (body.postScript !== undefined || savedRequest?.postScript || body.savedRequestId) {
       try {
         const postScriptCode = body.postScript
           ? body.postScript
@@ -812,6 +834,7 @@ export default defineEventHandler(async (event): Promise<ProxyResponse | ProxyEr
               body: responseBody
             },
             environmentId: body.environmentId,
+            collectionEnvironmentId: collectionScope?.environmentId,
             responseTimeMs: endTime - startTime,
             responseSize: responseSize
           });
